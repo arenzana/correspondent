@@ -26,12 +26,12 @@ categories, extensions and themes. The import lists anything it skipped.
 
 ## What you need
 
-- The account name (here `isma`).
+- The account name (here `reader`).
 - The API password, in a file only you can read (`chmod 600`). It is used to
   compare both servers through the same API Reeder uses.
 - Shell access to the FreshRSS host or container.
 - Correspondent deployed with an empty data volume, reachable by you but not
-  yet behind `rss.arenzana.org` (see the README's Docker section).
+  yet behind `rss.example.org` (see the README's Docker section).
 
 ## 1. Rehearse on a copy (no downtime)
 
@@ -52,9 +52,9 @@ setting; on a plain install, disable the cron entry that runs
 
 ```sh
 cd /var/www/FreshRSS
-sudo -u www-data php cli/export-sqlite-for-user.php --user isma --filename /tmp/isma.sqlite
+sudo -u www-data php cli/export-sqlite-for-user.php --user reader --filename /tmp/reader.sqlite
 cp data/config.php /tmp/freshrss-config.php
-cp data/users/isma/config.php /tmp/freshrss-user-config.php
+cp data/users/reader/config.php /tmp/freshrss-user-config.php
 ```
 
 `config.php` holds the salt that Reeder's token is derived from, and the user
@@ -64,8 +64,8 @@ to the Correspondent host over SSH, and delete them afterwards.
 **Import** into an empty Correspondent volume, with polling off:
 
 ```sh
-docker compose run --rm correspondent migrate import isma \
-  -export /secrets/isma.sqlite \
+docker compose run --rm correspondent migrate import reader \
+  -export /secrets/reader.sqlite \
   -system-config /secrets/freshrss-config.php \
   -user-config /secrets/freshrss-user-config.php
 CORRESPONDENT_NO_POLL=1 docker compose up -d
@@ -74,9 +74,9 @@ CORRESPONDENT_NO_POLL=1 docker compose up -d
 **Verify.** Compare the two servers through the Google Reader API:
 
 ```sh
-correspondent migrate verify isma \
-  -freshrss https://rss.arenzana.org/api/greader.php \
-  -correspondent https://correspondent.internal.example/api/greader.php \
+correspondent migrate verify reader \
+  -freshrss https://rss.example.org/api/greader.php \
+  -correspondent https://correspondent.example.org/api/greader.php \
   -api-password-file ~/.config/correspondent/api_password
 ```
 
@@ -85,7 +85,7 @@ counts per stream, the most recent history, the fields of a sample of items,
 and checks that the token FreshRSS issued is accepted. Continue only on
 "All checks passed. Safe to switch over."
 
-**Switch traffic.** Point `rss.arenzana.org` at Correspondent. The path
+**Switch traffic.** Point `rss.example.org` at Correspondent. The path
 `/api/greader.php/...` must reach it unchanged:
 
 - no redirects on that path (clients drop POST bodies and auth on redirect)
@@ -132,9 +132,9 @@ first, so FreshRSS ends up with your current state:
 
 ```sh
 # Show what would be sent:
-docker compose exec correspondent /correspondent migrate rollback isma
+docker compose exec correspondent /correspondent migrate rollback reader
 # Send it:
-docker compose exec correspondent /correspondent migrate rollback isma \
+docker compose exec correspondent /correspondent migrate rollback reader \
   -freshrss https://freshrss.internal.example/api/greader.php \
   -api-password-file /secrets/api_password -apply
 ```
@@ -151,4 +151,4 @@ retire it:
 
 1. In Settings, set a new app password.
 2. Sign in again in Reeder on each device with the new password.
-3. `correspondent legacy-auth off isma`
+3. `correspondent legacy-auth off reader`

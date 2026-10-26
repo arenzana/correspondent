@@ -107,7 +107,7 @@ func setup(t *testing.T) (*client, *store.Store, []int64) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	uid, _ := st.CreateUser(ctx, "isma", "web-password-123")
+	uid, _ := st.CreateUser(ctx, "reader", "web-password-123")
 	st.SetAPIPassword(ctx, uid, "api-password-123")
 	folder, _ := st.EnsureFolder(ctx, uid, "Tech & Co/Ops")
 	feedID, _ := st.AddFeed(ctx, uid, "https://example.com/feed", "Example", &folder)
@@ -133,11 +133,11 @@ func TestReaderFlow(t *testing.T) {
 	if code, body := c.do("GET", "/reader/api/0/subscription/list", url.Values{"output": {"json"}}); code != 401 || body != "Unauthorized!" {
 		t.Fatalf("unauthenticated: %d %q", code, body)
 	}
-	if code, _ := c.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"isma"}, "Passwd": {"web-password-123"}}); code != 401 {
+	if code, _ := c.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"reader"}, "Passwd": {"web-password-123"}}); code != 401 {
 		t.Fatal("web password must not authenticate the API")
 	}
 
-	code, body := c.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"isma"}, "Passwd": {"api-password-123"}})
+	code, body := c.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"reader"}, "Passwd": {"api-password-123"}})
 	if code != 200 || !strings.Contains(body, "LSID=null") {
 		t.Fatalf("login: %d %s", code, body)
 	}
@@ -253,19 +253,19 @@ func TestReaderFlow(t *testing.T) {
 func TestLegacyFreshRSSToken(t *testing.T) {
 	c, st, ids := setup(t)
 	ctx := context.Background()
-	uid, _ := st.UserIDByName(ctx, "isma")
+	uid, _ := st.UserIDByName(ctx, "reader")
 	const salt = "0123456789abcdef0123456789abcdef01234567"
 	// A PHP-style $2y$ hash for the API password, as FreshRSS stores it.
 	h, _ := bcrypt.GenerateFromPassword([]byte("api-password-123"), 10)
 	apiHash := "$2y$" + string(h[4:])
 	webHash, _ := bcrypt.GenerateFromPassword([]byte("web-password-123"), 10)
-	if _, err := st.ImportUser(ctx, "isma", string(webHash), apiHash); err != nil {
+	if _, err := st.ImportUser(ctx, "reader", string(webHash), apiHash); err != nil {
 		t.Fatal(err)
 	}
 	st.SetSetting(ctx, store.SettingFreshRSSSalt, salt)
-	sum := sha1.Sum([]byte(salt + "isma" + apiHash))
+	sum := sha1.Sum([]byte(salt + "reader" + apiHash))
 	freshToken := hex.EncodeToString(sum[:])
-	c.auth = "isma/" + freshToken
+	c.auth = "reader/" + freshToken
 
 	// Off by default: the FreshRSS token is refused.
 	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 401 {
@@ -286,12 +286,12 @@ func TestLegacyFreshRSSToken(t *testing.T) {
 	}
 	// Signing in again returns the same token FreshRSS would.
 	login := &client{t: t, base: c.base}
-	_, body := login.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"isma"}, "Passwd": {"api-password-123"}})
-	if !strings.Contains(body, "Auth=isma/"+freshToken+"\n") {
+	_, body := login.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"reader"}, "Passwd": {"api-password-123"}})
+	if !strings.Contains(body, "Auth=reader/"+freshToken+"\n") {
 		t.Fatalf("ClientLogin under legacy auth: %q", body)
 	}
 	// A wrong token for the right user, or the right token for another user, fails.
-	bad := &client{t: t, base: c.base, auth: "isma/" + strings.Repeat("0", 40)}
+	bad := &client{t: t, base: c.base, auth: "reader/" + strings.Repeat("0", 40)}
 	if code, _ := bad.do("GET", "/reader/api/0/user-info", nil); code != 401 {
 		t.Fatal("wrong legacy token accepted")
 	}
@@ -301,7 +301,7 @@ func TestLegacyFreshRSSToken(t *testing.T) {
 		t.Fatal("legacy token still valid after password change")
 	}
 	// And it can be switched off outright.
-	st.ImportUser(ctx, "isma", string(webHash), apiHash)
+	st.ImportUser(ctx, "reader", string(webHash), apiHash)
 	st.SetLegacyAuth(ctx, uid, false)
 	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 401 {
 		t.Fatal("legacy token valid after disabling")

@@ -67,7 +67,7 @@ return array (
 );`), 0o600)
 	return Export{
 		SQLite: filepath.Join(dir, "u.sqlite"), SystemConfig: filepath.Join(dir, "config.php"),
-		UserConfig: filepath.Join(dir, "user.php"), Username: "isma", LegacyAuth: true,
+		UserConfig: filepath.Join(dir, "user.php"), Username: "reader", LegacyAuth: true,
 	}, apiHash
 }
 
@@ -94,7 +94,7 @@ func TestFromSQLite(t *testing.T) {
 		}
 	}
 
-	uid, _ := st.UserIDByName(ctx, "isma")
+	uid, _ := st.UserIDByName(ctx, "reader")
 	// Folder and feed names are decoded, as FreshRSS's API serves them.
 	folders, _ := st.Folders(ctx, uid)
 	var names []string
@@ -136,14 +136,14 @@ func TestFromSQLite(t *testing.T) {
 	}
 
 	// Both FreshRSS passwords work, and the token FreshRSS issued is accepted.
-	if _, err := st.CheckPassword(ctx, "isma", "web-password-1", false); err != nil {
+	if _, err := st.CheckPassword(ctx, "reader", "web-password-1", false); err != nil {
 		t.Fatal("web password from FreshRSS rejected")
 	}
-	if _, err := st.CheckPassword(ctx, "isma", "api-password-1", true); err != nil {
+	if _, err := st.CheckPassword(ctx, "reader", "api-password-1", true); err != nil {
 		t.Fatal("API password from FreshRSS rejected")
 	}
-	sum := sha1.Sum([]byte(`S4lt'with\quote` + "isma" + apiHash))
-	if _, tok, _ := st.LegacyToken(ctx, "isma"); tok != hex.EncodeToString(sum[:]) {
+	sum := sha1.Sum([]byte(`S4lt'with\quote` + "reader" + apiHash))
+	if _, tok, _ := st.LegacyToken(ctx, "reader"); tok != hex.EncodeToString(sum[:]) {
 		t.Fatalf("legacy token %q does not match FreshRSS's", tok)
 	}
 
@@ -203,7 +203,7 @@ func TestPlanRollback(t *testing.T) {
 	if _, err := FromSQLite(ctx, st, ex); err != nil {
 		t.Fatal(err)
 	}
-	uid, _ := st.UserIDByName(ctx, "isma")
+	uid, _ := st.UserIDByName(ctx, "reader")
 	since := time.Now().Add(-time.Second)
 	st.SetState(ctx, uid, "read", []int64{1700000000000002})
 	st.SetState(ctx, uid, "unread", []int64{1700000000000002}) // net: unread

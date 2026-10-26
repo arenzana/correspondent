@@ -94,9 +94,9 @@ same passwords, the token FreshRSS issued keeps working, no duplicates, and a
 tested way back. See [docs/migration.md](docs/migration.md).
 
 ```sh
-correspondent migrate import isma -export isma.sqlite -system-config config.php -user-config users/isma/config.php
-correspondent migrate verify isma -freshrss https://old.example/api/greader.php -correspondent https://new.example/api/greader.php -api-password-file pw
-correspondent migrate rollback isma -freshrss https://old.example/api/greader.php -api-password-file pw -apply
+correspondent migrate import reader -export reader.sqlite -system-config config.php -user-config users/reader/config.php
+correspondent migrate verify reader -freshrss https://old.example/api/greader.php -correspondent https://new.example/api/greader.php -api-password-file pw
+correspondent migrate rollback reader -freshrss https://old.example/api/greader.php -api-password-file pw -apply
 ```
 
 `make rehearse` runs the whole cutover against a real FreshRSS in Docker.
