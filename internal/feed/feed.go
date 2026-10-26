@@ -66,8 +66,17 @@ func Parse(body []byte, feedURL string) (*Parsed, error) {
 	if len(items) > maxItems {
 		items = items[:maxItems]
 	}
+	// Some feeds list the same GUID more than once (sites that reuse one URL
+	// for an evolving page). Keep the first occurrence, as FreshRSS does, so
+	// one item doesn't overwrite another within a single poll.
+	seen := map[string]bool{}
 	for _, it := range items {
-		p.Items = append(p.Items, normalize(it, base))
+		e := normalize(it, base)
+		if seen[e.GUID] {
+			continue
+		}
+		seen[e.GUID] = true
+		p.Items = append(p.Items, e)
 	}
 	return p, nil
 }

@@ -51,6 +51,18 @@
     scroller.querySelector<HTMLElement>(`[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' })
   })
 
+  async function resume(id: number) {
+    try {
+      await api.updateFeed(id, { paused: false })
+      await api.refreshFeed(id)
+      await app.refreshTree()
+      await app.load()
+      app.toast('Updates resumed.')
+    } catch (e) {
+      app.toast(`Couldn't resume updates. ${(e as Error).message}`)
+    }
+  }
+
   let retrying = $state(false)
   async function retry(id: number) {
     retrying = true
@@ -112,7 +124,15 @@
     </div>
   </header>
 
-  {#if currentFeed && currentFeed.errorCount > 0}
+  {#if currentFeed?.paused}
+    <div class="notice" role="status">
+      <Icon name="pause" size={16} />
+      <div>
+        <p>Updates for this feed are paused.</p>
+        <button class="link" onclick={() => resume(currentFeed.id)}>Resume updates</button>
+      </div>
+    </div>
+  {:else if currentFeed && currentFeed.errorCount > 0}
     <div class="notice" role="status">
       <Icon name="alert" size={16} />
       <div>

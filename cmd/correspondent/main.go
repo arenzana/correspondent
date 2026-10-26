@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -65,6 +66,7 @@ func run(log *slog.Logger, args []string) error {
 	starredPath := fs.String("starred", "", "import-freshrss: starred JSON export")
 	subsPath := fs.String("subscriptions", "", "import-freshrss: saved subscription/list JSON, to keep feed IDs")
 	allowPrivate := fs.Bool("allow-private-feeds", false, "allow fetching feeds on private networks (development only)")
+	retention := fs.Int("retention-days", envInt("CORRESPONDENT_RETENTION_DAYS", 0), "delete read, unstarred articles older than this that have left their feed (0 = keep everything)")
 	noPoll := fs.Bool("no-poll", os.Getenv("CORRESPONDENT_NO_POLL") == "1", "serve without polling feeds (used during migration)")
 	exportPath := fs.String("export", "", "migrate import: FreshRSS SQLite export")
 	sysConfig := fs.String("system-config", "", "migrate import: FreshRSS data/config.php")
@@ -74,6 +76,7 @@ func run(log *slog.Logger, args []string) error {
 	corrURL := fs.String("correspondent", "http://127.0.0.1:8080/api/greader.php", "migrate verify: Correspondent Google Reader API base")
 	apiPWFile := fs.String("api-password-file", "", "migrate verify/rollback: file holding the API (app) password")
 	apply := fs.Bool("apply", false, "migrate rollback: send the changes (default: only show them)")
+	full := fs.Bool("full", false, "migrate verify: compare every item rather than a sample")
 
 	cmd := "serve"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
@@ -114,7 +117,7 @@ func run(log *slog.Logger, args []string) error {
 	defer st.Close()
 
 	fetcher := fetch.New(fetch.Options{AllowPrivate: *allowPrivate})
-	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log}
+	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log, RetentionDays: *retention}
 
 	switch cmd {
 	case "serve":
@@ -159,7 +162,7 @@ func run(log *slog.Logger, args []string) error {
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent migrate import|verify|rollback <username> [flags]")
 		}
-		m := migration{st: st, user: positional[0], freshURL: *freshURL, corrURL: *corrURL, apiPWFile: *apiPWFile}
+		m := migration{st: st, user: positional[0], freshURL: *freshURL, corrURL: *corrURL, apiPWFile: *apiPWFile, full: *full}
 		switch sub {
 		case "import":
 			return m.importExport(ctx, migrate.Export{SQLite: *exportPath, SystemConfig: *sysConfig, UserConfig: *userConfig,
@@ -397,6 +400,13 @@ func parsePrefixes(s string) ([]netip.Prefix, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+func envInt(key string, def int) int {
+	if v, err := strconv.Atoi(os.Getenv(key)); err == nil {
+		return v
+	}
+	return def
 }
 
 func envOr(key, def string) string {

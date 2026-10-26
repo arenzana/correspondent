@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app } from '../lib/state.svelte'
+  import { app, APP_ICONS } from '../lib/state.svelte'
   import { api } from '../lib/api'
   import Modal from './Modal.svelte'
 
@@ -46,6 +46,20 @@
         <input type="checkbox" checked={app.prefs.markOnOpen} onchange={(e) => app.setPrefs({ markOnOpen: e.currentTarget.checked })} />
         <span>Mark articles read when I open them</span>
       </label>
+    </section>
+
+    <section>
+      <h3>App icon</h3>
+      <div class="icons" role="radiogroup" aria-label="App icon">
+        {#each APP_ICONS as ic (ic.id)}
+          <button class="icon-choice" role="radio" aria-checked={app.prefs.appIcon === ic.id}
+            onclick={() => app.setPrefs({ appIcon: ic.id })}>
+            <img src="/icons/{ic.id}/icon-192.png" alt="" width="56" height="56" />
+            <span>{ic.label}</span>
+          </button>
+        {/each}
+      </div>
+      <p class="hint">Changes the browser tab and home-screen icon. An installed app updates its icon when your device next checks; on iPhone, add it to the Home Screen again.</p>
     </section>
 
     <section>
@@ -130,6 +144,30 @@
   }
   .msg {
     margin: 8px 0 0;
+  }
+  .icons {
+    display: flex;
+    gap: 12px;
+  }
+  .icon-choice {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: var(--radius-l);
+    border: 1px solid transparent;
+    font-size: 12.5px;
+    color: var(--slate);
+  }
+  .icon-choice[aria-checked='true'] {
+    border-color: var(--accent);
+    background: var(--accent-wash);
+    color: var(--ink);
+    font-weight: 560;
+  }
+  .hint {
+    margin: 10px 0 0;
+    font-size: 12.5px;
   }
   .check {
     display: flex;

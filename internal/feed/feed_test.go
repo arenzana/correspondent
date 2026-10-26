@@ -50,6 +50,20 @@ func TestParseRSS(t *testing.T) {
 	}
 }
 
+func TestDuplicateGUIDsKeepFirst(t *testing.T) {
+	doc := `<rss version="2.0"><channel><title>t</title>
+<item><title>August update</title><link>https://x.example/page</link></item>
+<item><title>Older update</title><link>https://x.example/page</link></item>
+<item><title>Other</title><link>https://x.example/other</link></item></channel></rss>`
+	p, err := Parse([]byte(doc), "https://x.example/feed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Items) != 2 || p.Items[0].Title != "August update" {
+		t.Fatalf("items %+v", p.Items)
+	}
+}
+
 func TestParseRejectsHTML(t *testing.T) {
 	if _, err := Parse([]byte("<!DOCTYPE html><html><body>hi</body></html>"), "https://x.example/"); err != ErrNotFeed {
 		t.Fatalf("err = %v", err)

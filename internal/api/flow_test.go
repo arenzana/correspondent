@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -125,6 +127,40 @@ func TestReaderFlow(t *testing.T) {
 	expect(t, e.do(t, c, "DELETE", fmt.Sprintf("/api/v1/folders/%d", folder.ID), "", true), 204)
 	expect(t, e.do(t, c, "DELETE", "/api/v1/session", "", true), 204)
 	expect(t, e.do(t, c, "GET", "/api/v1/me", "", false), 401)
+}
+
+func TestManifestFollowsChosenIcon(t *testing.T) {
+	e := newEnv(t)
+	c, _ := e.user(t, "erin")
+	manifest := func(cl *http.Client) string {
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/manifest.webmanifest", nil)
+		for _, ck := range cl.Jar.Cookies(mustURL(e.srv.URL)) {
+			r.AddCookie(ck)
+		}
+		(&API{Store: e.store}).Manifest(rec, r)
+		return rec.Body.String()
+	}
+	if m := manifest(c); !strings.Contains(m, "/icons/wire/icon-512.png") || !strings.Contains(m, `"maskable"`) {
+		t.Fatalf("default manifest: %s", m)
+	}
+	expect(t, e.do(t, c, "PUT", "/api/v1/prefs", `{"appIcon":"morse"}`, true), 204)
+	if m := manifest(c); !strings.Contains(m, "/icons/morse/icon-512.png") {
+		t.Fatalf("manifest ignores the chosen icon: %s", m)
+	}
+	// Unknown values never reach a path.
+	expect(t, e.do(t, c, "PUT", "/api/v1/prefs", `{"appIcon":"../../etc"}`, true), 204)
+	if m := manifest(c); !strings.Contains(m, "/icons/wire/") || strings.Contains(m, "etc") {
+		t.Fatalf("unsafe icon accepted: %s", m)
+	}
+}
+
+func mustURL(s string) *url.URL {
+	u, err := url.Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }
 
 func TestLoginRequiresHeader(t *testing.T) {

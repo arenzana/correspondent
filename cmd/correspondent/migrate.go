@@ -19,6 +19,7 @@ type migration struct {
 	freshURL  string
 	corrURL   string
 	apiPWFile string
+	full      bool
 }
 
 func (m migration) importExport(ctx context.Context, ex migrate.Export) error {
@@ -29,7 +30,7 @@ func (m migration) importExport(ctx context.Context, ex migrate.Export) error {
 	rep, err := migrate.FromSQLite(ctx, m.st, ex)
 	if rep != nil {
 		fmt.Printf("Imported %s in %s\n", ex.Username, time.Since(start).Round(time.Millisecond))
-		fmt.Printf("  folders %d, feeds %d (IDs preserved)\n", rep.Folders, rep.Feeds)
+		fmt.Printf("  folders %d, feeds %d (IDs preserved), %d paused as in FreshRSS\n", rep.Folders, rep.Feeds, rep.Paused)
 		fmt.Printf("  articles %d (IDs %d to %d), unread %d, starred %d\n", rep.Entries, rep.MinID, rep.MaxID, rep.Unread, rep.Starred)
 		fmt.Printf("  FreshRSS app token accepted: %v\n", ex.LegacyAuth)
 		for _, s := range rep.Skipped {
@@ -66,7 +67,7 @@ func (m migration) verify(ctx context.Context) error {
 	if err := cur.Login(ctx, m.user, pw); err != nil {
 		return fmt.Errorf("Correspondent: %w", err)
 	}
-	ok, err := migrate.Verify(ctx, old, cur, os.Stdout)
+	ok, err := migrate.Verify(ctx, old, cur, os.Stdout, m.full)
 	if err != nil {
 		return err
 	}

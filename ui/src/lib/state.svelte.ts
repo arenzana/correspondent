@@ -9,6 +9,12 @@ export type View = 'unread' | 'today' | 'starred' | 'all'
 export type Source = { kind: 'view'; view: View } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
 export type Theme = 'auto' | 'sun' | 'day' | 'night' | 'evening'
 export type Pane = 'nav' | 'list' | 'article'
+export type AppIcon = 'wire' | 'byline' | 'morse'
+export const APP_ICONS: { id: AppIcon; label: string }[] = [
+  { id: 'wire', label: 'Wire' },
+  { id: 'byline', label: 'Byline' },
+  { id: 'morse', label: 'Morse' },
+]
 
 export interface Prefs {
   theme: Theme
@@ -24,6 +30,7 @@ export interface Prefs {
   /** Pane widths in pixels; null means the responsive default. */
   navWidth: number | null
   listWidth: number | null
+  appIcon: AppIcon
 }
 
 const defaultPrefs: Prefs = {
@@ -38,6 +45,7 @@ const defaultPrefs: Prefs = {
   place: null,
   navWidth: null,
   listWidth: null,
+  appIcon: 'wire',
 }
 
 interface Toast {
@@ -208,6 +216,11 @@ class AppState {
   applyPrefs() {
     const root = document.documentElement
     root.dataset.theme = this.resolvedTheme()
+    const icon = APP_ICONS.some((i) => i.id === this.prefs.appIcon) ? this.prefs.appIcon : 'wire'
+    const setHref = (id: string, file: string) => document.getElementById(id)?.setAttribute('href', `/icons/${icon}/${file}`)
+    setHref('favicon', 'favicon.svg')
+    setHref('favicon-png', 'favicon-32.png')
+    setHref('touch-icon', 'apple-touch-icon.png')
     root.dataset.density = this.prefs.density
     root.style.setProperty('--read-size', this.prefs.readSize + 'px')
     root.style.setProperty('--read-measure', this.prefs.measure + 'ch')

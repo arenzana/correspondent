@@ -78,3 +78,24 @@ func microseconds(v int64) int64 {
 		return v
 	}
 }
+
+// UnicodeAlternative reproduces FreshRSS's escapeToUnicodeAlternative(),
+// which its Reader API applies to titles and authors (extended=false) and to
+// feed names (extended=true): characters that trip up Reader clients become
+// their fullwidth look-alikes. Reeder has cached FreshRSS's output, so we
+// match it exactly, including a quirk: FreshRSS builds the extended list with
+// PHP's array union (+=), which keeps keys 0–2 of the base list, so of the
+// extended characters only ? \ / , ; are actually replaced.
+func UnicodeAlternative(s string, extended bool) string {
+	r := unicodeAlt
+	if extended {
+		r = unicodeAltExtended
+	}
+	return strings.Trim(r.Replace(s), " \t\n\r\x00\x0b") // PHP trim(): ASCII whitespace only
+}
+
+var (
+	unicodeAlt         = strings.NewReplacer("&", "＆", "<", "＜", ">", "＞")
+	unicodeAltExtended = strings.NewReplacer("&", "＆", "<", "＜", ">", "＞",
+		"?", "？", `\`, "＼", "/", "／", ",", "，", ";", "；")
+)

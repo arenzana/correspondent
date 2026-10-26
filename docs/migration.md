@@ -17,6 +17,8 @@ touching production.
 | Every article, with ID, GUID, dates, read and star state | Same, so Reeder's cached items still match |
 | Web password and API password (bcrypt hashes) | Same passwords keep working |
 | The token FreshRSS issued to apps | Accepted until you turn it off |
+| Per-feed refresh interval, and paused feeds | Same; paused feeds stay paused |
+| Titles exactly as FreshRSS served them | Same, including FreshRSS's fullwidth ＆ ＜ ＞ and titles derived for untitled articles |
 
 Not migrated: HTTP credentials on feeds (re-add them), XPath/JSON scraping
 feeds (history is kept, polling will report errors), user labels other than
@@ -111,7 +113,12 @@ counts should match what FreshRSS showed, with no duplicates and no sign-in
 prompt. Then the second device.
 
 **Resume polling.** Restart Correspondent without `CORRESPONDENT_NO_POLL`.
-Articles FreshRSS already had are recognised; only new ones arrive.
+Articles FreshRSS already had are recognised by GUID (or, failing that, by
+link) and are left exactly as FreshRSS served them, which is what Reeder has
+cached; only new articles arrive. Nothing is deleted: retention is off unless
+you set `CORRESPONDENT_RETENTION_DAYS`, and even then it only removes read,
+unstarred articles that have left their feed, so they can never come back as
+duplicates.
 
 **Keep FreshRSS** stopped but intact, with its data, for a couple of weeks.
 

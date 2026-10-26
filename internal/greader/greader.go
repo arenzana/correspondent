@@ -228,7 +228,7 @@ func (s *Server) subscriptionList(ctx context.Context, w http.ResponseWriter, se
 			n := names[*f.FolderID]
 			cats = append(cats, category{ID: labelPrefix + n, Label: n})
 		}
-		out = append(out, sub{ID: feedPrefix + strconv.FormatInt(f.ID, 10), Title: f.Title,
+		out = append(out, sub{ID: feedPrefix + strconv.FormatInt(f.ID, 10), Title: UnicodeAlternative(f.Title, true),
 			Categories: cats, URL: f.URL, HTMLURL: f.SiteURL, IconURL: f.IconURL})
 	}
 	jsonOut(w, map[string]any{"subscriptions": out})
@@ -505,12 +505,12 @@ func (s *Server) items(ctx context.Context, sess session, entries []store.Entry)
 			CrawlTimeMsec: strconv.FormatInt(e.ID/1000, 10),
 			TimestampUsec: strconv.FormatInt(e.ID, 10),
 			Published:     e.PublishedAt,
-			Title:         e.Title,
-			Author:        e.Author,
+			Title:         UnicodeAlternative(e.Title, false),
+			Author:        UnicodeAlternative(e.Author, false),
 			Canonical:     []link{{Href: e.URL}},
 			Alternate:     []link{{Href: e.URL}},
 			Categories:    cats,
-			Origin:        map[string]string{"streamId": feedPrefix + strconv.FormatInt(f.ID, 10), "title": f.Title, "htmlUrl": f.SiteURL},
+			Origin:        map[string]string{"streamId": feedPrefix + strconv.FormatInt(f.ID, 10), "title": UnicodeAlternative(f.Title, true), "htmlUrl": f.SiteURL},
 			Summary:       map[string]string{"content": e.Content},
 		}
 		var encl []store.Enclosure

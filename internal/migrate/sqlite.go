@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"os"
 	"regexp"
 	"strings"
@@ -34,9 +33,9 @@ type Export struct {
 
 // FullReport describes what an import did, for reconciliation.
 type FullReport struct {
-	Folders, Feeds, Entries, Unread, Starred int
-	MinID, MaxID                             int64
-	Skipped                                  []string
+	Folders, Feeds, Paused, Entries, Unread, Starred int
+	MinID, MaxID                                     int64
+	Skipped                                          []string
 }
 
 // FromSQLite imports a complete FreshRSS account, preserving feed IDs, entry
@@ -62,7 +61,7 @@ func FromSQLite(ctx context.Context, st *store.Store, ex Export) (*FullReport, e
 		return nil, errors.New("user config apiPasswordHash is not bcrypt")
 	}
 
-	src, err := sql.Open("sqlite", "file:"+ex.SQLite+"?mode=ro&immutable=1")
+	src, err := sql.Open("sqlite", "file:"+ex.SQLite+"?mode=ro&immutable=1&_pragma=temp_store(MEMORY)")
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +96,7 @@ func FromSQLite(ctx context.Context, st *store.Store, ex Export) (*FullReport, e
 		}
 		// FreshRSS stores names HTML-escaped and serves them decoded; Reeder
 		// knows folders by the decoded name.
-		fid, err := st.EnsureFolder(ctx, uid, html.UnescapeString(name))
+		fid, err := st.EnsureFolder(ctx, uid, phpDecode(name))
 		if err != nil {
 			rows.Close()
 			return nil, err
@@ -148,12 +147,25 @@ func FromSQLite(ctx context.Context, st *store.Store, ex Export) (*FullReport, e
 		if !isHTTP(site) {
 			site = ""
 		}
-		got, err := st.ImportFeed(ctx, uid, f.id, f.url, html.UnescapeString(f.name), site, folderID)
+		got, err := st.ImportFeed(ctx, uid, f.id, f.url, phpDecode(f.name), site, folderID)
 		if err != nil {
 			return rep, fmt.Errorf("feed %d: %w", f.id, err)
 		}
 		if got != f.id {
 			return rep, fmt.Errorf("feed %d imported as %d: IDs must be preserved for Reeder", f.id, got)
+		}
+		// FreshRSS keeps a per-feed refresh interval in ttl; a negative value
+		// means automatic refresh is off. Keep both, so a paused feed stays
+		// paused instead of suddenly delivering a backlog.
+		interval := f.ttl
+		if interval < 0 {
+			interval = -interval
+		}
+		if err := st.SetFeedSchedule(ctx, uid, f.id, interval, f.ttl < 0); err != nil {
+			return rep, err
+		}
+		if f.ttl < 0 {
+			rep.Paused++
 		}
 		rep.Feeds++
 
@@ -180,7 +192,7 @@ func FromSQLite(ctx context.Context, st *store.Store, ex Export) (*FullReport, e
 
 func importFeedEntries(ctx context.Context, src *sql.DB, st *store.Store, feedID int64) (n, unread, starred int, minID, maxID int64, err error) {
 	rows, err := src.QueryContext(ctx, `SELECT id, guid, title, COALESCE(author, ''), COALESCE(content, ''), link,
-		COALESCE(date, 0), COALESCE(lastUserModified, 0), is_read, is_favorite, COALESCE(attributes, '')
+		COALESCE(date, 0), COALESCE(lastUserModified, 0), COALESCE(lastSeen, 0), is_read, is_favorite, COALESCE(attributes, '')
 		FROM entry WHERE id_feed = ? ORDER BY id`, feedID)
 	if err != nil {
 		return 0, 0, 0, 0, 0, err
@@ -204,16 +216,23 @@ func importFeedEntries(ctx context.Context, src *sql.DB, st *store.Store, feedID
 			date, userModified int64
 			isRead, isFavorite bool
 		)
-		if err := rows.Scan(&e.ID, &e.GUID, &title, &author, &raw, &link, &date, &userModified, &isRead, &isFavorite, &attrs); err != nil {
+		if err := rows.Scan(&e.ID, &e.GUID, &title, &author, &raw, &link, &date, &userModified, &e.LastSeen, &isRead, &isFavorite, &attrs); err != nil {
 			return n, unread, starred, minID, maxID, err
 		}
+		// FreshRSS stores these with htmlspecialchars() applied and decodes
+		// them when serving; GUIDs must match what a fresh poll yields, or
+		// articles would be duplicated after cutover.
+		if title == e.GUID {
+			title = untitled(raw, e.GUID)
+		}
+		e.GUID, link = phpDecode(e.GUID), phpDecode(link)
 		if !isHTTP(link) {
 			link = ""
 		}
 		body := content.Process(raw, link)
 		e.URL = link
-		e.Title = content.PlainText(title)
-		e.Author = content.PlainText(author)
+		e.Title = phpDecode(title) // plain text, rendered as text; whitespace kept as FreshRSS has it
+		e.Author = phpDecode(author)
 		e.Content = body.HTML
 		e.Excerpt = content.Excerpt(body.Text, 320)
 		e.ImageURL = body.ImageURL
@@ -285,3 +304,28 @@ func phpConfig(path string) (map[string]string, error) {
 	}
 	return out, nil
 }
+
+// phpDecode reverses PHP's htmlspecialchars(ENT_QUOTES), exactly as
+// htmlspecialchars_decode does: only these entities, nothing else touched.
+var phpDecode = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#039;", "'", "&#39;", "'", "&apos;", "'", "&amp;", "&").Replace
+
+// untitled reproduces FreshRSS's Entry::title() for articles without a
+// title, which it stores with title = guid: the first 75 characters of the
+// tag-stripped content, plus "…" if there is more; the GUID if empty.
+func untitled(rawContent, guid string) string {
+	text := phpTrim(stripTags.ReplaceAllString(rawContent, ""))
+	runes := []rune(text)
+	title := phpTrim(string(runes[:min(len(runes), 75)]))
+	if title == "" {
+		return guid
+	}
+	if len(text) > len(title) {
+		title += "…"
+	}
+	return title
+}
+
+var stripTags = regexp.MustCompile(`(?s)<!--.*?-->|<[^>]*>`)
+
+// phpTrim trims what PHP's trim() trims: ASCII whitespace and NUL only.
+func phpTrim(s string) string { return strings.Trim(s, " \t\n\r\x00\x0b") }
