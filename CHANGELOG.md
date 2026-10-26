@@ -7,6 +7,19 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-26
+
+### Changed
+
+- Softer contrast in every theme, easiest on the eyes at night: text now
+  sits around 10-12:1 against its background (from 13-16:1), still well
+  past the 7:1 accessibility target.
+
+### Fixed
+
+- On iPhone, switching theme while the app was open (Sun turning to Night
+  desk at sunset) left the strip behind the clock in the old colour.
+
 ## [0.7.3] - 2026-10-26
 
 ### Added
@@ -188,7 +201,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/arenzana/correspondent/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/arenzana/correspondent/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/arenzana/correspondent/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/arenzana/correspondent/compare/v0.7.0...v0.7.1

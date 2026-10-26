@@ -5,11 +5,11 @@
 
   // Swatches show each theme's own sheet and ink, independent of the current theme.
   const themes: { id: Theme; label: string; bg: string; fg: string }[] = [
-    { id: 'auto', label: 'System', bg: 'linear-gradient(135deg, #ffffff 50%, #161d2a 50%)', fg: '#8d97ab' },
-    { id: 'sun', label: 'Sun', bg: 'linear-gradient(135deg, #ffffff 33%, #f4ecdc 33% 66%, #161d2a 66%)', fg: '#6e604b' },
-    { id: 'day', label: 'Day', bg: '#ffffff', fg: '#18213a' },
-    { id: 'night', label: 'Night desk', bg: '#161d2a', fg: '#e3e8f2' },
-    { id: 'evening', label: 'Evening', bg: '#f4ecdc', fg: '#2e2416' },
+    { id: 'auto', label: 'System', bg: 'linear-gradient(135deg, #fcfcfb 50%, #1b2230 50%)', fg: '#8a94a7' },
+    { id: 'sun', label: 'Sun', bg: 'linear-gradient(135deg, #fcfcfb 33%, #f3ebdc 33% 66%, #1b2230 66%)', fg: '#6a5c48' },
+    { id: 'day', label: 'Day', bg: '#fcfcfb', fg: '#2a3349' },
+    { id: 'night', label: 'Night desk', bg: '#1b2230', fg: '#c5ccd8' },
+    { id: 'evening', label: 'Evening', bg: '#f3ebdc', fg: '#3b3123' },
   ]
 
   let el: HTMLElement | undefined = $state()

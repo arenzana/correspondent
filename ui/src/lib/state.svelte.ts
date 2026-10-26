@@ -395,11 +395,24 @@ class AppState {
     const root = document.documentElement
     root.dataset.theme = this.resolvedTheme()
     // The browser bar and the installed app's status bar match the headers.
+    // iOS reads a fresh theme-color tag but ignores edits to an existing
+    // one, and paints the status bar from the page background, so replace
+    // the tag and set the background outright when the theme changes.
     const sheet = getComputedStyle(root).getPropertyValue('--sheet').trim()
     if (sheet) {
-      for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
-        m.setAttribute('content', sheet)
-        m.removeAttribute('media')
+      const current = document.querySelectorAll('meta[name="theme-color"]')
+      if (current.length !== 1 || current[0].getAttribute('content') !== sheet) {
+        current.forEach((m) => m.remove())
+        const meta = document.createElement('meta')
+        meta.name = 'theme-color'
+        meta.content = sheet
+        document.head.append(meta)
+      }
+      if (window.matchMedia?.('(max-width: 699px)').matches) {
+        root.style.backgroundColor = sheet
+        document.body.style.backgroundColor = sheet
+      } else {
+        root.style.backgroundColor = document.body.style.backgroundColor = ''
       }
     }
     const icon = APP_ICONS.some((i) => i.id === this.prefs.appIcon) ? this.prefs.appIcon : 'wire'

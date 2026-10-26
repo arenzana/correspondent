@@ -9,10 +9,12 @@
  * selection) and seal (starred). Day is the default; Night desk and Evening
  * are selected by data-theme, and "auto" follows the system. */
 :root {
-  --fog: #eef1f5;
-  --sheet: #ffffff;
-  --ink: #18213a;
-  --slate: #5b6478;
+  /* Text sits around 10-12:1 against its sheet: comfortably past WCAG AAA
+   * (7:1) without the glare of pure black on white. */
+  --fog: #eef0f3;
+  --sheet: #fcfcfb;
+  --ink: #2a3349;
+  --slate: #5f6879;
   --rule: #d9dee7;
   --accent: #2742c7;
   --seal: #b7791f;
@@ -45,14 +47,14 @@
 }
 
 :root[data-theme='night'] {
-  --fog: #10151f;
-  --sheet: #161d2a;
-  --ink: #e3e8f2;
-  --slate: #8d97ab;
-  --rule: #263042;
-  --accent: #8ea2ff;
-  --seal: #e0a84a;
-  --ring: #4c5872;
+  --fog: #141a25;
+  --sheet: #1b2230;
+  --ink: #c5ccd8;
+  --slate: #8a94a7;
+  --rule: #2b3446;
+  --accent: #8a9cf0;
+  --seal: #d9a24a;
+  --ring: #4f5a70;
   --hover: color-mix(in oklab, var(--ink) 5%, transparent);
   --overlay-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 48px rgb(0 0 0 / 0.45);
   --scrim: rgb(0 0 0 / 0.5);
@@ -62,9 +64,9 @@
 
 :root[data-theme='evening'] {
   --fog: #e6dcc8;
-  --sheet: #f4ecdc;
-  --ink: #2e2416;
-  --slate: #6e604b;
+  --sheet: #f3ebdc;
+  --ink: #3b3123;
+  --slate: #6a5c48;
   --rule: #d8cbb2;
   --accent: #2f4a8a;
   --seal: #9a6516;
@@ -76,14 +78,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root[data-theme='auto'] {
-    --fog: #10151f;
-    --sheet: #161d2a;
-    --ink: #e3e8f2;
-    --slate: #8d97ab;
-    --rule: #263042;
-    --accent: #8ea2ff;
-    --seal: #e0a84a;
-    --ring: #4c5872;
+    --fog: #141a25;
+    --sheet: #1b2230;
+    --ink: #c5ccd8;
+    --slate: #8a94a7;
+    --rule: #2b3446;
+    --accent: #8a9cf0;
+    --seal: #d9a24a;
+    --ring: #4f5a70;
     --hover: color-mix(in oklab, var(--ink) 5%, transparent);
     --overlay-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 48px rgb(0 0 0 / 0.45);
     --scrim: rgb(0 0 0 / 0.5);
