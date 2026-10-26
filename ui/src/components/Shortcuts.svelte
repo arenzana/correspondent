@@ -32,6 +32,7 @@
         [['g', 't'], 'Today'],
         [['g', 's'], 'Starred'],
         [['g', 'a'], 'All articles'],
+        [['g', 'm'], 'Manage subscriptions'],
         [['⌘', 'K'], 'Jump anywhere'],
         [['/'], 'Search'],
         [['['], 'Show or hide feeds'],

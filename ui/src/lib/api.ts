@@ -25,6 +25,9 @@ export interface Feed {
   notify: boolean
   unread: number
   total: number
+  starred: number
+  /** Newest publication time (seconds), 0 if the feed has no articles. */
+  latestAt: number
   cadence: number[]
 }
 
@@ -146,7 +149,8 @@ export const api = {
   pushSubscribe: (sub: PushSubscriptionJSON) => request<void>('POST', '/push/subscriptions', sub),
   pushUnsubscribe: (endpoint: string) => request<void>('DELETE', '/push/subscriptions', { endpoint }),
   pushTest: () => request<{ sent: number }>('POST', '/push/test'),
-  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean; notify?: boolean }) =>
+  createFolder: (name: string) => request<{ id: number }>('POST', '/folders', { name }),
+  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean; notify?: boolean; url?: string }) =>
     request<void>('PATCH', '/feeds/' + id, patch),
   deleteFeed: (id: number) => request<void>('DELETE', '/feeds/' + id),
   refreshFeed: (id: number) => request<void>('POST', `/feeds/${id}/refresh`),

@@ -10,6 +10,7 @@
   import Login from './components/Login.svelte'
   import Toasts from './components/Toasts.svelte'
   import Resizer from './components/Resizer.svelte'
+  import Manage from './components/Manage.svelte'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -44,7 +45,10 @@
       clearTimeout(gTimer)
       const views = { u: 'unread', t: 'today', s: 'starred', a: 'all' } as const
       const v = views[e.key as keyof typeof views]
-      if (v) {
+      if (e.key === 'm') {
+        e.preventDefault()
+        app.manage()
+      } else if (v) {
         e.preventDefault()
         app.go({ kind: 'view', view: v })
       }
@@ -106,6 +110,7 @@
     class:focus={app.focusMode}
     class:nav-open={app.navOpen}
     class:resizing
+    class:managing={app.page === 'manage'}
     data-pane={app.pane}
     style:--nav-w="{live.nav ?? navWidth}px"
     style:--list-w="{live.list ?? listWidth}px"
@@ -122,6 +127,9 @@
     {#if app.navOpen}
       <button class="scrim" aria-label="Close feeds" onclick={() => (app.navOpen = false)}></button>
     {/if}
+    {#if app.page === 'manage'}
+      <div class="list manage-pane"><Manage /></div>
+    {:else}
     <div class="list">
       <Wire />
       <span class="handle list-handle">
@@ -132,6 +140,7 @@
       </span>
     </div>
     <div class="read" id="reader"><Article bind:this={article} /></div>
+    {/if}
   </div>
 
   {#if app.paletteOpen}<Palette />{/if}
@@ -188,6 +197,16 @@
   .shell.no-sidebar {
     grid-template-columns: 0 var(--list-w) minmax(0, 1fr);
   }
+  /* Subscription management takes the list and article columns together. */
+  .shell.managing {
+    grid-template-columns: var(--nav-w) minmax(0, 1fr);
+  }
+  .shell.managing.no-sidebar {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+  .manage-pane {
+    border-right: 0;
+  }
   .shell.no-sidebar .list {
     border-left: 0;
   }
@@ -216,6 +235,10 @@
     .shell,
     .shell.no-sidebar {
       grid-template-columns: var(--list-w) minmax(0, 1fr);
+    }
+    .shell.managing,
+    .shell.managing.no-sidebar {
+      grid-template-columns: minmax(0, 1fr);
     }
     .shell.focus {
       grid-template-columns: 0 minmax(0, 1fr);

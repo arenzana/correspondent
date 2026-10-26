@@ -122,6 +122,24 @@ try {
   const starred = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=starred')).json()).entries.map((e) => e.title))
   check(starred.length === 1 && starred[0] === 'Dispatch 0', 'the server has the star made offline')
 
+  console.log('Subscriptions')
+  await page.goto(APP + '/#/manage')
+  await page.reload()
+  const row = page.locator('.manage .row').first()
+  await row.waitFor({ timeout: 10_000 })
+  await row.locator('button.name').click()
+  const rename = row.locator('input.rename')
+  await rename.fill('Renamed Wire')
+  await rename.press('Enter')
+  await page.waitForTimeout(500)
+  const names = await page.evaluate(async () => (await (await fetch('/api/v1/tree')).json()).feeds.map((f) => f.title))
+  check(names.includes('Renamed Wire'), 'renaming a feed in Subscriptions saves it')
+  await page.getByRole('button', { name: 'Delete Renamed Wire' }).click()
+  await page.getByRole('button', { name: 'Delete feed' }).click()
+  await page.getByText('Deleted Renamed Wire.').waitFor({ timeout: 5_000 })
+  const after = await page.evaluate(async () => (await (await fetch('/api/v1/tree')).json()).feeds.length)
+  check(after === 0, 'deleting a feed after confirming removes it')
+
   console.log('Notifications')
   // Deliver a push message to the service worker through DevTools, as a push
   // service would, and check the notification it shows.

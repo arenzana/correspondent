@@ -106,6 +106,8 @@ class AppState {
   pane = $state<Pane>('list')
   focusMode = $state(false)
 
+  /** Which page fills the main area: the reader, or subscription management. */
+  page = $state<'reader' | 'manage'>('reader')
   paletteOpen = $state(false)
   shortcutsOpen = $state(false)
   addFeedOpen = $state(false)
@@ -475,7 +477,16 @@ class AppState {
 
   // ------------------------------------------------------------ navigation
 
+  /** Open subscription management. */
+  manage() {
+    this.page = 'manage'
+    this.navOpen = false
+    this.pane = 'list'
+    if (location.hash !== '#/manage') history.pushState(null, '', '#/manage')
+  }
+
   go(source: Source) {
+    this.page = 'reader'
     this.source = source
     this.selectedId = null
     this.article = null
@@ -495,6 +506,12 @@ class AppState {
   }
 
   readHash() {
+    if (location.hash === '#/manage') {
+      this.page = 'manage'
+      this.pane = 'list'
+      return
+    }
+    this.page = 'reader'
     const m = location.hash.match(/^#\/(unread|today|starred|all|feed\/\d+|folder\/\d+)(?:\/e\/(\d+))?$/)
     if (!m) return
     const [kind, id] = m[1].split('/')
@@ -707,6 +724,136 @@ class AppState {
   async showPending() {
     await this.load()
     document.querySelector('.wire-scroll')?.scrollTo({ top: 0 })
+  }
+
+  // ------------------------------------------------- subscription management
+
+  private feed(id: number) {
+    return this.feeds.find((f) => f.id === id)
+  }
+
+  async renameFeed(id: number, title: string) {
+    const f = this.feed(id)
+    const before = f?.title
+    title = title.trim()
+    if (!f || !title || title === before) return
+    f.title = title
+    try {
+      await api.updateFeed(id, { title })
+    } catch (e) {
+      f.title = before!
+      this.toast(`Couldn't rename the feed. ${(e as Error).message}`)
+    }
+  }
+
+  /** Move feeds to a folder (an ID), a new folder (a name), or out of any folder (null). */
+  async moveFeeds(ids: number[], to: number | string | null) {
+    try {
+      for (const id of ids) {
+        if (typeof to === 'string') await api.updateFeed(id, { folderName: to })
+        else if (to === null) await api.updateFeed(id, { noFolder: true })
+        else await api.updateFeed(id, { folderId: to })
+      }
+      await this.refreshTree()
+      const where = to === null ? 'out of folders' : typeof to === 'string' ? `to ${to}` : `to ${this.folders.find((f) => f.id === to)?.name ?? 'the folder'}`
+      this.toast(`Moved ${ids.length === 1 ? 'the feed' : `${ids.length} feeds`} ${where}.`)
+    } catch (e) {
+      await this.refreshTree().catch(() => {})
+      this.toast(`Couldn't move the feeds. ${(e as Error).message}`)
+    }
+  }
+
+  /** Point a feed at a new address; returns an error message, or '' on success. */
+  async setFeedURL(id: number, url: string): Promise<string> {
+    try {
+      await api.updateFeed(id, { url: url.trim() })
+      await api.refreshFeed(id).catch(() => {})
+      await this.refreshTree()
+      const f = this.feed(id)
+      this.toast(f?.errorCount ? `Saved, but the new address failed too: ${f.lastError}` : 'Address saved and the feed updated.')
+      return ''
+    } catch (e) {
+      return (e as Error).message
+    }
+  }
+
+  async setPaused(ids: number[], paused: boolean) {
+    for (const id of ids) {
+      const f = this.feed(id)
+      if (f) f.paused = paused
+    }
+    try {
+      for (const id of ids) await api.updateFeed(id, { paused })
+      if (!paused) for (const id of ids) await api.refreshFeed(id).catch(() => {})
+      await this.refreshTree()
+      this.toast(`${paused ? 'Paused' : 'Resumed'} ${ids.length === 1 ? 'the feed' : `${ids.length} feeds`}.`)
+    } catch (e) {
+      await this.refreshTree().catch(() => {})
+      this.toast(`Couldn't ${paused ? 'pause' : 'resume'} the feeds. ${(e as Error).message}`)
+    }
+  }
+
+  async refreshFeedNow(id: number) {
+    try {
+      await api.refreshFeed(id)
+      await this.refreshTree()
+      const f = this.feed(id)
+      this.toast(f?.errorCount ? `Still failing: ${f.lastError}` : `Updated ${f?.title ?? 'the feed'}.`)
+    } catch (e) {
+      this.toast(`Couldn't update the feed. ${(e as Error).message}`)
+    }
+  }
+
+  /** Unsubscribe; the feeds' articles go with them. */
+  async deleteFeeds(ids: number[]) {
+    const names = ids.map((id) => this.feed(id)?.title ?? 'feed')
+    try {
+      for (const id of ids) await api.deleteFeed(id)
+      if (this.source.kind === 'feed' && ids.includes(this.source.id)) this.source = { kind: 'view', view: 'unread' }
+      await this.refreshTree()
+      this.toast(ids.length === 1 ? `Deleted ${names[0]}.` : `Deleted ${ids.length} feeds.`)
+    } catch (e) {
+      await this.refreshTree().catch(() => {})
+      this.toast(`Couldn't delete. ${(e as Error).message}`)
+    }
+  }
+
+  async createFolder(name: string) {
+    name = name.trim()
+    if (!name) return
+    try {
+      await api.createFolder(name)
+      await this.refreshTree()
+    } catch (e) {
+      this.toast(`Couldn't create the folder. ${(e as Error).message}`)
+    }
+  }
+
+  async renameFolder(id: number, name: string) {
+    const folder = this.folders.find((f) => f.id === id)
+    const before = folder?.name
+    name = name.trim()
+    if (!folder || !name || name === before) return
+    folder.name = name
+    try {
+      await api.renameFolder(id, name)
+    } catch (e) {
+      folder.name = before!
+      this.toast(`Couldn't rename the folder. ${(e as Error).message}`)
+    }
+  }
+
+  /** Delete a folder; its feeds stay, outside any folder. */
+  async deleteFolder(id: number) {
+    const name = this.folders.find((f) => f.id === id)?.name
+    try {
+      await api.deleteFolder(id)
+      if (this.source.kind === 'folder' && this.source.id === id) this.source = { kind: 'view', view: 'unread' }
+      await this.refreshTree()
+      this.toast(`Deleted the folder ${name}. Its feeds are kept.`)
+    } catch (e) {
+      this.toast(`Couldn't delete the folder. ${(e as Error).message}`)
+    }
   }
 
   /** Opt the feed in or out of notifications. */

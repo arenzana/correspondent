@@ -127,7 +127,9 @@ ${items}
 
 function opml() {
   const folders = [...new Set(feeds.map((f) => f.folder))]
-  const body = folders
+  // A feed whose address is gone, to show a failing subscription.
+  const failing = '<outline text="Writing"><outline type="rss" text="The Old Wire" xmlUrl="' + FEEDS + '/old-wire.xml"/></outline>'
+  const body = failing + folders
     .map(
       (folder) =>
         `<outline text="${folder}">${feeds
@@ -200,6 +202,13 @@ try {
   await mutate('star', [byTitle('Optical sizes'), byTitle('Letters to a younger')])
   const hero = byTitle('The patience of a news desk')
 
+  // Subscription states for the management screen.
+  const tree = await (await api.get(`${APP}/api/v1/tree`)).json()
+  const feedID = (title) => tree.feeds.find((f) => f.title === title).id
+  const patchFeed = (title, data) => api.patch(`${APP}/api/v1/feeds/${feedID(title)}`, { headers: { 'X-Correspondent': '1' }, data })
+  await patchFeed('Kernel Weekly', { paused: true })
+  await patchFeed('Field Notes', { notify: true })
+
   const prefs = (p) => api.put(`${APP}/api/v1/prefs`, { headers: { 'X-Correspondent': '1' }, data: { markOnOpen: false, ...p } })
   const page = await ctx.newPage()
 
@@ -209,7 +218,7 @@ try {
     // Hash-only navigations don't reload; start every shot from a fresh page.
     await page.goto('about:blank')
     await page.goto(`${APP}/${hash}`)
-    await page.waitForSelector('.wire .row', { state: 'attached' })
+    await page.waitForSelector(hash.includes('manage') ? '.manage .row' : '.wire .row', { state: 'attached' })
     await page.waitForLoadState('networkidle')
     if (setup) await setup()
     await page.waitForTimeout(400)
@@ -240,8 +249,17 @@ try {
       await page.waitForSelector('.cand')
     },
   })
+  await shot('manage', { hash: '#/manage' })
+  await shot('manage-delete', {
+    hash: '#/manage',
+    theme: 'night',
+    setup: async () => {
+      await page.getByRole('button', { name: 'Delete Grid & Margin' }).click()
+    },
+  })
   await shot('mobile-wire', { viewport: { width: 390, height: 844 }, hash: '#/unread' })
   await shot('mobile-article', { viewport: { width: 390, height: 844 } })
+  await shot('mobile-manage', { viewport: { width: 390, height: 844 }, hash: '#/manage' })
   await shot('mobile-swipe', {
     viewport: { width: 390, height: 844 },
     hash: '#/unread',

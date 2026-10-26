@@ -392,6 +392,7 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 		NoFolder   bool    `json:"noFolder"`
 		Paused     *bool   `json:"paused"`
 		Notify     *bool   `json:"notify"`
+		URL        *string `json:"url"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -404,6 +405,21 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.FolderID = &fid
+	}
+	if in.URL != nil {
+		u := strings.TrimSpace(*in.URL)
+		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") || len(u) > 2048 {
+			fail(w, http.StatusBadRequest, "Enter a full http or https address.")
+			return
+		}
+		switch err := a.Store.SetFeedURL(r.Context(), uid, id, u); {
+		case errors.Is(err, store.ErrDuplicate):
+			fail(w, http.StatusConflict, "You already subscribe to that address.")
+			return
+		case err != nil:
+			a.result(w, err)
+			return
+		}
 	}
 	if in.Notify != nil {
 		if err := a.Store.SetFeedNotify(r.Context(), uid, id, *in.Notify); err != nil {

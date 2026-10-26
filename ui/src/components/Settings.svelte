@@ -149,6 +149,7 @@
 
     <section>
       <h3>Subscriptions</h3>
+      <p><button class="btn" onclick={() => { app.settingsOpen = false; app.manage() }}>Manage subscriptions</button></p>
       <div class="row">
         <button class="btn" onclick={() => fileInput?.click()}>Import OPML…</button>
         <a class="btn" href="/api/v1/opml" download>Export OPML</a>

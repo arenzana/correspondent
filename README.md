@@ -29,6 +29,8 @@ clients are concerned.
 | ![Night desk theme](docs/screenshots/desktop-night.png) | ![Evening theme in focused reading mode](docs/screenshots/reading-evening.png) |
 | **Jump anywhere with ⌘K** | **Add a feed from a site or feed address** |
 | ![Command palette](docs/screenshots/command-palette.png) | ![Add feed dialog with a discovered feed](docs/screenshots/add-feed.png) |
+| **Manage subscriptions** | **Deleting asks first** |
+| ![Subscriptions page with feed health](docs/screenshots/manage.png) | ![Delete confirmation](docs/screenshots/manage-delete.png) |
 
 <p>
   <img src="docs/screenshots/mobile-wire.png" alt="The wire on a phone" width="250">
@@ -120,9 +122,6 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- **A subscription manager**: delete, rename, move between folders, pause
-  and resume feeds, see each feed's health and posting cadence, and fix a
-  feed's address.
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.

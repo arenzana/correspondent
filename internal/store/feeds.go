@@ -32,6 +32,8 @@ type Feed struct {
 	Notify      bool   `json:"notify"`
 	Unread      int    `json:"unread"`
 	Total       int    `json:"total"`
+	Starred     int    `json:"starred"`
+	LatestAt    int64  `json:"latestAt"` // newest publication time (seconds), 0 if none
 	// Cadence is the number of entries per day over the last 14 days, oldest
 	// first; the UI draws it as the feed's pulse.
 	Cadence []int `json:"cadence"`
@@ -107,7 +109,9 @@ func (s *Store) Feeds(ctx context.Context, userID int64) ([]Feed, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+feedColumns+`,
 		       (SELECT COUNT(*) FROM entries e WHERE e.feed_id = f.id AND e.read_at IS NULL),
-		       (SELECT COUNT(*) FROM entries e WHERE e.feed_id = f.id)
+		       (SELECT COUNT(*) FROM entries e WHERE e.feed_id = f.id),
+		       (SELECT COUNT(*) FROM entries e WHERE e.feed_id = f.id AND e.starred_at IS NOT NULL),
+		       (SELECT COALESCE(MAX(e.published_at), 0) FROM entries e WHERE e.feed_id = f.id)
 		  FROM feeds f WHERE f.user_id = ? ORDER BY f.title COLLATE NOCASE`, userID)
 	if err != nil {
 		return nil, err
@@ -117,7 +121,7 @@ func (s *Store) Feeds(ctx context.Context, userID int64) ([]Feed, error) {
 	byID := map[int64]int{}
 	for rows.Next() {
 		var f Feed
-		if err := scanFeed(rows, &f, &f.Unread, &f.Total); err != nil {
+		if err := scanFeed(rows, &f, &f.Unread, &f.Total, &f.Starred, &f.LatestAt); err != nil {
 			return nil, err
 		}
 		f.Cadence = make([]int, 14)
@@ -298,4 +302,24 @@ func (s *Store) SetFeedSchedule(ctx context.Context, userID, feedID int64, inter
 	return checkAffected(s.db.ExecContext(ctx, `
 		UPDATE feeds SET paused = ?, interval_sec = CASE WHEN ? > 0 THEN ? ELSE interval_sec END
 		 WHERE id = ? AND user_id = ?`, paused, intervalSec, intervalSec, feedID, userID))
+}
+
+// ErrDuplicate means the user already subscribes to that address.
+var ErrDuplicate = errors.New("already subscribed")
+
+// SetFeedURL moves a feed to a new address (a site that moved its feed),
+// keeping its ID, history and settings. Conditional-request state is
+// cleared and the feed is fetched again right away.
+func (s *Store) SetFeedURL(ctx context.Context, userID, feedID int64, url string) error {
+	var other int64
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM feeds WHERE user_id = ? AND url = ? AND id <> ?`, userID, url, feedID).Scan(&other)
+	if err == nil {
+		return ErrDuplicate
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	return checkAffected(s.db.ExecContext(ctx, `
+		UPDATE feeds SET url = ?, etag = '', last_modified = '', error_count = 0, last_error = '', next_fetch_at = 0
+		 WHERE id = ? AND user_id = ?`, url, feedID, userID))
 }

@@ -301,3 +301,37 @@ func TestPublishedOrderAndCursor(t *testing.T) {
 		t.Fatalf("published order %v, want %v", got, want)
 	}
 }
+
+func TestSetFeedURL(t *testing.T) {
+	st, ctx := open(t), context.Background()
+	uid, feedID, ids := fixture(t, st, "a", 2)
+	other, _ := st.AddFeed(ctx, uid, "https://other.example/feed", "o", nil)
+	st.SaveFetchResult(ctx, feedID, FetchResult{Status: 200, ETag: `"x"`, LastModified: "yesterday", NextFetch: time.Now().Add(time.Hour)})
+
+	if err := st.SetFeedURL(ctx, uid, feedID, "https://other.example/feed"); err != ErrDuplicate {
+		t.Fatalf("duplicate address: %v", err)
+	}
+	if err := st.SetFeedURL(ctx, uid, feedID, "https://moved.example/feed"); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := st.Feed(ctx, uid, feedID)
+	if f.URL != "https://moved.example/feed" || f.ETag != "" || f.LastModified != "" {
+		t.Fatalf("after move: %+v", f)
+	}
+	if due, _ := st.DueFeeds(ctx, time.Now(), 10); !slices.ContainsFunc(due, func(d Feed) bool { return d.ID == feedID }) {
+		t.Fatal("moved feed not fetched right away")
+	}
+	if left, _, _ := st.EntryIDs(ctx, Filter{UserID: uid, FeedID: feedID}); len(left) != len(ids) {
+		t.Fatal("moving a feed lost its history")
+	}
+	feeds, _ := st.Feeds(ctx, uid)
+	for _, f := range feeds {
+		if f.ID == feedID && (f.LatestAt == 0 || f.Total != 2) {
+			t.Fatalf("stats: %+v", f)
+		}
+	}
+	bob, _ := st.CreateUser(ctx, "bob", "password-123")
+	if err := st.SetFeedURL(ctx, bob, other, "https://x.example/"); err != ErrNotFound {
+		t.Fatalf("other user's feed: %v", err)
+	}
+}

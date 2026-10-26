@@ -7,6 +7,20 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
+### Added
+
+- Subscriptions page (sidebar, ⌘K, `g m`, or Settings): every feed with its
+  address, posting rhythm, last check and any error, unread and total
+  counts, grouped by folder. Rename inline, move between folders, change a
+  feed's address (it keeps its articles), update now, pause or resume,
+  notifications, and delete with a confirmation that says what goes with it.
+- Find feeds by name or address; filter to failing, paused, or quiet ones
+  (nothing published in 90 days).
+- Select several feeds to move, pause, resume or delete together.
+- Create, rename and delete folders (deleting a folder keeps its feeds).
+
 ## [0.4.0] - 2026-10-26
 
 ### Added
@@ -100,7 +114,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/arenzana/correspondent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arenzana/correspondent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arenzana/correspondent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arenzana/correspondent/compare/v0.1.1...v0.2.0

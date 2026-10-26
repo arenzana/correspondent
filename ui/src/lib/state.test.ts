@@ -5,6 +5,12 @@ import type { Entry } from './api'
 vi.mock('./api', async (importOriginal) => ({
   ApiError: (await importOriginal<typeof import('./api')>()).ApiError,
   api: {
+    updateFeed: vi.fn(),
+    deleteFeed: vi.fn(),
+    refreshFeed: vi.fn(),
+    renameFolder: vi.fn(),
+    deleteFolder: vi.fn(),
+    createFolder: vi.fn(),
     setState: vi.fn(),
     markAllRead: vi.fn(),
     tree: vi.fn(),
@@ -32,7 +38,7 @@ beforeEach(async () => {
   vi.mocked(api.savePrefs).mockResolvedValue(undefined)
   app.entries = [entry('1'), entry('2'), entry('3', { read: true })]
   app.feeds = [{ id: 1, folderId: null, url: '', siteUrl: '', title: 'F', description: '', iconUrl: '', lastFetchAt: 0,
-    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, unread: 2, total: 3, cadence: [] }]
+    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
   app.folders = []
   app.counts = { unread: 2, starred: 0, today: 2, newest: '3' }
   app.toasts = []
@@ -107,6 +113,58 @@ describe('changes from other clients', () => {
     vi.mocked(api.entries).mockResolvedValue({ entries: [entry('1', { read: true, starred: true }), entry('3')], cursor: '' })
     await app.resyncStates()
     expect(app.entries.map((e) => [e.id, e.read, e.starred])).toEqual([['1', true, true], ['2', false, false], ['3', false, false]])
+  })
+})
+
+describe('subscription management', () => {
+  it('renames optimistically and rolls back if refused', async () => {
+    vi.mocked(api.updateFeed).mockResolvedValueOnce(undefined)
+    await app.renameFeed(1, '  Wire  ')
+    expect(app.feeds[0].title).toBe('Wire')
+    expect(api.updateFeed).toHaveBeenCalledWith(1, { title: 'Wire' })
+    vi.mocked(api.updateFeed).mockRejectedValueOnce(new ApiError(400, 'Too long.'))
+    await app.renameFeed(1, 'Other')
+    expect(app.feeds[0].title).toBe('Wire')
+    expect(app.toasts.at(-1)?.message).toMatch(/Couldn't rename the feed\. Too long\./)
+  })
+
+  it('ignores empty or unchanged names', async () => {
+    await app.renameFeed(1, '   ')
+    await app.renameFeed(1, 'F')
+    expect(api.updateFeed).not.toHaveBeenCalled()
+  })
+
+  it('moves feeds to a folder, a new folder, or out of folders', async () => {
+    vi.mocked(api.updateFeed).mockResolvedValue(undefined)
+    await app.moveFeeds([1, 2], 'Tech')
+    expect(api.updateFeed).toHaveBeenCalledWith(1, { folderName: 'Tech' })
+    expect(api.updateFeed).toHaveBeenCalledWith(2, { folderName: 'Tech' })
+    await app.moveFeeds([1], null)
+    expect(api.updateFeed).toHaveBeenCalledWith(1, { noFolder: true })
+    expect(app.toasts.at(-1)?.message).toBe('Moved the feed out of folders.')
+  })
+
+  it('reports a refused address change without closing anything', async () => {
+    vi.mocked(api.updateFeed).mockRejectedValueOnce(new ApiError(409, 'You already subscribe to that address.'))
+    expect(await app.setFeedURL(1, 'https://dup.example/feed')).toBe('You already subscribe to that address.')
+  })
+
+  it('deletes feeds and leaves a view that no longer exists', async () => {
+    vi.mocked(api.deleteFeed).mockResolvedValue(undefined)
+    app.source = { kind: 'feed', id: 1 }
+    await app.deleteFeeds([1])
+    expect(api.deleteFeed).toHaveBeenCalledWith(1)
+    expect(app.source).toEqual({ kind: 'view', view: 'unread' })
+    expect(app.toasts.at(-1)?.message).toBe('Deleted F.')
+  })
+
+  it('opens and leaves the management page through the address bar', () => {
+    app.manage()
+    expect(app.page).toBe('manage')
+    expect(location.hash).toBe('#/manage')
+    vi.mocked(api.entries).mockResolvedValue({ entries: [], cursor: '' })
+    app.go({ kind: 'view', view: 'starred' })
+    expect(app.page).toBe('reader')
   })
 })
 
