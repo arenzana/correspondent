@@ -349,6 +349,17 @@ describe('themes', () => {
     expect(document.documentElement.dataset.theme).toBe('night')
   })
 
+  it('colours the status bar like the headers', () => {
+    document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)">')
+    document.documentElement.style.setProperty('--sheet', '#f4ecdc')
+    app.setPrefs({ theme: 'evening' })
+    const meta = document.querySelector('meta[name="theme-color"]')!
+    expect(meta.getAttribute('content')).toBe('#f4ecdc')
+    expect(meta.hasAttribute('media')).toBe(false)
+    document.documentElement.style.removeProperty('--sheet')
+    meta.remove()
+  })
+
   it('follows the sun for a stored place', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-21T12:00:00Z'))

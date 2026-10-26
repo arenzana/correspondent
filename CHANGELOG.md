@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-26
+
+### Fixed
+
+- On iPhone the strip behind the clock was the page's background colour, a
+  shade off from the header below it. It now matches the header in every
+  theme (day, evening, night, and when following the system).
+
 ## [0.7.0] - 2026-10-26
 
 ### Added
@@ -156,7 +164,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/arenzana/correspondent/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arenzana/correspondent/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/arenzana/correspondent/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arenzana/correspondent/compare/v0.4.0...v0.5.0

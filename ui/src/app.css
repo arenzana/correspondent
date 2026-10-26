@@ -121,6 +121,15 @@ body {
   inset: 0;
 }
 
+/* On a phone the status bar takes the page's colour; every pane header
+   there is a sheet, so the page is one too. */
+@media (max-width: 699px) {
+  html,
+  body {
+    background: var(--sheet);
+  }
+}
+
 #app {
   height: 100%;
 }

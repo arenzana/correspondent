@@ -139,6 +139,8 @@ class AppState {
 
   async boot() {
     this.applyPrefs()
+    // "Auto" follows the system in CSS; the status bar colour must follow too.
+    window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => this.applyPrefs())
     try {
       let me: Awaited<ReturnType<typeof api.me>>
       try {
@@ -383,6 +385,14 @@ class AppState {
   applyPrefs() {
     const root = document.documentElement
     root.dataset.theme = this.resolvedTheme()
+    // The browser bar and the installed app's status bar match the headers.
+    const sheet = getComputedStyle(root).getPropertyValue('--sheet').trim()
+    if (sheet) {
+      for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+        m.setAttribute('content', sheet)
+        m.removeAttribute('media')
+      }
+    }
     const icon = APP_ICONS.some((i) => i.id === this.prefs.appIcon) ? this.prefs.appIcon : 'wire'
     const setHref = (id: string, file: string) => document.getElementById(id)?.setAttribute('href', `/icons/${icon}/${file}`)
     setHref('favicon', 'favicon.svg')
