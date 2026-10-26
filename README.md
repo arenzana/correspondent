@@ -120,7 +120,9 @@ make vuln    # govulncheck + npm audit
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.
 - Fluid motion for the selection bar on the time spine as you move up and
-  down the list.
+  down the list, and new articles sliding in at the top and pushing the list
+  down as they arrive (when you're at the top; a list you're reading further
+  down stays still).
 - **A CLI reader and manager** for people and AI agents alike: the same
   binary talking to `/api/v1` with personal API tokens, `--json` output with
   stable schemas, no prompts, meaningful exit codes, and an MCP server.
