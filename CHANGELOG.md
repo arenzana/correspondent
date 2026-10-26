@@ -7,6 +7,15 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-26
+
+### Fixed
+
+- Summaries that end with "Continue reading" followed by another line (a
+  subscribe link, "The post … appeared first on …") weren't recognised, so
+  the article didn't offer the full text. Such links now count anywhere near
+  the end, for teasers of up to several paragraphs.
+
 ## [0.7.1] - 2026-10-26
 
 ### Fixed
@@ -164,7 +173,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/arenzana/correspondent/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/arenzana/correspondent/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arenzana/correspondent/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/arenzana/correspondent/compare/v0.5.0...v0.6.0
