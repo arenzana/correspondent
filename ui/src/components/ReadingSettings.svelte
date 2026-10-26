@@ -5,7 +5,7 @@
   // Swatches show each theme's own sheet and ink, independent of the current theme.
   const themes: { id: Theme; label: string; bg: string; fg: string }[] = [
     { id: 'auto', label: 'System', bg: 'linear-gradient(135deg, #ffffff 50%, #161d2a 50%)', fg: '#8d97ab' },
-    { id: 'sun', label: 'Sun', bg: 'linear-gradient(135deg, #ffffff 50%, #f4ecdc 50%)', fg: '#6e604b' },
+    { id: 'sun', label: 'Sun', bg: 'linear-gradient(135deg, #ffffff 33%, #f4ecdc 33% 66%, #161d2a 66%)', fg: '#6e604b' },
     { id: 'day', label: 'Day', bg: '#ffffff', fg: '#18213a' },
     { id: 'night', label: 'Night desk', bg: '#161d2a', fg: '#e3e8f2' },
     { id: 'evening', label: 'Evening', bg: '#f4ecdc', fg: '#2e2416' },
@@ -41,7 +41,7 @@
     </div>
     {#if app.prefs.theme === 'sun' && app.sunNext}
       <p class="sun-note">
-        {app.sunNext.theme === 'evening' ? 'Evening' : 'Day'} at {clock(app.sunNext.at)}{#if app.prefs.place?.estimated},
+        {{ day: 'Day', evening: 'Evening', night: 'Night desk' }[app.sunNext.theme]} at {clock(app.sunNext.at)}{#if app.prefs.place?.estimated},
           estimated from your time zone{/if}.
       </p>
     {/if}

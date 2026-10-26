@@ -29,6 +29,11 @@ type Store struct {
 
 	idMu   sync.Mutex
 	lastID int64
+
+	// OnStateChange, if set, is called after every committed read/unread/
+	// star/unstar change with the IDs that actually changed, whichever API
+	// or client caused it. It must not block.
+	OnStateChange func(userID int64, action string, ids []int64)
 }
 
 // Open opens (creating if needed) the database at path and applies pending

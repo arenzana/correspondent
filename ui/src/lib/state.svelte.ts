@@ -157,6 +157,53 @@ class AppState {
     this.events?.close()
     this.events = new EventSource('/api/v1/events')
     this.events.addEventListener('refresh', () => this.onNewEntries())
+    this.events.addEventListener('state', (e) => {
+      try {
+        const { action, ids } = JSON.parse((e as MessageEvent).data)
+        this.applyRemoteState(action, ids)
+      } catch {
+        /* malformed event: ignore, the next resync corrects it */
+      }
+    })
+    this.events.addEventListener('resync', () => this.resyncStates())
+  }
+
+  private treeTimer: ReturnType<typeof setTimeout> | undefined
+  private refreshTreeSoon() {
+    clearTimeout(this.treeTimer)
+    this.treeTimer = setTimeout(() => this.refreshTree().catch(() => {}), 250)
+  }
+
+  /**
+   * A change made anywhere (Reeder, another tab, another device) arrives
+   * here. Visible rows and the open article are patched in place; counts are
+   * reloaded from the server, so nothing is counted twice when our own
+   * changes echo back.
+   */
+  applyRemoteState(action: string, ids: ID[]) {
+    const change: Partial<Entry> | null =
+      action === 'read' ? { read: true }
+      : action === 'unread' ? { read: false }
+      : action === 'star' ? { starred: true }
+      : action === 'unstar' ? { starred: false }
+      : null
+    if (!change) return
+    if (action === 'read' && this.selectedId && ids.includes(this.selectedId)) clearTimeout(this.dwell)
+    this.patch(ids, change)
+    this.refreshTreeSoon()
+  }
+
+  /** After missed events: re-read the state of the visible rows, in place. */
+  async resyncStates() {
+    this.refreshTreeSoon()
+    if (!this.entries.length) return
+    const r = await api.entries({ ...this.query_(), view: undefined, limit: Math.min(200, this.entries.length) }).catch(() => null)
+    if (!r) return
+    const fresh = new Map(r.entries.map((e) => [e.id, e]))
+    this.entries = this.entries.map((e) => {
+      const f = fresh.get(e.id)
+      return f ? { ...e, read: f.read, starred: f.starred } : e
+    })
   }
 
   private async onNewEntries() {
@@ -179,7 +226,7 @@ class AppState {
   private prefsTimer: ReturnType<typeof setTimeout> | undefined
 
   /** When the Sun theme will next change, for the settings popover. */
-  sunNext = $state<{ theme: 'day' | 'evening'; at: Date } | null>(null)
+  sunNext = $state<{ theme: 'day' | 'evening' | 'night'; at: Date } | null>(null)
   private sunTimer: ReturnType<typeof setTimeout> | undefined
 
   /**
@@ -211,10 +258,11 @@ class AppState {
     const p = place ?? { ...estimateFromTimezone(), estimated: true }
     const now = new Date()
     const r = sunTheme(now, p.lat, p.lon)
-    this.sunNext = { theme: r.theme === 'day' ? 'evening' : 'day', at: r.next }
+    // What comes next: Day → Evening → Night desk → Day.
+    this.sunNext = { theme: r.theme === 'day' ? 'evening' : r.theme === 'evening' ? 'night' : 'day', at: r.next }
     // Re-evaluate at the next sunrise or sunset (plus a second of margin).
     this.sunTimer = setTimeout(() => this.applyPrefs(), Math.min(r.next.getTime() - now.getTime() + 1000, 2 ** 31 - 1))
-    return r.theme === 'day' ? 'light' : 'evening'
+    return r.theme === 'day' ? 'light' : r.theme
   }
 
   applyPrefs() {

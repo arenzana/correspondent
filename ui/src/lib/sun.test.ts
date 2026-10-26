@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coarse, estimateFromTimezone, sunTheme, sunTimes } from './sun'
+import { coarse, estimateFromTimezone, nauticalTwilight, sunTheme, sunTimes } from './sun'
 
 const minutesApart = (a: Date | null, b: Date) => Math.abs((a?.getTime() ?? NaN) - b.getTime()) / 60_000
 
@@ -32,19 +32,31 @@ describe('sunTheme', () => {
     expect(minutesApart(r.next, new Date('2026-06-21T19:48:00Z'))).toBeLessThan(4)
   })
 
-  it('is Evening after sunset until the next sunrise', () => {
+  it('is Evening from sunset until nautical dusk', () => {
+    // NOAA: Madrid, 21 June 2026, nautical dusk about 20:58 UTC.
+    const r = sunTheme(new Date('2026-06-21T20:00:00Z'), ...madrid)
+    expect(r.theme).toBe('evening')
+    expect(minutesApart(r.next, new Date('2026-06-21T20:58:00Z'))).toBeLessThan(6)
+  })
+
+  it('is Night desk after nautical dusk until sunrise', () => {
     const r = sunTheme(new Date('2026-06-21T22:00:00Z'), ...madrid)
-    expect(r.theme).toBe('evening')
+    expect(r.theme).toBe('night')
     expect(minutesApart(r.next, new Date('2026-06-22T04:44:00Z'))).toBeLessThan(5)
+    expect(sunTheme(new Date('2026-06-22T03:00:00Z'), ...madrid).theme).toBe('night')
   })
 
-  it('is Evening before sunrise', () => {
-    expect(sunTheme(new Date('2026-06-21T03:00:00Z'), ...madrid).theme).toBe('evening')
-  })
-
-  it('handles polar periods without a sunrise', () => {
-    const r = sunTheme(new Date('2026-12-21T12:00:00Z'), 69.65, 18.96)
+  it('stays Evening all night where the sky never gets dark', () => {
+    // Oslo in June: the sun stays above -12°, so no nautical dusk.
+    expect(nauticalTwilight(new Date('2026-06-21T12:00:00Z'), 59.91, 10.75).polar).toBe('day')
+    const r = sunTheme(new Date('2026-06-21T23:30:00Z'), 59.91, 10.75)
     expect(r.theme).toBe('evening')
+  })
+
+  it('handles polar day and polar night', () => {
+    expect(sunTheme(new Date('2026-06-21T23:00:00Z'), 69.65, 18.96).theme).toBe('day')
+    const r = sunTheme(new Date('2026-12-21T12:00:00Z'), 69.65, 18.96)
+    expect(r.theme).toBe('night')
     expect(r.next.getTime()).toBeGreaterThan(Date.parse('2026-12-21T12:00:00Z'))
   })
 })

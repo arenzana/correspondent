@@ -212,6 +212,7 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 	limiter := ratelimit.New(10, 10*time.Minute)
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip}
 	ing.Notify = a.Notify
+	st.OnStateChange = a.NotifyState
 	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip}
 	srv := &http.Server{
 		Addr:              addr,

@@ -1,14 +1,21 @@
 package api
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/arenzana/correspondent/internal/ratelimit"
 )
 
 func decodeJSON[T any](t *testing.T, r *http.Response) T {
@@ -79,6 +86,12 @@ func TestReaderFlow(t *testing.T) {
 	}](t, expect(t, e.do(t, c, "GET", fmt.Sprintf("/api/v1/entries?folder=%d&view=unread", folder.ID), "", false), 200))
 	if len(list.Entries) != 1 || list.Entries[0].ID != entryID || list.Cursor != "" {
 		t.Fatalf("folder entries: %+v", list)
+	}
+	withBody := decodeJSON[struct {
+		Entries []struct{ Content string }
+	}](t, expect(t, e.do(t, c, "GET", "/api/v1/entries?view=unread&content=1", "", false), 200))
+	if len(withBody.Entries) != 1 {
+		t.Fatalf("content=1: %+v", withBody)
 	}
 	full := decodeJSON[struct {
 		Entry struct{ Title, Content string }
@@ -170,7 +183,7 @@ func TestLoginRequiresHeader(t *testing.T) {
 	expect(t, r, http.StatusForbidden)
 }
 
-func TestHubLimitsStreams(t *testing.T) {
+func TestHubLimitsAndOverflow(t *testing.T) {
 	var h hub
 	for i := range 16 {
 		if _, ok := h.subscribe(1); !ok {
@@ -180,15 +193,83 @@ func TestHubLimitsStreams(t *testing.T) {
 	if _, ok := h.subscribe(1); ok {
 		t.Fatal("17th stream accepted")
 	}
-	ch, ok := h.subscribe(2)
+	s, ok := h.subscribe(2)
 	if !ok {
 		t.Fatal("other user affected by the limit")
 	}
-	h.publish(2)
-	h.publish(2) // coalesces; must not block
+	for range 200 { // far more than the buffer: must not block
+		h.publish(2, event{name: "state", data: []byte("{}")})
+	}
+	if len(s.ch) != cap(s.ch) {
+		t.Fatalf("buffer holds %d of %d", len(s.ch), cap(s.ch))
+	}
 	select {
-	case <-ch:
+	case <-s.overflowed:
 	default:
-		t.Fatal("no notification delivered")
+		t.Fatal("overflow not signalled, the reader would silently miss changes")
+	}
+}
+
+// TestStateEventsReachOpenReaders: a change made by any client (here through
+// the store, as the Reader API does) is pushed to the user's open streams,
+// and only to that user's.
+func TestStateEventsReachOpenReaders(t *testing.T) {
+	e := newEnv(t)
+	a := &API{Store: e.store, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute)}
+	e.store.OnStateChange = a.NotifyState
+	srv := httptest.NewServer(a.Handler())
+	// Cleanups run last-in first-out: open streams close before the server,
+	// whose Close waits for active connections.
+	t.Cleanup(srv.Close)
+	e.srv = srv
+	alice, entry := e.user(t, "alice")
+	bob, _ := e.user(t, "bob")
+
+	open := func(c *http.Client) *bufio.Reader {
+		req, _ := http.NewRequest("GET", srv.URL+"/api/v1/events", nil)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { resp.Body.Close() })
+		return bufio.NewReader(resp.Body)
+	}
+	aliceStream, bobStream := open(alice), open(bob)
+	next := func(r *bufio.Reader) (string, string) {
+		var name, data string
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return name, data
+			}
+			line = strings.TrimRight(line, "\n")
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				name = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "data: "):
+				data = strings.TrimPrefix(line, "data: ")
+			case line == "" && name != "":
+				return name, data
+			}
+		}
+	}
+
+	uid, _ := e.store.UserIDByName(context.Background(), "alice")
+	id, _ := strconv.ParseInt(entry, 10, 64)
+	if _, err := e.store.SetState(context.Background(), uid, "star", []int64{id}); err != nil {
+		t.Fatal(err)
+	}
+	name, data := next(aliceStream)
+	if name != "state" || !strings.Contains(data, `"action":"star"`) || !strings.Contains(data, entry) {
+		t.Fatalf("alice got %q %q", name, data)
+	}
+	// A no-op change sends nothing; bob never hears about alice's articles.
+	e.store.SetState(context.Background(), uid, "star", []int64{id})
+	got := make(chan string, 1)
+	go func() { n, _ := next(bobStream); got <- n }()
+	select {
+	case n := <-got:
+		t.Fatalf("bob received %q", n)
+	case <-time.After(300 * time.Millisecond):
 	}
 }

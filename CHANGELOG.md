@@ -7,6 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+### Added
+
+- Live sync across clients: reading, starring and mark-all-read from Reeder,
+  another tab or another device appear in open readers within a second,
+  patched in place without reloading. Readers that fall behind resync.
+- The Sun theme has three phases: Day from sunrise to sunset, Evening until
+  nautical dusk, then Night desk until sunrise. Where the sky never gets
+  dark (summer at high latitudes), Evening lasts until sunrise.
+- `GET /api/v1/entries?content=1` returns full articles, for offline sync.
+
 ## [0.1.1] - 2026-10-26
 
 ### Changed
@@ -51,6 +63,7 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/arenzana/correspondent/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/arenzana/correspondent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/arenzana/correspondent/releases/tag/v0.1.0

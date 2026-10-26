@@ -11,6 +11,16 @@ export interface SunTimes {
 const rad = Math.PI / 180
 
 export function sunTimes(date: Date, lat: number, lon: number): SunTimes {
+  return solarEvent(date, lat, lon, 90.833) // refraction plus the sun's radius
+}
+
+/** Nautical twilight: the sun 12° below the horizon; the sky is dark after it. */
+export function nauticalTwilight(date: Date, lat: number, lon: number): SunTimes {
+  return solarEvent(date, lat, lon, 102)
+}
+
+/** When the sun crosses the given zenith angle on date's UTC day (NOAA equations). */
+function solarEvent(date: Date, lat: number, lon: number, zenith: number): SunTimes {
   const midnightUTC = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
   const dayOfYear = (midnightUTC - Date.UTC(date.getUTCFullYear(), 0, 1)) / 86_400_000 + 1
   const g = ((2 * Math.PI) / 365) * (dayOfYear - 1) // fractional year at noon
@@ -27,8 +37,7 @@ export function sunTimes(date: Date, lat: number, lon: number): SunTimes {
     0.002697 * Math.cos(3 * g) +
     0.00148 * Math.sin(3 * g)
 
-  // 90.833° accounts for refraction and the sun's apparent radius.
-  const cosHA = Math.cos(90.833 * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl)
+  const cosHA = Math.cos(zenith * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl)
   if (cosHA > 1) return { sunrise: null, sunset: null, polar: 'night' }
   if (cosHA < -1) return { sunrise: null, sunset: null, polar: 'day' }
   const ha = Math.acos(cosHA) / rad
@@ -41,21 +50,37 @@ export function sunTimes(date: Date, lat: number, lon: number): SunTimes {
   }
 }
 
-export type SunTheme = 'day' | 'evening'
+export type SunTheme = 'day' | 'evening' | 'night'
 
-/** Which theme applies at `now`, and when it next changes. */
+/**
+ * Which theme applies at `now`, and when it next changes:
+ * Day from sunrise to sunset, Evening from sunset until nautical dusk (the
+ * sun 12° down), Night desk from then until sunrise. Where the sun never
+ * gets that low (summer at high latitudes), Evening lasts until sunrise.
+ */
 export function sunTheme(now: Date, lat: number, lon: number): { theme: SunTheme; next: Date } {
-  const t = sunTimes(now, lat, lon)
-  const tomorrow = new Date(now.getTime() + 86_400_000)
-  if (t.polar) {
-    // Re-check at the next UTC midnight; polar periods change slowly.
+  const day = 86_400_000
+  const sun = sunTimes(now, lat, lon)
+  if (sun.polar) {
+    // Midnight sun or polar night: re-check at the next UTC midnight.
+    const tomorrow = new Date(now.getTime() + day)
     const next = new Date(Date.UTC(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate()))
-    return { theme: t.polar === 'day' ? 'day' : 'evening', next }
+    return { theme: sun.polar === 'day' ? 'day' : 'night', next }
   }
-  const { sunrise, sunset } = t as { sunrise: Date; sunset: Date }
-  if (now < sunrise) return { theme: 'evening', next: sunrise }
-  if (now < sunset) return { theme: 'day', next: sunset }
-  return { theme: 'evening', next: sunTimes(tomorrow, lat, lon).sunrise ?? new Date(now.getTime() + 3_600_000) }
+  const { sunrise, sunset } = sun as { sunrise: Date; sunset: Date }
+  const nextSunrise = () => sunTimes(new Date(now.getTime() + day), lat, lon).sunrise ?? new Date(now.getTime() + 3_600_000)
+
+  if (now >= sunrise && now < sunset) return { theme: 'day', next: sunset }
+
+  // Between sunset and midnight, or after midnight before sunrise: find the
+  // dusk that follows the most recent sunset (it may fall after midnight).
+  const lastSunset = now >= sunset ? sunset : sunTimes(new Date(now.getTime() - day), lat, lon).sunset
+  const dusk = lastSunset ? nauticalTwilight(lastSunset, lat, lon) : null
+  const duskEnd = dusk && !dusk.polar ? dusk.sunset : null // null: the sky never gets dark
+  const until = now >= sunset ? nextSunrise() : sunrise
+  if (!duskEnd || duskEnd < (lastSunset ?? now)) return { theme: 'evening', next: until }
+  if (now < duskEnd) return { theme: 'evening', next: duskEnd }
+  return { theme: 'night', next: until }
 }
 
 /** Round to one decimal (about 11 km) before a location is ever stored. */

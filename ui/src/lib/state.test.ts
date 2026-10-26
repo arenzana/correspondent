@@ -67,6 +67,42 @@ describe('optimistic mutations', () => {
   })
 })
 
+describe('changes from other clients', () => {
+  it('patches visible rows and the open article without touching counts directly', async () => {
+    vi.useFakeTimers()
+    app.article = { entry: { ...entry('2'), content: '' }, enclosures: [] }
+    const before = app.counts.unread
+    app.applyRemoteState('read', ['1', '2', 'not-loaded'])
+    expect(app.entries.filter((e) => e.read).map((e) => e.id)).toEqual(['1', '2', '3'])
+    expect(app.article?.entry.read).toBe(true)
+    expect(app.counts.unread).toBe(before) // the server's counts arrive with the debounced refresh
+    expect(api.tree).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(300)
+    expect(api.tree).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('coalesces bursts into one count refresh', () => {
+    vi.useFakeTimers()
+    for (let i = 0; i < 50; i++) app.applyRemoteState('star', ['1'])
+    vi.advanceTimersByTime(300)
+    expect(api.tree).toHaveBeenCalledTimes(1)
+    expect(app.entries[0].starred).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('ignores unknown actions', () => {
+    app.applyRemoteState('explode', ['1'])
+    expect(app.entries[0]).toEqual(entry('1'))
+  })
+
+  it('resyncs visible rows in place after missed events', async () => {
+    vi.mocked(api.entries).mockResolvedValue({ entries: [entry('1', { read: true, starred: true }), entry('3')], cursor: '' })
+    await app.resyncStates()
+    expect(app.entries.map((e) => [e.id, e.read, e.starred])).toEqual([['1', true, true], ['2', false, false], ['3', false, false]])
+  })
+})
+
 describe('mark all read', () => {
   it('uses the loaded boundary and offers Undo that restores exactly those entries', async () => {
     app.boundary = '3'

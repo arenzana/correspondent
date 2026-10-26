@@ -407,7 +407,13 @@ func (s *Store) SetState(ctx context.Context, userID int64, action string, ids [
 			return nil, err
 		}
 	}
-	return changed, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	if s.OnStateChange != nil && len(changed) > 0 {
+		s.OnStateChange(userID, action, changed)
+	}
+	return changed, nil
 }
 
 // MarkAllRead marks every unread entry matching f with id <= maxID as read

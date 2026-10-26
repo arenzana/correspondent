@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/arenzana/correspondent/internal/ingest"
@@ -69,7 +68,7 @@ func (a *API) Handler() http.Handler {
 }
 
 // Notify tells a user's open readers that new entries arrived.
-func (a *API) Notify(userID int64) { a.hub.publish(userID) }
+func (a *API) Notify(userID int64) { a.hub.publish(userID, event{name: "refresh", data: []byte("{}")}) }
 
 type ctxKey struct{}
 
@@ -218,10 +217,17 @@ func filterFrom(r *http.Request) store.Filter {
 
 func (a *API) entries(w http.ResponseWriter, r *http.Request) {
 	f := filterFrom(r)
-	if f.Limit > 200 {
-		f.Limit = 200
+	// content=1 includes full article HTML, for offline reading; pages are
+	// smaller then because each article can be large.
+	withContent := r.URL.Query().Get("content") == "1"
+	maxLimit := 200
+	if withContent {
+		maxLimit = 100
 	}
-	entries, next, err := a.Store.Entries(r.Context(), f, false)
+	if f.Limit > maxLimit {
+		f.Limit = maxLimit
+	}
+	entries, next, err := a.Store.Entries(r.Context(), f, withContent)
 	if err != nil {
 		a.internal(w, err)
 		return
@@ -506,39 +512,6 @@ func (a *API) exportOPML(w http.ResponseWriter, r *http.Request) {
 	opml.Write(w, "Correspondent subscriptions", subs)
 }
 
-// events streams a "refresh" event whenever new entries arrive.
-func (a *API) events(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		fail(w, http.StatusInternalServerError, "Streaming unsupported.")
-		return
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Accel-Buffering", "no")
-	ch, ok := a.hub.subscribe(userID(r))
-	if !ok {
-		fail(w, http.StatusTooManyRequests, "Too many open windows.")
-		return
-	}
-	defer a.hub.unsubscribe(userID(r), ch)
-	fmt.Fprint(w, "retry: 5000\n\n")
-	flusher.Flush()
-	keepalive := time.NewTicker(25 * time.Second)
-	defer keepalive.Stop()
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ch:
-			fmt.Fprint(w, "event: refresh\ndata: {}\n\n")
-		case <-keepalive.C:
-			fmt.Fprint(w, ": keepalive\n\n")
-		}
-		flusher.Flush()
-	}
-}
-
 func (a *API) result(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -573,45 +546,4 @@ func fail(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
-}
-
-// hub fans out new-entry notifications to a user's open event streams.
-type hub struct {
-	mu   sync.Mutex
-	subs map[int64]map[chan struct{}]struct{}
-}
-
-// subscribe registers a stream; each user may hold at most 16 at once.
-func (h *hub) subscribe(uid int64) (chan struct{}, bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.subs == nil {
-		h.subs = map[int64]map[chan struct{}]struct{}{}
-	}
-	if h.subs[uid] == nil {
-		h.subs[uid] = map[chan struct{}]struct{}{}
-	}
-	if len(h.subs[uid]) >= 16 {
-		return nil, false
-	}
-	ch := make(chan struct{}, 1)
-	h.subs[uid][ch] = struct{}{}
-	return ch, true
-}
-
-func (h *hub) unsubscribe(uid int64, ch chan struct{}) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	delete(h.subs[uid], ch)
-}
-
-func (h *hub) publish(uid int64) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for ch := range h.subs[uid] {
-		select {
-		case ch <- struct{}{}:
-		default: // a refresh is already pending
-		}
-	}
 }
