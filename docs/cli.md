@@ -10,8 +10,8 @@ and AI agents as much as for people.
 brew install arenzana/tap/corr
 ```
 
-or download a binary for macOS or Linux from the
-[releases](https://github.com/arenzana/correspondent/releases), or
+or download a binary for macOS, Linux (including 32-bit ARM), Windows or
+FreeBSD from the [releases](https://github.com/arenzana/correspondent/releases), or
 `go install github.com/arenzana/correspondent/cmd/corr@latest`.
 
 ## Sign in

@@ -88,3 +88,21 @@ func FuzzParse(f *testing.F) {
 		Parse(b, "https://example.com/feed")
 	})
 }
+
+func TestSponsoredItems(t *testing.T) {
+	p, err := Parse([]byte(`<?xml version="1.0"?><rss version="2.0"><channel><title>B</title>
+<item><title>Sponsor: Audio Hijack</title><link>https://b.example/1</link></item>
+<item><title>A product we like</title><category>Sponsored</category><link>https://b.example/2</link></item>
+<item><title>On sponsors</title><category>Business</category><link>https://b.example/3</link></item>
+</channel></rss>`), "https://b.example/feed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []bool
+	for _, it := range p.Items {
+		got = append(got, it.Sponsored)
+	}
+	if len(got) != 3 || !got[0] || !got[1] || got[2] {
+		t.Errorf("sponsored = %v, want [true true false]", got)
+	}
+}

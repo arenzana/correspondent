@@ -260,6 +260,7 @@ func entries(items []item, base *url.URL) []store.NewEntry {
 			ImageURL:    it.image,
 			PublishedAt: it.published,
 			Enclosures:  "[]",
+			Sponsored:   content.Sponsored(title, nil),
 		}
 		if e.Excerpt != "" {
 			e.Content = content.Process("<p>"+htmlEscape(e.Excerpt)+"</p>", link).HTML

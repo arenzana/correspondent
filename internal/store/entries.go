@@ -56,6 +56,9 @@ type NewEntry struct {
 	FullText    bool
 	FeedContent string
 	FullError   string
+	// Sponsored marks a paid post; for a reader who skips them (the
+	// skipSponsored preference) it arrives already read.
+	Sponsored bool
 }
 
 // UpsertEntries stores a feed's items in one short transaction. New items get
@@ -74,6 +77,14 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 		return 0, 0, err
 	}
 	defer tx.Rollback()
+	var skipSponsored bool
+	if slices.ContainsFunc(items, func(it NewEntry) bool { return it.Sponsored }) {
+		err := tx.QueryRowContext(ctx, `SELECT coalesce(json_extract(u.prefs, '$.skipSponsored'), 0) = 1
+			FROM feeds f JOIN users u ON u.id = f.user_id WHERE f.id = ?`, feedID).Scan(&skipSponsored)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, 0, err
+		}
+	}
 	for _, it := range items {
 		var (
 			id   int64
@@ -106,7 +117,7 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 				pub = now
 			}
 			var readAt any
-			if pub.Before(readBefore) || (it.PublishedAt.IsZero() && !readBefore.IsZero()) {
+			if pub.Before(readBefore) || (it.PublishedAt.IsZero() && !readBefore.IsZero()) || (it.Sponsored && skipSponsored) {
 				readAt = now.Unix()
 			}
 			var feedContent any // NULL: content is the feed's own
@@ -116,11 +127,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url,
 				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at,
-				                     feed_content, full_error)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				                     feed_content, full_error, sponsored)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				s.nextID(now), feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt,
 				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix(),
-				feedContent, it.FullError)
+				feedContent, it.FullError, it.Sponsored)
 			if err != nil {
 				return 0, 0, fmt.Errorf("insert %q: %w", it.GUID, err)
 			}
@@ -438,6 +449,40 @@ func (s *Store) SetState(ctx context.Context, userID int64, action string, ids [
 // MarkAllRead marks every unread entry matching f with id <= maxID as read
 // and returns the IDs it changed (so the UI can offer Undo). The boundary
 // keeps items that arrive while the user is deciding unread.
+// SkipSponsored marks a user's unread sponsored posts read, for when they
+// turn on skipping them. It returns the IDs it changed.
+func (s *Store) SkipSponsored(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT e.id FROM entries e JOIN feeds d ON d.id = e.feed_id
+		WHERE d.user_id = ? AND e.sponsored = 1 AND e.read_at IS NULL`, userID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	var changed []int64
+	for len(ids) > 0 {
+		n := min(len(ids), 500)
+		c, err := s.SetState(ctx, userID, "read", ids[:n])
+		if err != nil {
+			return changed, err
+		}
+		changed = append(changed, c...)
+		ids = ids[n:]
+	}
+	return changed, nil
+}
+
 func (s *Store) MarkAllRead(ctx context.Context, f Filter, maxID int64) ([]int64, error) {
 	f.State, f.MaxID, f.After, f.Limit = StateUnread, maxID, 0, 0
 	where, args := f.where()

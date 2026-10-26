@@ -5,10 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // config is where corr keeps its server and token: $XDG_CONFIG_HOME/corr
-// (or ~/.config/corr) /config.json, readable only by its owner.
+// (or ~/.config/corr; %AppData%\corr on Windows) /config.json, readable
+// only by its owner.
 // CORR_SERVER and CORR_TOKEN override it, for scripts and agents.
 type config struct {
 	Server   string `json:"server"`
@@ -18,6 +20,13 @@ type config struct {
 
 func configPath() (string, error) {
 	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" && runtime.GOOS == "windows" {
+		d, err := os.UserConfigDir()
+		if err != nil {
+			return "", err
+		}
+		dir = d
+	}
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

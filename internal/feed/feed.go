@@ -103,6 +103,7 @@ func normalize(it *gofeed.Item, base string) store.NewEntry {
 	if e.Title == "" {
 		e.Title = content.Excerpt(body.Text, 90)
 	}
+	e.Sponsored = content.Sponsored(e.Title, it.Categories)
 	if it.Author != nil {
 		e.Author = content.PlainText(it.Author.Name)
 	} else if len(it.Authors) > 0 && it.Authors[0] != nil {

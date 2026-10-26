@@ -494,6 +494,11 @@
             <small>Unread, Today and Starred always show what they say.</small></span>
           <input type="checkbox" role="switch" checked={app.prefs.unreadOnly} onchange={(e) => { app.setPrefs({ unreadOnly: e.currentTarget.checked }); app.load() }} />
         </label>
+        <label class="toggle">
+          <span><strong>Skip sponsored posts</strong>
+            <small>Posts titled "Sponsor:", "[Sponsor]" and the like, or tagged as sponsored, arrive already read, here and in Reeder, and don't notify you. They stay in All.</small></span>
+          <input type="checkbox" role="switch" checked={app.prefs.skipSponsored} onchange={(e) => app.setPrefs({ skipSponsored: e.currentTarget.checked })} />
+        </label>
       </section>
 
       <section id="settings-feeds">

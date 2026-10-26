@@ -40,6 +40,8 @@ export interface Prefs {
   uiFont: 'grotesk' | 'system'
   unreadOnly: boolean
   markOnOpen: boolean
+  /** Read by the server too: sponsored posts arrive already read. */
+  skipSponsored: boolean
   sidebar: boolean
   /** Coarse position (about 11 km) for the Sun theme; never more precise. */
   place: { lat: number; lon: number; estimated: boolean } | null
@@ -59,6 +61,7 @@ const defaultPrefs: Prefs = {
   uiFont: 'grotesk',
   unreadOnly: true,
   markOnOpen: true,
+  skipSponsored: false,
   sidebar: true,
   place: null,
   navWidth: null,

@@ -201,11 +201,16 @@ func (m *reader) setState(action string, ids ...string) tea.Cmd {
 
 func openURL(u string) tea.Cmd {
 	return func() tea.Msg {
-		name := "xdg-open"
-		if runtime.GOOS == "darwin" {
-			name = "open"
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("open", u)
+		case "windows":
+			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
+		default:
+			cmd = exec.Command("xdg-open", u)
 		}
-		if err := exec.Command(name, u).Start(); err != nil {
+		if err := cmd.Start(); err != nil {
 			return statusMsg("Couldn't open a browser: " + u)
 		}
 		return statusMsg("Opened in your browser.")

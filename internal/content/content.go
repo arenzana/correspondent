@@ -111,6 +111,27 @@ func PlainText(s string) string {
 	return collapse(html.UnescapeString(bluemonday.StrictPolicy().Sanitize(s)))
 }
 
+// sponsoredTitle matches how blogs label paid posts: "Sponsor: …",
+// "[Sponsor] …", "Sponsored by …" and the like. Migration 0011 flags stored
+// entries with the same prefixes.
+var sponsoredTitle = regexp.MustCompile(`(?i)^\s*(?:\[(?:sponsor|sponsored)\]|\((?:sponsor|sponsored)\)|(?:sponsor|sponsored|sponsored post|paid post|partner content|advertisement)\s*:|sponsored by\s)`)
+
+// Sponsored reports whether an item is a paid post, by its title or by a
+// feed category such as "Sponsor" or "Sponsored".
+func Sponsored(title string, categories []string) bool {
+	if sponsoredTitle.MatchString(title) {
+		return true
+	}
+	for _, c := range categories {
+		switch strings.ToLower(strings.TrimSpace(c)) {
+		case "sponsor", "sponsors", "sponsored", "sponsorship", "sponsored post", "sponsored content",
+			"paid post", "partner content", "advertisement", "advertorial":
+			return true
+		}
+	}
+	return false
+}
+
 // Excerpt returns up to max runes of text, cut at a word boundary.
 func Excerpt(text string, max int) string {
 	if utf8.RuneCountInString(text) <= max {

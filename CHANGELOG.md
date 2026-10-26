@@ -7,6 +7,19 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-26
+
+### Added
+
+- Skip sponsored posts (Settings → Reading). Posts titled "Sponsor:",
+  "[Sponsor]", "Sponsored by" and the like, or tagged as sponsored in the
+  feed, arrive already read, on the web, in Reeder and in corr, and never
+  notify. Turning it on also clears the ones waiting. They stay in All.
+- corr for Windows (amd64, arm64), FreeBSD (amd64, arm64) and 32-bit ARM
+  Linux, besides macOS and Linux. On Windows it opens links in the default
+  browser, `corr watch --notify` shows toasts, and the config lives in
+  %AppData%\corr.
+
 ## [0.11.0] - 2026-10-26
 
 ### Added

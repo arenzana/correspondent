@@ -95,7 +95,20 @@ func desktopNotify(title, body string) {
 	case "darwin":
 		script := fmt.Sprintf("display notification %s with title %s", strconv.Quote(body), strconv.Quote(title))
 		exec.Command("osascript", "-e", script).Run()
-	case "linux":
+	case "windows":
+		// A toast through PowerShell; title and body travel as environment
+		// variables so nothing in them is ever parsed as script.
+		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", windowsToast)
+		cmd.Env = append(os.Environ(), "CORR_TITLE="+title, "CORR_BODY="+body)
+		cmd.Run()
+	default:
 		exec.Command("notify-send", "--app-name=Correspondent", title, body).Run()
 	}
 }
+
+const windowsToast = `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$x = $t.GetElementsByTagName('text')
+$x.Item(0).AppendChild($t.CreateTextNode($env:CORR_TITLE)) > $null
+$x.Item(1).AppendChild($t.CreateTextNode($env:CORR_BODY)) > $null
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Correspondent').Show([Windows.UI.Notifications.ToastNotification]::new($t))`

@@ -2,7 +2,7 @@ version: 2
 project_name: corr
 
 # The corr CLI. The server ships as a container image (image.yml); this
-# builds corr for macOS and Linux, signs the checksums, and publishes the
+# builds corr for macOS, Linux, Windows and FreeBSD, signs the checksums, and publishes the
 # Homebrew cask to arenzana/homebrew-tap.
 
 before:
@@ -22,8 +22,17 @@ builds:
       - -X github.com/arenzana/correspondent/internal/version.Version={{ .Version }}
       - -X github.com/arenzana/correspondent/internal/version.Commit={{ .FullCommit }}
     mod_timestamp: '{{ .CommitTimestamp }}'
-    goos: [linux, darwin]
-    goarch: [amd64, arm64]
+    goos: [linux, darwin, windows, freebsd]
+    goarch: [amd64, arm64, arm]
+    goarm: ['7']
+    ignore:
+      # 32-bit ARM only for Linux (Raspberry Pi and the like).
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+      - goos: freebsd
+        goarch: arm
 
 archives:
   - formats: [tar.gz]
@@ -31,7 +40,10 @@ archives:
     # so the release and the cask can't disagree on checksums.
     builds_info:
       mtime: '{{ .CommitDate }}'
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     files:
       - src: LICENSE
         info:

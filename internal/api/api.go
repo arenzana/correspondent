@@ -279,6 +279,14 @@ func (a *API) putPrefs(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	// Turning on "skip sponsored posts" also clears the ones already waiting.
+	var p struct{ SkipSponsored bool }
+	if json.Unmarshal(body, &p) == nil && p.SkipSponsored {
+		if _, err := a.Store.SkipSponsored(r.Context(), userID(r)); err != nil {
+			a.internal(w, err)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

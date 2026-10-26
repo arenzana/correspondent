@@ -335,3 +335,44 @@ func TestSetFeedURL(t *testing.T) {
 		t.Fatalf("other user's feed: %v", err)
 	}
 }
+
+func TestSkipSponsored(t *testing.T) {
+	st, ctx := open(t), context.Background()
+	uid, _ := st.CreateUser(ctx, "u", "password-123")
+	feedID, _ := st.AddFeed(ctx, uid, "https://x.example/f", "x", nil)
+	now := time.Now()
+	unread := func() int {
+		t.Helper()
+		es, _, err := st.Entries(ctx, Filter{UserID: uid, State: StateUnread}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(es)
+	}
+
+	// Off (the default): sponsored posts arrive unread like any other.
+	st.UpsertEntries(ctx, feedID, []NewEntry{
+		{GUID: "a", Title: "Sponsor: A", Sponsored: true, Enclosures: "[]", PublishedAt: now},
+		{GUID: "b", Title: "Post B", Enclosures: "[]", PublishedAt: now},
+	}, time.Time{})
+	if n := unread(); n != 2 {
+		t.Fatalf("unread = %d, want 2", n)
+	}
+
+	// Turning it on clears the waiting one; new ones arrive read.
+	st.SetPrefs(ctx, uid, `{"skipSponsored":true}`)
+	if changed, err := st.SkipSponsored(ctx, uid); err != nil || len(changed) != 1 {
+		t.Fatalf("SkipSponsored = %v, %v", changed, err)
+	}
+	st.UpsertEntries(ctx, feedID, []NewEntry{
+		{GUID: "c", Title: "[Sponsor] C", Sponsored: true, Enclosures: "[]", PublishedAt: now},
+		{GUID: "d", Title: "Post D", Enclosures: "[]", PublishedAt: now},
+	}, time.Time{})
+	if n := unread(); n != 2 {
+		t.Fatalf("unread = %d, want 2 (B and D)", n)
+	}
+	all, _, _ := st.Entries(ctx, Filter{UserID: uid}, false)
+	if len(all) != 4 {
+		t.Errorf("all = %d, want 4: skipped posts stay in All", len(all))
+	}
+}
