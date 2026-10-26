@@ -187,7 +187,7 @@
     height: 100%;
     border: 0;
     background: none;
-    font-size: 16px;
+    font-size: calc(16px * var(--ui-scale));
     color: var(--ink);
     outline: none;
   }
@@ -200,7 +200,7 @@
   }
   .group {
     padding: 10px 10px 4px;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     font-weight: 560;
     color: var(--slate);
   }
@@ -230,7 +230,7 @@
     white-space: nowrap;
   }
   .hint {
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--slate);
   }
   .none {

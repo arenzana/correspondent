@@ -77,7 +77,7 @@
   h2 {
     margin: 0 0 18px;
     font-family: var(--font-read);
-    font-size: 22px;
+    font-size: calc(22px * var(--ui-scale));
     font-weight: 540;
   }
   .cols {
@@ -87,7 +87,7 @@
   }
   h3 {
     margin: 0 0 8px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 600;
     color: var(--slate);
   }
@@ -114,6 +114,6 @@
     padding-top: 14px;
     border-top: 1px solid var(--rule);
     color: var(--slate);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
   }
 </style>

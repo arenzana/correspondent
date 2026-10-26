@@ -25,8 +25,12 @@
   --scrim: rgb(16 21 31 / 0.32);
   --danger: #b4322b;
 
-  --font-ui: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-grotesk: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-system: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-read: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  /* The interface typeface and text scale are reader preferences. */
+  --font-ui: var(--font-grotesk);
+  --ui-scale: 1;
 
   --read-size: 19px;
   --read-measure: 68ch;
@@ -109,7 +113,7 @@ body {
   background: var(--fog);
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: calc(14px * var(--ui-scale));
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -132,6 +136,14 @@ body {
 
 #app {
   height: 100%;
+}
+
+/* Controls show their own pressed state; the browser's grey-blue tap flash
+   only blurs it. */
+button,
+a,
+label {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Installed on a phone the app draws edge to edge (viewport-fit=cover);
@@ -248,7 +260,7 @@ a {
 
 kbd {
   font-family: var(--font-ui);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--ui-scale));
   font-weight: 500;
   min-width: 20px;
   height: 20px;

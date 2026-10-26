@@ -31,6 +31,14 @@ describe('service worker routing', () => {
   })
 })
 
+describe('app icons', () => {
+  it('lists every choice for caching on install', async () => {
+    const { appIconAssets } = await import('./lib/icons')
+    const assets = appIconAssets()
+    for (const id of ['wire', 'byline', 'morse']) expect(assets).toContain(`/icons/${id}/icon-192.png`)
+  })
+})
+
 describe('image cache trimming', () => {
   it('drops the oldest entries beyond the limit', async () => {
     const keys = ['a', 'b', 'c', 'd', 'e'].map((k) => new Request(`${o}/img/${k}`))

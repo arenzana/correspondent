@@ -92,7 +92,7 @@
   h1 {
     margin: 0 0 10px;
     font-family: var(--font-read);
-    font-size: 34px;
+    font-size: calc(34px * var(--ui-scale));
     font-weight: 540;
     font-variation-settings: 'opsz' 72;
     letter-spacing: -0.015em;
@@ -100,7 +100,7 @@
   label span {
     display: block;
     margin-bottom: 5px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 560;
   }
   .error {

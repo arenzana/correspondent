@@ -158,7 +158,26 @@ try {
   await mobile.locator('nav.sidebar').getByRole('button', { name: /Starred/ }).first().tap()
   check(await mobile.locator('.wire h1').innerText() === 'Starred', 'choosing a view from Feeds opens it')
   await tabbar.getByRole('button', { name: 'Settings' }).tap()
-  check(await mobile.getByRole('dialog', { name: 'Settings' }).isVisible(), 'Settings opens from the tab bar')
+  const settings = mobile.getByRole('dialog', { name: 'Settings' })
+  check(await settings.isVisible(), 'Settings opens from the tab bar')
+  // Interface text: size and typeface apply at once, everywhere.
+  await settings.getByRole('button', { name: 'Larger' }).tap()
+  await settings.getByRole('button', { name: 'System' }).tap()
+  const text = await mobile.evaluate(() => ({
+    size: getComputedStyle(document.querySelector('.wire h1')).fontSize,
+    font: getComputedStyle(document.body).fontFamily,
+    icons: [...document.querySelectorAll('.icon-choice img')].every((i) => i.complete && i.naturalWidth > 0),
+  }))
+  check(Math.abs(parseFloat(text.size) - 23 * 1.2) < 0.01 && text.font.startsWith('system-ui'), `interface text size and typeface change from Settings (${text.size}, ${text.font.split(',')[0]})`)
+  check(text.icons, 'every app icon choice shows in Settings')
+  if (process.env.SHOT_DIR) {
+    await mobile.screenshot({ path: process.env.SHOT_DIR + '/settings-larger.png' })
+    await mobile.keyboard.press('Escape')
+    await mobile.screenshot({ path: process.env.SHOT_DIR + '/list-larger.png' })
+    await tabbar.getByRole('button', { name: 'Settings' }).tap()
+  }
+  await settings.getByRole('button', { name: 'Default' }).tap()
+  await settings.getByRole('button', { name: 'Grotesk' }).first().tap()
   await mobile.keyboard.press('Escape')
   // Dispatch 0, the link post, is the one starred earlier.
   await tabbar.getByRole('button', { name: 'Starred' }).tap()

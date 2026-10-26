@@ -349,6 +349,17 @@ describe('themes', () => {
     expect(document.documentElement.dataset.theme).toBe('night')
   })
 
+  it('applies interface text size and typeface, ignoring unknown sizes', () => {
+    const root = document.documentElement
+    app.setPrefs({ uiScale: 1.2, uiFont: 'system' })
+    expect(root.style.getPropertyValue('--ui-scale')).toBe('1.2')
+    expect(root.style.getPropertyValue('--font-ui')).toBe('var(--font-system)')
+    app.setPrefs({ uiScale: 7, uiFont: 'grotesk' })
+    expect(root.style.getPropertyValue('--ui-scale')).toBe('1')
+    expect(root.style.getPropertyValue('--font-ui')).toBe('var(--font-grotesk)')
+    app.setPrefs({ uiScale: 1 })
+  })
+
   it('colours the status bar like the headers', () => {
     document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)">')
     document.documentElement.style.setProperty('--sheet', '#f4ecdc')

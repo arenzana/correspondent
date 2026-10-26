@@ -7,6 +7,21 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-26
+
+### Added
+
+- Interface text in Settings: a text size for the whole app (Small,
+  Default, Large, Larger) and its typeface (Grotesk or the system's own,
+  San Francisco on Apple devices). Article typeface, text size and line
+  length are in Settings too, as well as under the T button.
+
+### Fixed
+
+- Settings could show broken app icons if it was opened while the server
+  was restarting; every icon choice is now kept offline by the app.
+- No grey-blue flash on buttons when tapped on phones.
+
 ## [0.7.2] - 2026-10-26
 
 ### Fixed
@@ -173,7 +188,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/arenzana/correspondent/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/arenzana/correspondent/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/arenzana/correspondent/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/arenzana/correspondent/compare/v0.6.0...v0.7.0

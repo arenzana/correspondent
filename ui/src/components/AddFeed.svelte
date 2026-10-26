@@ -124,7 +124,7 @@
   h2 {
     margin: 0 0 16px;
     font-family: var(--font-read);
-    font-size: 22px;
+    font-size: calc(22px * var(--ui-scale));
     font-weight: 540;
   }
   label > span,
@@ -132,7 +132,7 @@
   legend {
     display: block;
     margin-bottom: 6px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 560;
   }
   .row {
@@ -177,16 +177,16 @@
   }
   .cand-title {
     font-family: var(--font-read);
-    font-size: 17px;
+    font-size: calc(17px * var(--ui-scale));
     font-weight: 560;
   }
   .cand-desc {
     color: var(--slate);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
   }
   .cand-meta {
     color: var(--slate);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .grid {
     display: grid;

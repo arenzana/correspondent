@@ -183,7 +183,7 @@
   }
   .wordmark {
     font-family: var(--font-read);
-    font-size: 21px;
+    font-size: calc(21px * var(--ui-scale));
     font-weight: 560;
     font-variation-settings: 'opsz' 48;
     letter-spacing: -0.01em;
@@ -260,7 +260,7 @@
     white-space: nowrap;
   }
   .count {
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     font-variant-numeric: tabular-nums;
     color: var(--slate);
   }

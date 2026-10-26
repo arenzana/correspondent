@@ -7,6 +7,7 @@ import { api, ApiError, type Counts, type Entry, type Enclosure, type Feed, type
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
+import { APP_ICONS, type AppIcon } from './icons'
 
 /**
  * A failure to reach the server at all, as opposed to the server saying no:
@@ -18,12 +19,15 @@ export type View = 'unread' | 'today' | 'starred' | 'all'
 export type Source = { kind: 'view'; view: View } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
 export type Theme = 'auto' | 'sun' | 'day' | 'night' | 'evening'
 export type Pane = 'nav' | 'list' | 'article'
-export type AppIcon = 'wire' | 'byline' | 'morse'
-export const APP_ICONS: { id: AppIcon; label: string }[] = [
-  { id: 'wire', label: 'Wire' },
-  { id: 'byline', label: 'Byline' },
-  { id: 'morse', label: 'Morse' },
-]
+export { APP_ICONS, type AppIcon }
+
+/** Interface text sizes offered in Settings. */
+export const UI_SCALES = [
+  { value: 0.92, label: 'Small' },
+  { value: 1, label: 'Default' },
+  { value: 1.1, label: 'Large' },
+  { value: 1.2, label: 'Larger' },
+] as const
 
 export interface Prefs {
   theme: Theme
@@ -31,6 +35,9 @@ export interface Prefs {
   measure: number
   density: 'comfortable' | 'compact'
   readFont: 'serif' | 'sans'
+  /** Interface text: a scale on every size, and the typeface. */
+  uiScale: number
+  uiFont: 'grotesk' | 'system'
   unreadOnly: boolean
   markOnOpen: boolean
   sidebar: boolean
@@ -48,6 +55,8 @@ const defaultPrefs: Prefs = {
   measure: 68,
   density: 'comfortable',
   readFont: 'serif',
+  uiScale: 1,
+  uiFont: 'grotesk',
   unreadOnly: true,
   markOnOpen: true,
   sidebar: true,
@@ -401,7 +410,9 @@ class AppState {
     root.dataset.density = this.prefs.density
     root.style.setProperty('--read-size', this.prefs.readSize + 'px')
     root.style.setProperty('--read-measure', this.prefs.measure + 'ch')
-    root.style.setProperty('--read-family', this.prefs.readFont === 'serif' ? 'var(--font-read)' : 'var(--font-ui)')
+    root.style.setProperty('--read-family', this.prefs.readFont === 'serif' ? 'var(--font-read)' : 'var(--font-grotesk)')
+    root.style.setProperty('--ui-scale', String(UI_SCALES.some((u) => u.value === this.prefs.uiScale) ? this.prefs.uiScale : 1))
+    root.style.setProperty('--font-ui', this.prefs.uiFont === 'system' ? 'var(--font-system)' : 'var(--font-grotesk)')
     try {
       localStorage.setItem('correspondent:prefs', JSON.stringify(this.prefs))
     } catch {

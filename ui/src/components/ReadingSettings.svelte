@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, type Theme } from '../lib/state.svelte'
   import { clock } from '../lib/time'
+  import TextControls from './TextControls.svelte'
 
   // Swatches show each theme's own sheet and ink, independent of the current theme.
   const themes: { id: Theme; label: string; bg: string; fg: string }[] = [
@@ -47,25 +48,7 @@
     {/if}
   </fieldset>
 
-  <fieldset>
-    <legend>Typeface</legend>
-    <div class="seg">
-      <button aria-pressed={app.prefs.readFont === 'serif'} class="serif" onclick={() => app.setPrefs({ readFont: 'serif' })}>Newsreader</button>
-      <button aria-pressed={app.prefs.readFont === 'sans'} onclick={() => app.setPrefs({ readFont: 'sans' })}>Grotesk</button>
-    </div>
-  </fieldset>
-
-  <label class="slider">
-    <span>Text size <output>{app.prefs.readSize}px</output></span>
-    <input type="range" min="15" max="24" step="1" value={app.prefs.readSize}
-      oninput={(e) => app.setPrefs({ readSize: Number(e.currentTarget.value) })} />
-  </label>
-
-  <label class="slider">
-    <span>Line length <output>{app.prefs.measure} characters</output></span>
-    <input type="range" min="54" max="84" step="2" value={app.prefs.measure}
-      oninput={(e) => app.setPrefs({ measure: Number(e.currentTarget.value) })} />
-  </label>
+  <TextControls />
 
   <fieldset>
     <legend>List density</legend>
@@ -103,20 +86,14 @@
     margin: 0;
     padding: 0;
   }
-  legend,
-  .slider > span {
+  legend {
     display: flex;
     justify-content: space-between;
     width: 100%;
     margin-bottom: 8px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 560;
     color: var(--ink);
-  }
-  output {
-    font-weight: 400;
-    color: var(--slate);
-    font-variant-numeric: tabular-nums;
   }
   .themes {
     display: grid;
@@ -127,7 +104,7 @@
     display: grid;
     justify-items: center;
     gap: 6px;
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     color: var(--slate);
   }
   .theme[aria-pressed='true'] {
@@ -142,7 +119,7 @@
     border-radius: var(--radius-s);
     border: 1px solid var(--rule);
     font-family: var(--font-read);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale));
   }
   .theme[aria-pressed='true'] .swatch {
     border-color: var(--accent);
@@ -150,7 +127,7 @@
   }
   .sun-note {
     margin: 10px 0 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--slate);
   }
   .seg {
@@ -164,20 +141,12 @@
   .seg button {
     height: 28px;
     border-radius: 4px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
-  }
-  .seg .serif {
-    font-family: var(--font-read);
-    font-size: 14px;
   }
   .seg button[aria-pressed='true'] {
     background: var(--sheet);
     color: var(--ink);
     box-shadow: 0 0 0 1px var(--rule);
-  }
-  input[type='range'] {
-    width: 100%;
-    accent-color: var(--accent);
   }
 </style>

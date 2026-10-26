@@ -52,7 +52,7 @@
     gap: 2px;
     min-height: 48px; /* comfortable touch target */
     color: var(--slate);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     font-weight: 500;
   }
   .tab[aria-current='page'] {
@@ -72,7 +72,7 @@
     border-radius: 9px;
     background: var(--accent);
     color: var(--sheet);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     font-weight: 600;
     line-height: 17px;
     text-align: center;

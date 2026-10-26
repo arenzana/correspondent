@@ -14,6 +14,7 @@
 
 import { flush } from './lib/offline/outbox'
 import { safeTarget } from './lib/push'
+import { appIconAssets } from './lib/icons'
 
 declare const self: ServiceWorkerGlobalScope
 declare const __BUILD_ID__: string
@@ -53,7 +54,7 @@ if (typeof self !== 'undefined' && 'registration' in self) {
         if (res.ok) {
           const html = await res.clone().text()
           await cache.put(SHELL, res)
-          await cache.addAll(shellAssets(html))
+          await cache.addAll([...new Set([...shellAssets(html), ...appIconAssets()])])
         }
       })(),
     )

@@ -3,6 +3,7 @@
   import { api } from '../lib/api'
   import { deviceSubscribed, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
   import Modal from './Modal.svelte'
+  import TextControls from './TextControls.svelte'
 
   let apiPassword = $state('')
   let apiMessage = $state('')
@@ -93,6 +94,12 @@
       </label>
     </section>
 
+    <section class="text">
+      <h3>Text</h3>
+      <TextControls interfaceText />
+      <p class="hint">The article settings, with themes, are also under the T button above any article.</p>
+    </section>
+
     <section>
       <h3>Notifications</h3>
       {#if support === 'unsupported'}
@@ -177,12 +184,20 @@
   h2 {
     margin: 0 0 6px;
     font-family: var(--font-read);
-    font-size: 22px;
+    font-size: calc(22px * var(--ui-scale));
     font-weight: 540;
   }
   section {
     padding: 16px 0;
     border-bottom: 1px solid var(--rule);
+  }
+  .text {
+    display: grid;
+    gap: 16px;
+  }
+  .text h3,
+  .text .hint {
+    margin: 0;
   }
   section.last {
     border: 0;
@@ -190,7 +205,7 @@
   }
   h3 {
     margin: 0 0 8px;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     font-weight: 600;
   }
   p {
@@ -198,7 +213,7 @@
     color: var(--slate);
   }
   code {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     padding: 1px 5px;
     border-radius: 4px;
     background: var(--fog);
@@ -232,7 +247,7 @@
     padding: 8px;
     border-radius: var(--radius-l);
     border: 1px solid transparent;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
   }
   .icon-choice[aria-checked='true'] {
@@ -243,11 +258,11 @@
   }
   .hint {
     margin: 10px 0 0;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .about {
     margin: 16px 0 0;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .check {
     display: flex;

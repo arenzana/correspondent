@@ -330,14 +330,14 @@
   h1 {
     margin: 0;
     font-family: var(--font-read);
-    font-size: 23px;
+    font-size: calc(23px * var(--ui-scale));
     font-weight: 560;
     font-variation-settings: 'opsz' 36;
   }
   .sub {
     margin: 2px 0 0;
     color: var(--slate);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .toolbar {
     display: flex;
@@ -371,7 +371,7 @@
     height: 30px;
     padding: 0 10px;
     border-radius: 4px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 500;
     color: var(--slate);
   }
@@ -415,11 +415,11 @@
   }
   .group-head h2 {
     margin: 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     font-weight: 600;
   }
   .count {
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--slate);
   }
   .spacer {
@@ -460,7 +460,7 @@
     justify-self: start;
     max-width: 100%;
     font-family: var(--font-read);
-    font-size: 16px;
+    font-size: calc(16px * var(--ui-scale));
     font-weight: 560;
     text-align: left;
     overflow: hidden;
@@ -474,7 +474,7 @@
     text-underline-offset: 3px;
   }
   .url {
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--slate);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -490,7 +490,7 @@
     align-items: center;
     gap: 2px 10px;
     min-width: 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--slate);
   }
   .status {
@@ -503,7 +503,7 @@
     color: var(--danger);
   }
   .nums {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -523,7 +523,7 @@
   .none {
     margin: 4px 18px 10px 44px;
     color: var(--slate);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
   }
   .none {
     margin: 40px 18px;
@@ -546,7 +546,7 @@
     border-radius: var(--radius-l);
     background: var(--sheet);
     box-shadow: var(--overlay-shadow);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
   }
   .inline {
     display: flex;
@@ -582,7 +582,7 @@
   .dialog h2 {
     margin: 0;
     font-family: var(--font-read);
-    font-size: 21px;
+    font-size: calc(21px * var(--ui-scale));
     font-weight: 540;
   }
   .dialog p {

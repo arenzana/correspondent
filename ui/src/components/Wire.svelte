@@ -282,7 +282,7 @@
   h1 {
     margin: 0;
     font-family: var(--font-read);
-    font-size: 23px;
+    font-size: calc(23px * var(--ui-scale));
     font-weight: 560;
     font-variation-settings: 'opsz' 36;
     letter-spacing: -0.012em;
@@ -294,14 +294,14 @@
   .sub {
     margin: 2px 0 0;
     color: var(--slate);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .chip {
     display: inline-block;
     margin-right: 6px;
     padding: 0 7px;
     border-radius: 9px;
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     font-weight: 560;
     line-height: 18px;
     color: var(--ink);
@@ -323,7 +323,7 @@
     height: 26px;
     padding: 0 9px;
     border-radius: 4px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 500;
     color: var(--slate);
   }
@@ -341,7 +341,7 @@
     border-radius: var(--radius-s);
     background: var(--fog);
     color: var(--slate);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
   }
   .notice p {
     margin: 0 0 4px;
@@ -364,7 +364,7 @@
     background: var(--accent);
     color: var(--sheet);
     font-weight: 560;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     box-shadow: var(--overlay-shadow);
     animation: drop 220ms var(--ease);
   }
@@ -398,7 +398,7 @@
     z-index: 2;
     margin: 0;
     padding: 14px 16px 6px calc(var(--spine-x) - 5px);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 600;
     color: var(--ink);
     background: linear-gradient(var(--sheet) 70%, transparent);
@@ -443,7 +443,7 @@
     align-items: center;
     padding: 0 22px;
     font-weight: 600;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     color: var(--sheet);
     background: var(--ring);
     opacity: 0;
@@ -506,7 +506,7 @@
     line-height: 1.2;
   }
   .clock {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     color: var(--slate);
     white-space: nowrap;
   }
@@ -555,7 +555,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
     min-width: 0;
   }
@@ -566,7 +566,7 @@
   }
   .title {
     font-family: var(--font-read);
-    font-size: 17px;
+    font-size: calc(17px * var(--ui-scale));
     line-height: 1.3;
     font-weight: 620;
     font-variation-settings: 'opsz' 18;
@@ -579,7 +579,7 @@
     color: color-mix(in oklab, var(--ink) 78%, var(--sheet));
   }
   .excerpt {
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     line-height: 1.45;
     color: var(--slate);
     display: -webkit-box;
@@ -614,7 +614,7 @@
     align-items: center;
     padding-left: calc(var(--spine-x) - 5px);
     color: var(--slate);
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     background: var(--sheet);
   }
   /* Where the list ends, the spine ends in a short terminal bar. */
@@ -639,7 +639,7 @@
   .state h2 {
     margin: 0 0 6px;
     font-family: var(--font-read);
-    font-size: 22px;
+    font-size: calc(22px * var(--ui-scale));
     font-weight: 520;
   }
   .state p {

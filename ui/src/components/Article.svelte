@@ -217,7 +217,7 @@
   }
   .position {
     margin-left: 6px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
     font-variant-numeric: tabular-nums;
   }
@@ -256,7 +256,7 @@
     align-items: center;
     gap: 8px;
     margin: 0 0 14px;
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     color: var(--slate);
   }
   .source {
@@ -288,7 +288,7 @@
     margin: 14px 0 34px;
     padding-bottom: 22px;
     border-bottom: 1px solid var(--rule);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     color: var(--slate);
   }
   .media {
@@ -354,7 +354,7 @@
   .prose :global(figcaption) {
     margin-top: 8px;
     font-family: var(--font-ui);
-    font-size: 13px;
+    font-size: calc(13px * var(--ui-scale));
     line-height: 1.45;
     color: var(--slate);
   }
@@ -408,7 +408,7 @@
   }
   .source-note {
     margin: -18px 0 22px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
   }
   .source-note a {
@@ -431,7 +431,7 @@
   .partial .err {
     display: block;
     margin-top: 4px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
   }
   .partial-actions {
@@ -462,7 +462,7 @@
   .always small {
     display: block;
     margin-top: 2px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     font-weight: 400;
     color: var(--slate);
   }
@@ -514,12 +514,12 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
     color: var(--slate);
   }
   .next-title {
     font-family: var(--font-read);
-    font-size: 18px;
+    font-size: calc(18px * var(--ui-scale));
     font-weight: 560;
   }
 
@@ -537,7 +537,7 @@
     margin: 6px 0;
   }
   .hint {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--ui-scale));
   }
   .blank-mark {
     position: relative;
