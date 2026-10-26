@@ -1,0 +1,169 @@
+<script lang="ts">
+  import { app, type Theme } from '../lib/state.svelte'
+
+  // Swatches show each theme's own sheet and ink, independent of the current theme.
+  const themes: { id: Theme; label: string; bg: string; fg: string }[] = [
+    { id: 'auto', label: 'Auto', bg: 'linear-gradient(135deg, #ffffff 50%, #161d2a 50%)', fg: '#8d97ab' },
+    { id: 'day', label: 'Day', bg: '#ffffff', fg: '#18213a' },
+    { id: 'night', label: 'Night desk', bg: '#161d2a', fg: '#e3e8f2' },
+    { id: 'evening', label: 'Evening', bg: '#f4ecdc', fg: '#2e2416' },
+  ]
+
+  let el: HTMLElement | undefined = $state()
+
+  $effect(() => {
+    const close = (e: MouseEvent) => {
+      if (el && !el.parentElement?.contains(e.target as Node)) app.readingOpen = false
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && (app.readingOpen = false)
+    setTimeout(() => document.addEventListener('click', close))
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('click', close)
+      document.removeEventListener('keydown', esc)
+    }
+  })
+</script>
+
+<div class="pop" bind:this={el} role="dialog" aria-label="Reading settings">
+  <fieldset>
+    <legend>Theme</legend>
+    <div class="themes">
+      {#each themes as t (t.id)}
+        <button class="theme" aria-pressed={app.prefs.theme === t.id} onclick={() => app.setPrefs({ theme: t.id })}>
+          <span class="swatch" style:background={t.bg} style:color={t.fg}>Aa</span>
+          {t.label}
+        </button>
+      {/each}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Typeface</legend>
+    <div class="seg">
+      <button aria-pressed={app.prefs.readFont === 'serif'} class="serif" onclick={() => app.setPrefs({ readFont: 'serif' })}>Newsreader</button>
+      <button aria-pressed={app.prefs.readFont === 'sans'} onclick={() => app.setPrefs({ readFont: 'sans' })}>Grotesk</button>
+    </div>
+  </fieldset>
+
+  <label class="slider">
+    <span>Text size <output>{app.prefs.readSize}px</output></span>
+    <input type="range" min="15" max="24" step="1" value={app.prefs.readSize}
+      oninput={(e) => app.setPrefs({ readSize: Number(e.currentTarget.value) })} />
+  </label>
+
+  <label class="slider">
+    <span>Line length <output>{app.prefs.measure} characters</output></span>
+    <input type="range" min="54" max="84" step="2" value={app.prefs.measure}
+      oninput={(e) => app.setPrefs({ measure: Number(e.currentTarget.value) })} />
+  </label>
+
+  <fieldset>
+    <legend>List density</legend>
+    <div class="seg">
+      <button aria-pressed={app.prefs.density === 'comfortable'} onclick={() => app.setPrefs({ density: 'comfortable' })}>Comfortable</button>
+      <button aria-pressed={app.prefs.density === 'compact'} onclick={() => app.setPrefs({ density: 'compact' })}>Compact</button>
+    </div>
+  </fieldset>
+</div>
+
+<style>
+  .pop {
+    position: absolute;
+    right: 0;
+    top: 40px;
+    z-index: 20;
+    width: 300px;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    background: var(--sheet);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-l);
+    box-shadow: var(--overlay-shadow);
+    animation: pop 140ms var(--ease);
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+  legend,
+  .slider > span {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+    font-weight: 560;
+    color: var(--ink);
+  }
+  output {
+    font-weight: 400;
+    color: var(--slate);
+    font-variant-numeric: tabular-nums;
+  }
+  .themes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .theme {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--slate);
+  }
+  .theme[aria-pressed='true'] {
+    color: var(--ink);
+    font-weight: 560;
+  }
+  .swatch {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 40px;
+    border-radius: var(--radius-s);
+    border: 1px solid var(--rule);
+    font-family: var(--font-read);
+    font-size: 15px;
+  }
+  .theme[aria-pressed='true'] .swatch {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-wash-strong);
+  }
+  .seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    padding: 2px;
+    border-radius: var(--radius-s);
+    background: var(--fog);
+  }
+  .seg button {
+    height: 28px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: var(--slate);
+  }
+  .seg .serif {
+    font-family: var(--font-read);
+    font-size: 14px;
+  }
+  .seg button[aria-pressed='true'] {
+    background: var(--sheet);
+    color: var(--ink);
+    box-shadow: 0 0 0 1px var(--rule);
+  }
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+</style>

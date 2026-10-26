@@ -1,0 +1,9 @@
+{
+  "name": "Correspondent",
+  "short_name": "Correspondent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EEF1F5",
+  "theme_color": "#2742C7",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
