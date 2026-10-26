@@ -24,6 +24,14 @@ const items = Array.from({ length: 6 }, (_, i) => ({
   date: new Date(Date.now() - (i + 1) * hour).toUTCString(),
   body: `<p>Full text of dispatch ${i}, long enough to read offline.</p>`,
 }))
+// The newest dispatch is shaped like a real link post: an emoji, a long
+// quotation, a wide picture, and a line of links.
+items[0].body = `<p>📎 Linking to <a href="https://example.com/newsroom/2026/10/an-unusually-long-address-for-a-press-release/">example.com</a></p>
+<p>Full text of dispatch 0, long enough to read offline.</p>
+<blockquote><p>${'A quotation that runs on for a while, with nano-texture options and Dual 16-core engines. '.repeat(6)}</p></blockquote>
+<p><img src="${FEEDS}/wide.svg" alt="A wide picture" width="1600" height="400"></p>
+<p><a href="https://example.com/a">Read it at example.com →</a>  ·  <a href="https://example.com/b">Permalink</a></p>`
+const wideSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400"><rect width="1600" height="400" fill="#c84"/></svg>'
 const rss = `<?xml version="1.0"?><rss version="2.0"><channel><title>Wire Service</title><link>${FEEDS}/</link>
 ${items.map((it) => `<item><title>${it.title}</title><link>${FEEDS}/${it.n}</link><guid>d-${it.n}</guid>
 <pubDate>${it.date}</pubDate><description><![CDATA[${it.body}]]></description></item>`).join('\n')}
@@ -31,6 +39,7 @@ ${items.map((it) => `<item><title>${it.title}</title><link>${FEEDS}/${it.n}</lin
 
 const fixtures = createServer((req, res) => {
   if (req.url === '/feed.xml') res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(rss)
+  else if (req.url === '/wide.svg') res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(wideSVG)
   else res.writeHead(404).end()
 })
 
@@ -151,10 +160,37 @@ try {
   await tabbar.getByRole('button', { name: 'Settings' }).tap()
   check(await mobile.getByRole('dialog', { name: 'Settings' }).isVisible(), 'Settings opens from the tab bar')
   await mobile.keyboard.press('Escape')
-  await tabbar.getByRole('button', { name: 'Unread' }).tap()
-  await mobile.locator('.wire .row .hit').first().tap()
+  // Dispatch 0, the link post, is the one starred earlier.
+  await tabbar.getByRole('button', { name: 'Starred' }).tap()
+  await mobile.locator('.wire .row .hit', { hasText: 'Dispatch 0' }).tap()
   await mobile.locator('article.pane .bar').waitFor()
   check(!(await tabbar.isVisible()), 'the tab bar steps aside while reading')
+  // Nothing in the article may be wider than the screen, and dragging
+  // sideways or past the end must not move the page or its toolbar.
+  await mobile.locator('article.pane .scroll').hover()
+  for (let i = 0; i < 4; i++) await mobile.mouse.wheel(600, 2000)
+  await mobile.waitForTimeout(300)
+  const reading = await mobile.evaluate(() => {
+    const w = window.innerWidth
+    const wide = [...document.querySelectorAll('article.pane *')]
+      .filter((el) => el.getClientRects().length && !el.closest('pre, table'))
+      .filter((el) => { const r = el.getBoundingClientRect(); return r.right > w + 0.5 || r.left < -0.5 })
+      .map((el) => el.tagName + '.' + el.className)
+    const scroll = document.querySelector('article.pane .scroll')
+    return {
+      wide,
+      pageX: document.scrollingElement.scrollLeft + window.scrollX,
+      pageY: document.scrollingElement.scrollTop + window.scrollY,
+      paneX: scroll.scrollLeft,
+      barTop: document.querySelector('article.pane .bar').getBoundingClientRect().top,
+    }
+  })
+  const picture = mobile.locator('article.pane .prose img')
+  await picture.evaluate((img) => img.complete || new Promise((r) => (img.onload = img.onerror = r)))
+  const pic = await picture.evaluate((img) => ({ src: img.getAttribute('src'), loaded: img.naturalWidth > 0 }))
+  check(pic.src.startsWith('/img/') && pic.loaded, 'article pictures load through the image proxy')
+  check(reading.wide.length === 0, `the article fits the screen${reading.wide.length ? ': ' + reading.wide.slice(0, 5).join(', ') : ''}`)
+  check(reading.pageX === 0 && reading.pageY === 0 && reading.paneX === 0 && reading.barTop === 0, 'dragging the article never moves the page or its toolbar')
   await mobile.getByRole('button', { name: 'Back to articles' }).tap()
   check(await mobile.locator('nav.tabbar').isVisible(), 'and comes back with the list')
   await phone.close()

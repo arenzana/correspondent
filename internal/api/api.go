@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/arenzana/correspondent/internal/imgproxy"
 	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/opml"
 	"github.com/arenzana/correspondent/internal/push"
@@ -39,6 +40,9 @@ type API struct {
 	Limiter  *ratelimit.Limiter
 	ClientIP ratelimit.ClientIP
 	Push     *push.Notifier
+	// Images, when set, routes article images, thumbnails and feed icons
+	// through the server so third parties never see the reader.
+	Images *imgproxy.Proxy
 
 	hub hub
 }
@@ -197,6 +201,9 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	for i := range feeds {
+		feeds[i].IconURL = a.image(feeds[i].IconURL, iconWidth)
+	}
 	reply(w, map[string]any{"folders": folders, "feeds": feeds, "counts": counts})
 }
 
@@ -245,6 +252,9 @@ func (a *API) entries(w http.ResponseWriter, r *http.Request) {
 		last := entries[len(entries)-1]
 		cursor = fmt.Sprintf("%d.%d", last.PublishedAt, last.ID)
 	}
+	for i := range entries {
+		a.proxyEntry(&entries[i])
+	}
 	reply(w, map[string]any{"entries": entries, "cursor": cursor})
 }
 
@@ -262,6 +272,7 @@ func (a *API) entry(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	a.proxyEntry(e)
 	var encl []store.Enclosure
 	json.Unmarshal([]byte(e.Enclosures), &encl)
 	reply(w, map[string]any{"entry": e, "enclosures": encl})
@@ -338,6 +349,9 @@ func (a *API) discover(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(w, http.StatusUnprocessableEntity, err.Error())
 		return
+	}
+	for i := range c {
+		c[i].IconURL = a.image(c[i].IconURL, iconWidth)
 	}
 	reply(w, map[string]any{"candidates": c})
 }
@@ -590,6 +604,36 @@ func (a *API) revertFullArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.entry(w, r)
+}
+
+// Image widths: icons show at up to 20px and thumbnails at 64px (cropped to
+// a square), so both leave room for high-density screens.
+const (
+	iconWidth  = 64
+	thumbWidth = 256
+	bodyWidth  = 1600
+)
+
+// image returns the proxied address of an image, or raw unchanged when the
+// proxy is off or raw isn't a web address.
+func (a *API) image(raw string, width int) string {
+	if a.Images == nil {
+		return raw
+	}
+	if u := a.Images.URL(raw, width); u != "" {
+		return u
+	}
+	return raw
+}
+
+func (a *API) proxyEntry(e *store.Entry) {
+	if a.Images == nil {
+		return
+	}
+	e.ImageURL = a.image(e.ImageURL, thumbWidth)
+	if e.Content != "" {
+		e.Content = a.Images.RewriteHTML(e.Content, bodyWidth)
+	}
 }
 
 func (a *API) result(w http.ResponseWriter, err error) {

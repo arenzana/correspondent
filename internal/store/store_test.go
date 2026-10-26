@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"path/filepath"
 	"testing"
@@ -34,5 +35,19 @@ func TestBackup(t *testing.T) {
 	entries, _, err := copy.Entries(ctx, Filter{UserID: uid}, false)
 	if err != nil || len(entries) != 1 || entries[0].Title != "one" {
 		t.Fatalf("restored entries: %+v %v", entries, err)
+	}
+}
+
+func TestSecret(t *testing.T) {
+	s := open(t)
+	ctx := context.Background()
+	a, err := s.Secret(ctx, "k")
+	if err != nil || len(a) != 32 {
+		t.Fatalf("%x %v", a, err)
+	}
+	b, _ := s.Secret(ctx, "k")
+	c, _ := s.Secret(ctx, "other")
+	if !bytes.Equal(a, b) || bytes.Equal(a, c) {
+		t.Errorf("not stable per key: %x %x %x", a, b, c)
 	}
 }

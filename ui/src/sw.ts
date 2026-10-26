@@ -7,6 +7,9 @@
 //     own offline copy of data in IndexedDB
 //   - page loads: network first, falling back to the cached app shell
 //   - hashed assets, icons and fonts: cache first (they never change)
+//   - proxied images (/img/): cache first, in their own cache that survives
+//     app updates and keeps the most recent IMAGE_LIMIT, so articles saved
+//     for offline reading keep their pictures
 //   - anything else from this origin: network, refreshing the cache
 
 import { flush } from './lib/offline/outbox'
@@ -17,8 +20,10 @@ declare const __BUILD_ID__: string
 
 const CACHE = `correspondent-${__BUILD_ID__}`
 const SHELL = '/'
+const IMAGES = 'images-v1'
+const IMAGE_LIMIT = 1500
 
-export type Strategy = 'network-only' | 'shell' | 'cache-first' | 'network-then-cache'
+export type Strategy = 'network-only' | 'shell' | 'cache-first' | 'image' | 'network-then-cache'
 
 /** Decides how a request is handled. Pure, so it can be tested. */
 export function route(url: URL, method: string, mode: RequestMode, origin: string): Strategy {
@@ -28,6 +33,7 @@ export function route(url: URL, method: string, mode: RequestMode, origin: strin
   }
   if (mode === 'navigate') return 'shell'
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')) return 'cache-first'
+  if (url.pathname.startsWith('/img/')) return 'image'
   return 'network-then-cache'
 }
 
@@ -127,6 +133,7 @@ if (typeof self !== 'undefined' && 'registration' in self) {
 }
 
 async function handle(req: Request, strategy: Strategy): Promise<Response> {
+  if (strategy === 'image') return image(req)
   const cache = await caches.open(CACHE)
   if (strategy === 'shell') {
     try {
@@ -151,4 +158,25 @@ async function handle(req: Request, strategy: Strategy): Promise<Response> {
   } catch {
     return (await cache.match(req)) ?? Response.error()
   }
+}
+
+// Image addresses are signed and never change, so a cached copy is final.
+async function image(req: Request): Promise<Response> {
+  const cache = await caches.open(IMAGES)
+  const hit = await cache.match(req)
+  if (hit) return hit
+  const res = await fetch(req)
+  if (res.ok) {
+    await cache.put(req, res.clone())
+    if (Math.random() < 0.05) void trim(cache, IMAGE_LIMIT)
+  }
+  return res
+}
+
+/** Drops the oldest entries (keys() lists in insertion order) beyond limit. */
+export async function trim(cache: Cache, limit: number): Promise<number> {
+  const keys = await cache.keys()
+  const extra = keys.slice(0, Math.max(0, keys.length - limit))
+  for (const k of extra) await cache.delete(k)
+  return extra.length
 }

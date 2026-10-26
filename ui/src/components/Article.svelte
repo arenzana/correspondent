@@ -231,6 +231,9 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Reading scrolls only up and down; wide code and tables scroll inside
+       themselves. */
+    overflow-x: hidden;
     scrollbar-gutter: stable;
     outline: none;
     padding-bottom: env(safe-area-inset-bottom);

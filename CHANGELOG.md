@@ -9,13 +9,24 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ### Added
 
+- An image proxy. Article pictures, list thumbnails and feed icons now load
+  through Correspondent, so the sites (and their trackers) never see your
+  address or what you read. Thumbnails arrive at the size they're shown,
+  not as multi-megabyte originals, and pictures are kept for offline reading.
+  Addresses are signed, so the proxy fetches only images that articles
+  refer to; it uses the same protections as feed fetching, rejects anything
+  that isn't an image, and serves SVGs sandboxed. The page now loads images
+  from this server only. Cached images live in `imgcache/` beside the
+  database (512 MB by default, `CORRESPONDENT_IMAGE_CACHE_MB`; `0` turns the
+  proxy off). Reeder is unaffected.
 - A tab bar on phones (Feeds, Unread, Starred, Search, Settings), so every
   menu is reachable; it steps aside while an article is open.
 
 ### Fixed
 
 - On iPhone the whole page could be dragged, taking the header (and the way
-  to the feeds) off screen. Only the list and the article scroll now.
+  to the feeds) off screen, or shift an article sideways past the screen's
+  edge. Only the list and the article scroll now, and only up and down.
 
 ## [0.6.0] - 2026-10-26
 

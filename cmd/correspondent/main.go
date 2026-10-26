@@ -40,6 +40,7 @@ import (
 	"github.com/arenzana/correspondent/internal/extract"
 	"github.com/arenzana/correspondent/internal/fetch"
 	"github.com/arenzana/correspondent/internal/greader"
+	"github.com/arenzana/correspondent/internal/imgproxy"
 	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/migrate"
 	"github.com/arenzana/correspondent/internal/push"
@@ -69,6 +70,7 @@ func run(log *slog.Logger, args []string) error {
 	subsPath := fs.String("subscriptions", "", "import-freshrss: saved subscription/list JSON, to keep feed IDs")
 	allowPrivate := fs.Bool("allow-private-feeds", false, "allow fetching feeds on private networks (development only)")
 	retention := fs.Int("retention-days", envInt("CORRESPONDENT_RETENTION_DAYS", 0), "delete read, unstarred articles older than this that have left their feed (0 = keep everything)")
+	imageCache := fs.Int("image-cache-mb", envInt("CORRESPONDENT_IMAGE_CACHE_MB", 512), "disk space for proxied images (0 = load images directly from their sites)")
 	noPoll := fs.Bool("no-poll", os.Getenv("CORRESPONDENT_NO_POLL") == "1", "serve without polling feeds (used during migration)")
 	exportPath := fs.String("export", "", "migrate import: FreshRSS SQLite export")
 	sysConfig := fs.String("system-config", "", "migrate import: FreshRSS data/config.php")
@@ -131,7 +133,21 @@ func run(log *slog.Logger, args []string) error {
 		if err := bootstrap(ctx, log, st); err != nil {
 			return err
 		}
-		return serve(ctx, log, st, ing, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
+		var images *imgproxy.Proxy
+		if *imageCache > 0 {
+			key, err := st.Secret(ctx, store.SettingImageKey)
+			if err != nil {
+				return err
+			}
+			images = &imgproxy.Proxy{
+				Fetch:    fetch.New(fetch.Options{AllowPrivate: *allowPrivate, MaxBytes: imgproxy.MaxBytes}),
+				Dir:      filepath.Join(*dataDir, "imgcache"),
+				MaxCache: int64(*imageCache) << 20,
+				Key:      key,
+				Log:      log,
+			}
+		}
+		return serve(ctx, log, st, ing, images, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent user add|api-password <username>")
@@ -210,21 +226,24 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	notifier := &push.Notifier{Store: st, Log: log}
-	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier}
+	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images}
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles
 	st.OnStateChange = a.NotifyState
 	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip}
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.New(st, a, g, web.Dist(), secure),
+		Handler:           server.New(st, a, g, imageHandler(images), web.Dist(), secure),
 		ReadHeaderTimeout: 10 * time.Second,
 		MaxHeaderBytes:    64 << 10,
 		IdleTimeout:       120 * time.Second,
+	}
+	if images != nil {
+		go pruneImages(ctx, log, images)
 	}
 	if poll {
 		go ing.Run(ctx)
@@ -242,6 +261,32 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 		return err
 	}
 	return nil
+}
+
+// imageHandler avoids handing server.New a typed nil.
+func imageHandler(p *imgproxy.Proxy) http.Handler {
+	if p == nil {
+		return nil
+	}
+	return p
+}
+
+// pruneImages keeps the image cache within its size, hourly.
+func pruneImages(ctx context.Context, log *slog.Logger, p *imgproxy.Proxy) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		if n, err := p.Prune(); err != nil {
+			log.Warn("image cache", "error", err.Error())
+		} else if n > 0 {
+			log.Info("image cache pruned", "removed", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // bootstrap creates the first account from Docker-style secret files, so a

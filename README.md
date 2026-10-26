@@ -81,6 +81,7 @@ docker compose exec correspondent /correspondent version
 | `CORRESPONDENT_TRUSTED_PROXIES` | | CIDRs whose `X-Forwarded-For` is trusted |
 | `CORRESPONDENT_RETENTION_DAYS` | `0` (keep all) | Delete read, unstarred articles older than this that have left their feed |
 | `CORRESPONDENT_NO_POLL` | | `1` to serve without fetching feeds (used during migration) |
+| `CORRESPONDENT_IMAGE_CACHE_MB` | `512` | Disk for proxied images; `0` turns the image proxy off and images load straight from their sites |
 | `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
 
 ## Build from source
@@ -124,8 +125,6 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- An image proxy that resizes thumbnails and stops article images from
-  reaching third parties directly.
 - Feeds for sites without one (for example a company's research page):
   exact methods first (h-feed, JSON-LD, sitemaps, link patterns), then an
   AI model, asked once per site, that works out extraction rules which are

@@ -20,6 +20,7 @@ import (
 type env struct {
 	srv   *httptest.Server
 	store *store.Store
+	api   *API
 }
 
 func newEnv(t *testing.T) *env {
@@ -32,7 +33,7 @@ func newEnv(t *testing.T) *env {
 	a := &API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute)}
 	srv := httptest.NewServer(a.Handler())
 	t.Cleanup(srv.Close)
-	return &env{srv: srv, store: st}
+	return &env{srv: srv, store: st, api: a}
 }
 
 // user creates an account with one feed and one entry, and returns a

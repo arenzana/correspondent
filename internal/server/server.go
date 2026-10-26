@@ -15,12 +15,25 @@ import (
 	"github.com/arenzana/correspondent/internal/store"
 )
 
-const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-	"img-src * data: blob:; media-src *; font-src 'self'; connect-src 'self'; " +
-	"frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+// cspFor returns the page policy. With the image proxy on, images can only
+// come from this server, so no page can make the browser contact a third
+// party; without it, article images load from anywhere.
+func cspFor(proxied bool) string {
+	img := "img-src * data: blob:"
+	if proxied {
+		img = "img-src 'self' data: blob:"
+	}
+	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+		img + "; media-src *; font-src 'self'; connect-src 'self'; " +
+		"frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+}
 
-func New(st *store.Store, a *api.API, g *greader.Server, ui fs.FS, secure bool) http.Handler {
+// New assembles the server. images serves /img/ (nil: the proxy is off).
+func New(st *store.Store, a *api.API, g *greader.Server, images http.Handler, ui fs.FS, secure bool) http.Handler {
 	mux := http.NewServeMux()
+	if images != nil {
+		mux.Handle("GET /img/", images)
+	}
 	mux.Handle("/api/v1/", a.Handler())
 	// Reeder's base URL is the literal /api/greader.php; route the whole suffix.
 	mux.Handle(greader.Prefix, g)
@@ -37,10 +50,10 @@ func New(st *store.Store, a *api.API, g *greader.Server, ui fs.FS, secure bool) 
 	})
 	mux.HandleFunc("GET /manifest.webmanifest", a.Manifest)
 	mux.Handle("/", spa(ui))
-	return headers(mux, secure)
+	return headers(mux, cspFor(images != nil), secure)
 }
 
-func headers(next http.Handler, secure bool) http.Handler {
+func headers(next http.Handler, csp string, secure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -51,7 +64,8 @@ func headers(next http.Handler, secure bool) http.Handler {
 		if secure {
 			h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		}
-		if !strings.HasPrefix(r.URL.Path, greader.Prefix) {
+		// Images set their own, stricter policy.
+		if !strings.HasPrefix(r.URL.Path, greader.Prefix) && !strings.HasPrefix(r.URL.Path, "/img/") {
 			h.Set("Content-Security-Policy", csp)
 			h.Set("X-Frame-Options", "DENY")
 		}

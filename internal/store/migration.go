@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/subtle"
 	"database/sql"
@@ -16,6 +17,7 @@ const (
 	SettingFreshRSSSalt = "freshrss.salt"
 	SettingMigratedAt   = "freshrss.migrated_at" // RFC 3339; the rollback replay boundary
 	SettingMaxLegacyID  = "freshrss.max_id"      // highest imported entry ID; newer ones exist only here
+	SettingImageKey     = "images.key"           // signs image proxy addresses
 )
 
 func (s *Store) Setting(ctx context.Context, key string) (string, error) {
@@ -31,6 +33,22 @@ func (s *Store) SetSetting(ctx context.Context, key, value string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
+}
+
+// Secret returns the random secret stored under key, creating it on first
+// use. Concurrent first calls agree on one value.
+func (s *Store) Secret(ctx context.Context, key string) ([]byte, error) {
+	b := make([]byte, 32)
+	rand.Read(b)
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`,
+		key, hex.EncodeToString(b)); err != nil {
+		return nil, err
+	}
+	v, err := s.Setting(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(v)
 }
 
 // ImportUser creates or updates an account with existing bcrypt hashes from

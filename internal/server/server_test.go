@@ -18,6 +18,10 @@ import (
 )
 
 func newServer(t *testing.T, secure bool) *httptest.Server {
+	return newServerWith(t, secure, nil)
+}
+
+func newServerWith(t *testing.T, secure bool, images http.Handler) *httptest.Server {
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +33,7 @@ func newServer(t *testing.T, secure bool) *httptest.Server {
 		"index.html":    {Data: []byte("<!doctype html><title>app</title>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
-	h := New(st, &api.API{Store: st, Log: log, Limiter: lim}, &greader.Server{Store: st, Log: log, Limiter: lim}, ui, secure)
+	h := New(st, &api.API{Store: st, Log: log, Limiter: lim}, &greader.Server{Store: st, Log: log, Limiter: lim}, images, ui, secure)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return srv
@@ -101,5 +105,29 @@ func TestRouting(t *testing.T) {
 	r := get(t, srv.URL+greader.Prefix+"/reader/api/0/subscription/list?output=json")
 	if r.StatusCode != 401 || r.Header.Get("Content-Security-Policy") != "" {
 		t.Fatalf("reader path: %d csp=%q", r.StatusCode, r.Header.Get("Content-Security-Policy"))
+	}
+}
+
+func TestImageProxyRoute(t *testing.T) {
+	images := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		w.Write([]byte(r.URL.Path))
+	})
+	srv := newServerWith(t, false, images)
+	r := get(t, srv.URL+"/img/sig/64/aHR0cHM6Ly9leGFtcGxlLmNvbQ")
+	if body, _ := io.ReadAll(r.Body); string(body) != "/img/sig/64/aHR0cHM6Ly9leGFtcGxlLmNvbQ" {
+		t.Fatalf("image route served %q", body)
+	}
+	if csp := r.Header.Get("Content-Security-Policy"); csp != "sandbox" {
+		t.Errorf("image policy replaced: %q", csp)
+	}
+	// With the proxy on, pages may load images only from this server.
+	if csp := get(t, srv.URL+"/").Header.Get("Content-Security-Policy"); !strings.Contains(csp, "img-src 'self' data: blob:;") {
+		t.Errorf("proxied CSP: %s", csp)
+	}
+	// Without it, /img/ is just a client route, and images load from anywhere.
+	off := newServer(t, false)
+	if csp := get(t, off.URL+"/").Header.Get("Content-Security-Policy"); !strings.Contains(csp, "img-src * data: blob:;") {
+		t.Errorf("unproxied CSP: %s", csp)
 	}
 }

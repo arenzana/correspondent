@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { route, shellAssets } from './sw'
+import { route, shellAssets, trim } from './sw'
 
 const o = 'https://rss.example.org'
 const r = (path: string, method = 'GET', mode: RequestMode = 'cors', origin = o) => route(new URL(path, origin), method, mode, o)
@@ -24,6 +24,26 @@ describe('service worker routing', () => {
     expect(r('/assets/index-abc.js')).toBe('cache-first')
     expect(r('/icons/wire/icon-192.png')).toBe('cache-first')
     expect(r('/favicon.svg')).toBe('network-then-cache')
+  })
+  it('keeps proxied images in their own cache', () => {
+    expect(r('/img/sig/256/aHR0cHM6Ly9leGFtcGxlLmNvbQ')).toBe('image')
+    expect(r('/img/sig/256/x', 'POST')).toBe('network-only')
+  })
+})
+
+describe('image cache trimming', () => {
+  it('drops the oldest entries beyond the limit', async () => {
+    const keys = ['a', 'b', 'c', 'd', 'e'].map((k) => new Request(`${o}/img/${k}`))
+    const deleted: string[] = []
+    const cache = {
+      keys: async () => keys,
+      delete: async (k: Request) => (deleted.push(new URL(k.url).pathname), true),
+    } as unknown as Cache
+    expect(await trim(cache, 3)).toBe(2)
+    expect(deleted).toEqual(['/img/a', '/img/b'])
+    deleted.length = 0
+    expect(await trim(cache, 10)).toBe(0)
+    expect(deleted).toEqual([])
   })
 })
 
