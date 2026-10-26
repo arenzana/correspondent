@@ -119,6 +119,9 @@ make vuln    # govulncheck + npm audit
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.
+- A reworked Settings: a full page with clear sections (reading,
+  appearance, feeds and folders, apps and sync, data and backups, about),
+  feed management with health and cadence, and live previews.
 - Fluid motion for the selection bar on the time spine as you move up and
   down the list, and new articles sliding in at the top and pushing the list
   down as they arrive (when you're at the top; a list you're reading further
