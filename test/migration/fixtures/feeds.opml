@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<opml version="2.0"><head><title>Rehearsal</title></head><body>
+<outline text="News"><outline type="rss" text="Dispatches" xmlUrl="http://fixtures/dispatches.xml"/><outline type="rss" text="Field Atoms" xmlUrl="http://fixtures/atom.xml"/></outline>
+<outline text="Notes &amp; Logs"><outline type="rss" text="Linked Notes" xmlUrl="http://fixtures/noguid.xml"/><outline type="rss" text="Change Log" xmlUrl="http://fixtures/changes.xml"/></outline>
+</body></opml>

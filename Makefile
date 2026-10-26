@@ -1,4 +1,4 @@
-.PHONY: all ui build test check fuzz vuln dev screenshots image clean
+.PHONY: all ui build test check fuzz vuln dev screenshots image rehearse clean
 
 all: build
 
@@ -30,6 +30,10 @@ check: test vuln
 # Backend on :8080 (plain HTTP, so cookies are not Secure) plus Vite with hot reload on :5173.
 dev:
 	go run ./cmd/correspondent serve -addr 127.0.0.1:8080 -data ./data -insecure-cookies & cd ui && npm run dev
+
+# The FreshRSS cutover, end to end, against a real FreshRSS in Docker.
+rehearse: build
+	test/migration/rehearse.sh
 
 # README screenshots from invented fixture content (uses the installed Chrome).
 screenshots: build

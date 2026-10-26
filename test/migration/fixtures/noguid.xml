@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel>
+<title>Linked Notes</title><link>http://fixtures/noguid/</link><description>Fixture feed</description>
+<item><title>Linked note 0</title><link>http://fixtures/noguid/0</link><pubDate>Mon, 26 Oct 2026 04:00:00 +0000</pubDate><description><![CDATA[<p>Linked note 0. Fixture body for item 0 of Linked Notes.</p>]]></description></item>
+<item><title>Linked note 1</title><link>http://fixtures/noguid/1</link><pubDate>Sun, 25 Oct 2026 17:00:00 +0000</pubDate><description><![CDATA[<p>Linked note 1. Fixture body for item 1 of Linked Notes.</p>]]></description></item>
+<item><title>Linked note 2</title><link>http://fixtures/noguid/2</link><pubDate>Sun, 25 Oct 2026 06:00:00 +0000</pubDate><description><![CDATA[<p>Linked note 2. Fixture body for item 2 of Linked Notes.</p>]]></description></item>
+<item><title>Linked note 3</title><link>http://fixtures/noguid/3</link><pubDate>Sat, 24 Oct 2026 19:00:00 +0000</pubDate><description><![CDATA[<p>Linked note 3. Fixture body for item 3 of Linked Notes.</p>]]></description></item>
+<item><title>Linked note 4</title><link>http://fixtures/noguid/4</link><pubDate>Sat, 24 Oct 2026 08:00:00 +0000</pubDate><description><![CDATA[<p>Linked note 4. Fixture body for item 4 of Linked Notes.</p>]]></description></item>
+</channel></rss>

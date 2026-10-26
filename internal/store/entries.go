@@ -74,6 +74,18 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 		)
 		err := tx.QueryRowContext(ctx, `SELECT id, content_hash FROM entries WHERE feed_id = ? AND guid = ?`,
 			feedID, it.GUID).Scan(&id, &hash)
+		if errors.Is(err, sql.ErrNoRows) && it.URL != "" {
+			// An imported FreshRSS entry may carry a GUID we derive differently
+			// (FreshRSS hashes some GUID-less items). Same feed and link means
+			// same article: adopt our GUID so later polls match directly.
+			err = tx.QueryRowContext(ctx, `SELECT id, content_hash FROM entries
+				WHERE feed_id = ? AND url = ? AND imported = 1 LIMIT 1`, feedID, it.URL).Scan(&id, &hash)
+			if err == nil {
+				if _, err = tx.ExecContext(ctx, `UPDATE entries SET guid = ?, imported = 0 WHERE id = ?`, it.GUID, id); err != nil {
+					return 0, 0, err
+				}
+			}
+		}
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			pub := it.PublishedAt
@@ -518,6 +530,7 @@ type ImportedEntry struct {
 	ID      int64
 	Read    bool
 	Starred bool
+	StateAt int64 // seconds; when the user last changed read/star (0 = now)
 }
 
 // ImportEntries inserts entries keeping their IDs, and makes sure new IDs are
@@ -533,12 +546,16 @@ func (s *Store) ImportEntries(ctx context.Context, feedID int64, items []Importe
 	n := 0
 	var maxID int64
 	for _, it := range items {
+		stateAt := it.StateAt
+		if stateAt <= 0 {
+			stateAt = now
+		}
 		var readAt, starredAt any
 		if it.Read {
-			readAt = now
+			readAt = stateAt
 		}
 		if it.Starred {
-			starredAt = now
+			starredAt = stateAt
 		}
 		pub := it.PublishedAt.Unix()
 		if it.PublishedAt.IsZero() {
@@ -546,10 +563,10 @@ func (s *Store) ImportEntries(ctx context.Context, feedID int64, items []Importe
 		}
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url, enclosures,
-			                     content_hash, published_at, updated_at, read_at, starred_at, state_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+			                     content_hash, published_at, updated_at, read_at, starred_at, state_at, imported)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT DO NOTHING`,
 			it.ID, feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt, it.ImageURL,
-			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, now)
+			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, stateAt)
 		if err != nil {
 			return n, err
 		}

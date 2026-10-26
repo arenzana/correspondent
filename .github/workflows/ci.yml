@@ -41,6 +41,10 @@ jobs:
         run: |
           go test ./internal/content -run='^$' -fuzz=FuzzProcess -fuzztime=30s
           go test ./internal/feed -run='^$' -fuzz=FuzzParse -fuzztime=30s
+      - name: FreshRSS migration rehearsal
+        run: |
+          CGO_ENABLED=0 go build -o bin/correspondent ./cmd/correspondent
+          test/migration/rehearse.sh
       - name: Vulnerabilities
         run: |
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...

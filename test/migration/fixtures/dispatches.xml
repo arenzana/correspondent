@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel>
+<title>Dispatches</title><link>http://fixtures/dispatches/</link><description>Fixture feed</description>
+<item><title>Dispatch 0</title><link>http://fixtures/dispatches/0</link><guid isPermaLink="false">dispatches-0</guid><pubDate>Mon, 26 Oct 2026 07:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 0. Fixture body for item 0 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 1</title><link>http://fixtures/dispatches/1</link><guid isPermaLink="false">dispatches-1</guid><pubDate>Mon, 26 Oct 2026 00:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 1. Fixture body for item 1 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 2</title><link>http://fixtures/dispatches/2</link><guid isPermaLink="false">dispatches-2</guid><pubDate>Sun, 25 Oct 2026 17:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 2. Fixture body for item 2 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 3 with audio</title><link>http://fixtures/dispatches/3</link><guid isPermaLink="false">dispatches-3</guid><pubDate>Sun, 25 Oct 2026 10:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 3 with audio. Fixture body for item 3 of Dispatches.</p>]]></description><enclosure url="http://fixtures/audio/3.mp3" type="audio/mpeg" length="1234"/></item>
+<item><title>Dispatch 4</title><link>http://fixtures/dispatches/4</link><guid isPermaLink="false">dispatches-4</guid><pubDate>Sun, 25 Oct 2026 03:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 4. Fixture body for item 4 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 5</title><link>http://fixtures/dispatches/5</link><guid isPermaLink="false">dispatches-5</guid><pubDate>Sat, 24 Oct 2026 20:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 5. Fixture body for item 5 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 6</title><link>http://fixtures/dispatches/6</link><guid isPermaLink="false">dispatches-6</guid><pubDate>Sat, 24 Oct 2026 13:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 6. Fixture body for item 6 of Dispatches.</p>]]></description></item>
+<item><title>Dispatch 7</title><link>http://fixtures/dispatches/7</link><guid isPermaLink="false">dispatches-7</guid><pubDate>Sat, 24 Oct 2026 06:00:00 +0000</pubDate><description><![CDATA[<p>Dispatch 7. Fixture body for item 7 of Dispatches.</p>]]></description></item>
+</channel></rss>

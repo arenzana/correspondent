@@ -32,6 +32,7 @@
       })),
       { id: 'a-mark', label: `Mark all as read in ${scopeName}`, icon: 'checkAll', group: 'Actions', hint: '⇧A', run: () => app.markAllRead() },
       { id: 'a-add', label: 'Add feed…', icon: 'plus', group: 'Actions', hint: 'a', run: () => (app.addFeedOpen = true) },
+      { id: 'a-sidebar', label: app.prefs.sidebar ? 'Hide feeds' : 'Show feeds', icon: 'sidebar', group: 'Actions', hint: '[', run: () => app.setPrefs({ sidebar: !app.prefs.sidebar }) },
       { id: 'a-focus', label: app.focusMode ? 'Leave focused reading' : 'Focused reading', icon: 'focus', group: 'Actions', hint: 'f', run: () => (app.focusMode = !app.focusMode) },
       { id: 'a-day', label: 'Switch to Day', icon: 'sun', group: 'Actions', run: () => app.setPrefs({ theme: 'day' }) },
       { id: 'a-night', label: 'Switch to Night desk', icon: 'sun', group: 'Actions', run: () => app.setPrefs({ theme: 'night' }) },

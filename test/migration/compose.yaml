@@ -1,0 +1,43 @@
+# Migration rehearsal: a real FreshRSS, fixture feeds, and Correspondent's
+# own image, wired as in production. Driven by rehearse.sh.
+name: correspondent-rehearsal
+
+services:
+  fixtures:
+    image: nginx:1-alpine@sha256:a3554c0d0b48177b1413c26e01f695334428020d9df01243fbae3e11cfd17417
+    volumes:
+      - ./work/fixtures:/usr/share/nginx/html:ro
+
+  freshrss:
+    image: freshrss/freshrss:1.30.4@sha256:af44385229541bee24aa9148d0ff8f3b40e095373c63a2c0f74e09a27d3c59df
+    ports: ["127.0.0.1:8091:80"]
+    depends_on: [fixtures]
+    environment:
+      TZ: UTC
+      FRESHRSS_INSTALL: |-
+        --api-enabled
+        --base-url http://localhost:8091
+        --default-user reader
+        --language en
+        --db-type sqlite
+      FRESHRSS_USER: |-
+        --user reader
+        --password ${WEB_PASSWORD}
+        --api-password ${API_PASSWORD}
+        --language en
+        --no-default-feeds
+
+  correspondent:
+    build: ../..
+    ports: ["127.0.0.1:8092:8080"]
+    depends_on: [fixtures]
+    environment:
+      CORRESPONDENT_INSECURE_COOKIES: "1"
+      CORRESPONDENT_NO_POLL: ${NO_POLL:-1}
+    command: ["serve", "-allow-private-feeds"]
+    volumes:
+      - data:/data
+      - ./work:/work:ro
+
+volumes:
+  data:
