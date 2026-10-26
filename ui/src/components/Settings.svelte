@@ -6,7 +6,7 @@
   import ThemePicker from './ThemePicker.svelte'
   import { relative } from '../lib/time'
   import { addPasskey, passkeysSupported } from '../lib/passkey'
-  import type { Passkey, Session } from '../lib/api'
+  import type { APIToken, Passkey, Session } from '../lib/api'
   import TextControls from './TextControls.svelte'
 
   let apiPassword = $state('')
@@ -197,8 +197,41 @@
   let keyMessage = $state('')
   let renaming = $state<number | null>(null)
   const canPasskey = passkeysSupported()
+  // Personal API tokens: corr, scripts, and AI tools over MCP.
+  let tokens = $state<APIToken[]>([])
+  let tokenName = $state('')
+  let tokenScope = $state<'read' | 'write'>('read')
+  let newToken = $state('')
+  let tokenCopied = $state(false)
+  const mcpURL = `${location.origin}/mcp`
+  async function createToken(e: SubmitEvent) {
+    e.preventDefault()
+    try {
+      const r = await api.createToken(tokenName.trim() || 'Token', tokenScope)
+      newToken = r.token
+      tokenName = ''
+      loadAccount()
+    } catch (err) {
+      app.toast((err as Error).message)
+    }
+  }
+  async function copyToken() {
+    try {
+      await navigator.clipboard.writeText(newToken)
+      tokenCopied = true
+      setTimeout(() => (tokenCopied = false), 1600)
+    } catch {
+      /* visible to copy by hand */
+    }
+  }
+  async function revoke(t: APIToken) {
+    await api.revokeToken(t.id).catch((e) => app.toast((e as Error).message))
+    loadAccount()
+  }
+
   function loadAccount() {
     api.sessions().then((r) => (sessionList = r.sessions)).catch(() => {})
+    api.tokens().then((r) => (tokens = r.tokens)).catch(() => {})
     if (app.passkeysAvailable) api.passkeys().then((r) => (keys = r.passkeys)).catch(() => {})
   }
   $effect(loadAccount)
@@ -318,6 +351,47 @@
             <button class="btn">Change password</button>
           </form>
           {#if pwMessage}<p class="msg" role="status">{pwMessage}</p>{/if}
+        </div>
+
+        <div class="card">
+          <h3>Command line and AI tools</h3>
+          <p class="hint">
+            A token lets <code>corr</code>, scripts and AI tools use your account. Read-only tokens can read but never change
+            anything: the safe choice for an AI agent. Tokens can’t change your password, passkeys or other tokens.
+          </p>
+          <form class="token-form" onsubmit={createToken}>
+            <input class="field" bind:value={tokenName} maxlength="60" placeholder="What is it for? (e.g. Claude, laptop)" />
+            <select class="field" bind:value={tokenScope} aria-label="Access">
+              <option value="read">Read only</option>
+              <option value="write">Read and change</option>
+            </select>
+            <button class="btn">Create token</button>
+          </form>
+          {#if newToken}
+            <div class="fresh" role="status">
+              <p>Your new token. Copy it now; it won’t be shown again.</p>
+              <div class="linkrow">
+                <code class="secret">{newToken}</code>
+                <button class="btn primary" onclick={copyToken}>{tokenCopied ? 'Copied' : 'Copy'}</button>
+                <button class="btn" onclick={() => (newToken = '')}>Done</button>
+              </div>
+              <p class="hint">
+                AI tools: connect to <code>{mcpURL}</code> with the header <code>Authorization: Bearer</code> and this token.
+                In Claude Code: <code>claude mcp add --transport http correspondent {mcpURL} --header "Authorization: Bearer {newToken.slice(0, 9)}…"</code>
+              </p>
+            </div>
+          {/if}
+          {#if tokens.length}
+            <ul class="list">
+              {#each tokens as t (t.id)}
+                <li>
+                  <span class="item"><strong>{t.name}<span class="role">{t.scope === 'read' ? 'Read only' : 'Read and change'}</span></strong>
+                    <small>Created {relative(t.createdAt)}{#if t.lastUsedAt}, used {relative(t.lastUsedAt)}{:else}, not used yet{/if}</small></span>
+                  <button class="link danger" onclick={() => revoke(t)}>Revoke</button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </div>
 
         <div class="card">
@@ -919,13 +993,43 @@
   .link.danger {
     color: var(--danger);
   }
+  .token-form {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+  }
+  .fresh {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    border-radius: var(--radius-l);
+    background: var(--accent-wash);
+    border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--rule));
+  }
+  .fresh p {
+    margin: 0;
+  }
+  .linkrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .secret {
+    flex: 1 1 260px;
+    padding: 8px 10px;
+    background: var(--sheet);
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
   .pw {
     display: grid;
     grid-template-columns: 1fr 1fr auto;
     gap: 8px;
   }
   @media (max-width: 559px) {
-    .pw {
+    .pw,
+    .token-form {
       grid-template-columns: 1fr;
     }
     .pw .btn {

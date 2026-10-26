@@ -89,8 +89,7 @@ func (a *API) admin(next http.HandlerFunc) http.HandlerFunc {
 // --- your own account ------------------------------------------------------
 
 func (a *API) sessions(w http.ResponseWriter, r *http.Request) {
-	c, _ := r.Cookie(cookieName)
-	list, err := a.Store.Sessions(r.Context(), userID(r), c.Value)
+	list, err := a.Store.Sessions(r.Context(), userID(r), sessionToken(r))
 	if err != nil {
 		a.internal(w, err)
 		return
@@ -130,8 +129,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "Use at least 10 characters.")
 		return
 	}
-	c, _ := r.Cookie(cookieName)
-	if err := a.Store.SetPassword(r.Context(), uid, in.New, c.Value); err != nil {
+	if err := a.Store.SetPassword(r.Context(), uid, in.New, sessionToken(r)); err != nil {
 		a.internal(w, err)
 		return
 	}
@@ -462,4 +460,88 @@ func orEmpty[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// --- personal API tokens ---------------------------------------------------
+
+func (a *API) tokens(w http.ResponseWriter, r *http.Request) {
+	list, err := a.Store.Tokens(r.Context(), userID(r))
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+	reply(w, map[string]any{"tokens": orEmpty(list)})
+}
+
+// createToken returns the token once, from a signed-in browser.
+func (a *API) createToken(w http.ResponseWriter, r *http.Request) {
+	var in struct{ Name, Scope string }
+	if !decode(w, r, &in) {
+		return
+	}
+	token, t, err := a.Store.CreateToken(r.Context(), userID(r), in.Name, in.Scope)
+	if err != nil {
+		fail(w, http.StatusBadRequest, sentence(err.Error()))
+		return
+	}
+	reply(w, map[string]any{"token": token, "info": t})
+}
+
+func (a *API) revokeToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.Store.RevokeToken(r.Context(), userID(r), id); err != nil {
+		a.result(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// tokenLogin exchanges a username and password for a token (corr auth
+// login), throttled like signing in. Disabled accounts get none.
+func (a *API) tokenLogin(w http.ResponseWriter, r *http.Request) {
+	ip := a.ClientIP.Of(r)
+	if !a.Limiter.Allow(ip) {
+		fail(w, http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again.")
+		return
+	}
+	var in struct{ Username, Password, Name, Scope string }
+	if !decode(w, r, &in) {
+		return
+	}
+	u, err := a.Store.CheckPassword(r.Context(), in.Username, in.Password, false)
+	if errors.Is(err, store.ErrDisabled) {
+		fail(w, http.StatusForbidden, "This account is disabled. Ask your admin.")
+		return
+	}
+	if err != nil {
+		a.Limiter.Fail(ip)
+		fail(w, http.StatusUnauthorized, "That username and password don't match.")
+		return
+	}
+	if in.Scope == "" {
+		in.Scope = store.ScopeWrite
+	}
+	token, t, err := a.Store.CreateToken(r.Context(), u.ID, in.Name, in.Scope)
+	if err != nil {
+		fail(w, http.StatusBadRequest, sentence(err.Error()))
+		return
+	}
+	reply(w, map[string]any{"token": token, "info": t, "username": u.Username})
+}
+
+// revokeCurrentToken lets a token revoke itself (corr auth logout).
+func (a *API) revokeCurrentToken(w http.ResponseWriter, r *http.Request) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		fail(w, http.StatusBadRequest, "Only an API token can revoke itself.")
+		return
+	}
+	if err := a.Store.RevokeTokenBySecret(r.Context(), strings.TrimSpace(token)); err != nil {
+		a.result(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -1,0 +1,94 @@
+version: 2
+project_name: corr
+
+# The corr CLI. The server ships as a container image (image.yml); this
+# builds corr for macOS and Linux, signs the checksums, and publishes the
+# Homebrew cask to arenzana/homebrew-tap.
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: corr
+    main: ./cmd/corr
+    binary: corr
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/arenzana/correspondent/internal/version.Version={{ .Version }}
+      - -X github.com/arenzana/correspondent/internal/version.Commit={{ .FullCommit }}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - formats: [tar.gz]
+    # Deterministic archives: the same commit always gives the same bytes,
+    # so the release and the cask can't disagree on checksums.
+    builds_info:
+      mtime: '{{ .CommitDate }}'
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - src: LICENSE
+        info:
+          mtime: '{{ .CommitDate }}'
+      - src: docs/cli.md
+        info:
+          mtime: '{{ .CommitDate }}'
+
+checksum:
+  name_template: 'corr_checksums.txt'
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+# Keyless signature over the checksums (verifying it verifies every archive).
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    signature: '${artifact}.sigstore.json'
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - ${artifact}
+      - --yes
+
+homebrew_casks:
+  - name: corr
+    repository:
+      owner: arenzana
+      name: homebrew-tap
+      branch: main
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+    # Without the token (forks, dry runs) the cask is built but not pushed.
+    skip_upload: '{{ if not .Env.HOMEBREW_TAP_TOKEN }}true{{ end }}'
+    directory: Casks
+    homepage: https://github.com/arenzana/correspondent
+    description: Read and manage a Correspondent feed reader from the terminal
+    binaries: [corr]
+    commit_author:
+      name: Ismael Arenzana
+      email: isma@arenzana.org
+    commit_msg_template: 'corr {{ .Tag }}'
+    hooks:
+      post:
+        # corr isn't notarized: clear the quarantine flag so macOS runs it.
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/corr"]
+          end
+
+# The release itself (with notes from CHANGELOG.md) is made by release.yml;
+# GoReleaser only adds corr's files to it.
+release:
+  mode: keep-existing
+  replace_existing_artifacts: true
+
+changelog:
+  disable: true

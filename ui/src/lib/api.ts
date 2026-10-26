@@ -122,6 +122,14 @@ export interface Session {
   current: boolean
 }
 
+export interface APIToken {
+  id: number
+  name: string
+  scope: 'read' | 'write'
+  createdAt: number
+  lastUsedAt: number
+}
+
 export interface Passkey {
   id: number
   name: string
@@ -247,6 +255,9 @@ export const api = {
     request<{ kind: 'invite' | 'reset'; username: string; invitedBy: string; expiresAt: number }>('GET', `/invites/${encodeURIComponent(token)}`),
   acceptInvite: (token: string, username: string, password: string) =>
     request<{ username: string }>('POST', `/invites/${encodeURIComponent(token)}`, { username, password }),
+  tokens: () => request<{ tokens: APIToken[] }>('GET', '/tokens'),
+  createToken: (name: string, scope: 'read' | 'write') => request<{ token: string; info: APIToken }>('POST', '/tokens', { name, scope }),
+  revokeToken: (id: number) => request<void>('DELETE', `/tokens/${id}`),
   passkeys: () => request<{ passkeys: Passkey[] }>('GET', '/passkeys'),
   renamePasskey: (id: number, name: string) => request<void>('PATCH', `/passkeys/${id}`, { name }),
   deletePasskey: (id: number) => request<void>('DELETE', `/passkeys/${id}`),

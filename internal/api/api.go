@@ -59,6 +59,8 @@ type API struct {
 	WebAuthn *webauthn.WebAuthn
 	// DataDir is where the database lives, for the admin's server view.
 	DataDir string
+	// PublicURL is the address readers use (CORRESPONDENT_PUBLIC_URL).
+	PublicURL string
 
 	hub        hub
 	ceremonies ceremonies
@@ -72,8 +74,13 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/session", a.auth(a.logout))
 	mux.HandleFunc("GET /api/v1/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/v1/sessions", a.auth(a.sessions))
-	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.auth(a.endSession))
-	mux.HandleFunc("PUT /api/v1/password", a.auth(a.changePassword))
+	mux.HandleFunc("GET /api/v1/tokens", a.auth(a.tokens))
+	mux.HandleFunc("POST /api/v1/tokens", a.session(a.createToken))
+	mux.HandleFunc("DELETE /api/v1/tokens/{id}", a.session(a.revokeToken))
+	mux.HandleFunc("POST /api/v1/tokens/login", a.tokenLogin)
+	mux.HandleFunc("DELETE /api/v1/tokens/current", a.auth(a.revokeCurrentToken))
+	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.session(a.endSession))
+	mux.HandleFunc("PUT /api/v1/password", a.session(a.changePassword))
 	mux.HandleFunc("GET /api/v1/invites/{token}", a.invite)
 	mux.HandleFunc("POST /api/v1/invites/{token}", a.acceptInvite)
 	mux.HandleFunc("GET /api/v1/admin/accounts", a.admin(a.adminAccounts))
@@ -91,12 +98,12 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/session/passkey", a.passkeyLoginBegin)
 	mux.HandleFunc("POST /api/v1/session/passkey/finish", a.passkeyLoginFinish)
 	mux.HandleFunc("GET /api/v1/passkeys", a.auth(a.passkeys))
-	mux.HandleFunc("POST /api/v1/passkeys", a.auth(a.passkeyRegisterBegin))
-	mux.HandleFunc("POST /api/v1/passkeys/finish", a.auth(a.passkeyRegisterFinish))
-	mux.HandleFunc("PATCH /api/v1/passkeys/{id}", a.auth(a.renamePasskey))
-	mux.HandleFunc("DELETE /api/v1/passkeys/{id}", a.auth(a.deletePasskey))
+	mux.HandleFunc("POST /api/v1/passkeys", a.session(a.passkeyRegisterBegin))
+	mux.HandleFunc("POST /api/v1/passkeys/finish", a.session(a.passkeyRegisterFinish))
+	mux.HandleFunc("PATCH /api/v1/passkeys/{id}", a.session(a.renamePasskey))
+	mux.HandleFunc("DELETE /api/v1/passkeys/{id}", a.session(a.deletePasskey))
 	mux.HandleFunc("PUT /api/v1/prefs", a.auth(a.putPrefs))
-	mux.HandleFunc("PUT /api/v1/api-password", a.auth(a.putAPIPassword))
+	mux.HandleFunc("PUT /api/v1/api-password", a.session(a.putAPIPassword))
 	mux.HandleFunc("GET /api/v1/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/v1/entries", a.auth(a.entries))
 	mux.HandleFunc("GET /api/v1/entries/{id}", a.auth(a.entry))
@@ -106,8 +113,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/entries/mark-all-read", a.auth(a.markAllRead))
 	mux.HandleFunc("POST /api/v1/discover", a.auth(a.discover))
 	mux.HandleFunc("POST /api/v1/discover/ai", a.auth(a.discoverAI))
-	mux.HandleFunc("PUT /api/v1/ai", a.auth(a.putAI))
-	mux.HandleFunc("DELETE /api/v1/ai", a.auth(a.deleteAI))
+	mux.HandleFunc("PUT /api/v1/ai", a.session(a.putAI))
+	mux.HandleFunc("DELETE /api/v1/ai", a.session(a.deleteAI))
 	mux.HandleFunc("POST /api/v1/feeds", a.auth(a.subscribe))
 	mux.HandleFunc("PATCH /api/v1/feeds/{id}", a.auth(a.updateFeed))
 	mux.HandleFunc("DELETE /api/v1/feeds/{id}", a.auth(a.deleteFeed))
@@ -135,6 +142,33 @@ func userID(r *http.Request) int64 { return r.Context().Value(ctxKey{}).(int64) 
 
 func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Personal API tokens (the corr CLI, scripts, agents): no cookie, so
+		// no cross-site request can carry them and no CSRF header is needed.
+		if h := r.Header.Get("Authorization"); h != "" {
+			token, ok := strings.CutPrefix(h, "Bearer ")
+			if !ok {
+				fail(w, http.StatusUnauthorized, "Use an Authorization: Bearer token.")
+				return
+			}
+			ip := a.ClientIP.Of(r)
+			if !a.Limiter.Allow(ip) {
+				fail(w, http.StatusTooManyRequests, "Too many failed attempts. Wait a minute and try again.")
+				return
+			}
+			uid, scope, err := a.Store.TokenUser(r.Context(), strings.TrimSpace(token))
+			if err != nil {
+				a.Limiter.Fail(ip)
+				fail(w, http.StatusUnauthorized, "That token isn't valid: it was revoked, or the account is disabled.")
+				return
+			}
+			if scope != store.ScopeWrite && r.Method != http.MethodGet {
+				fail(w, http.StatusForbidden, "This token can only read.")
+				return
+			}
+			ctx := context.WithValue(r.Context(), ctxKey{}, uid)
+			next(w, r.WithContext(context.WithValue(ctx, viaTokenKey{}, true)))
+			return
+		}
 		c, err := r.Cookie(cookieName)
 		if err != nil {
 			fail(w, http.StatusUnauthorized, "Sign in to continue.")
@@ -151,6 +185,29 @@ func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, uid)))
 	}
+}
+
+type viaTokenKey struct{}
+
+// session wraps auth for changes to the account itself (password,
+// passkeys, tokens, AI key, sessions): only a signed-in browser may make
+// them, never an API token, so a leaked token can't take over an account.
+func (a *API) session(next http.HandlerFunc) http.HandlerFunc {
+	return a.auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Context().Value(viaTokenKey{}) != nil {
+			fail(w, http.StatusForbidden, "Sign in to the app to change this; API tokens can't.")
+			return
+		}
+		next(w, r)
+	})
+}
+
+// sessionToken is the browser session's token, "" with an API token.
+func sessionToken(r *http.Request) string {
+	if c, err := r.Cookie(cookieName); err == nil {
+		return c.Value
+	}
+	return ""
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {

@@ -169,7 +169,7 @@ func run(log *slog.Logger, args []string) error {
 		} else {
 			log.Warn("passkeys are off: set CORRESPONDENT_PUBLIC_URL to the address readers use")
 		}
-		return serve(ctx, log, st, ing, images, keyring, wa, *dataDir, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
+		return serve(ctx, log, st, ing, images, keyring, wa, *dataDir, *publicURL, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
 		if sub == "role" {
 			if len(positional) != 2 {
@@ -275,12 +275,12 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, dataDir, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, dataDir, publicURL, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	notifier := &push.Notifier{Store: st, Log: log}
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images,
-		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir}
+		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir, PublicURL: publicURL}
 	ing.AIFor = a.AIForApps
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles

@@ -7,6 +7,27 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-26
+
+### Added
+
+- corr, the command line: a full-screen terminal reader (Bubble Tea) in
+  the web app's themes (Day, Evening, Night desk, following your choice
+  there), with articles rendered as Markdown and links numbered at the end;
+  and commands to list, read, mark, subscribe and manage feeds and folders,
+  discover feeds (with AI for sites without them) and import or export
+  OPML. Every command prints stable JSON with --json, never prompts (except
+  signing in on a terminal), and exits with codes that say what went wrong.
+  Install with `brew install arenzana/tap/corr` or from the release.
+- MCP for AI tools at /mcp (Streamable HTTP): list and read articles (as
+  Markdown), mark them, list, find, add, change and remove feeds. Tools are
+  marked read-only or destructive so clients can ask first, and reading
+  never marks articles read unless asked.
+- Personal API tokens (Settings → Account, or corr auth login): read-only or
+  read-and-change, shown once, revocable, listed with when they were last
+  used. Tokens can't change a password, passkeys, other tokens or the AI
+  key, and stop working when an account is disabled.
+
 ## [0.10.0] - 2026-10-26
 
 ### Added
@@ -277,7 +298,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/arenzana/correspondent/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/arenzana/correspondent/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/arenzana/correspondent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/arenzana/correspondent/compare/v0.7.4...v0.8.0

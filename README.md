@@ -116,6 +116,29 @@ localhost). Pass `-insecure-cookies` only for plain-HTTP development.
 Behind a reverse proxy, pass `-trusted-proxies 10.42.0.0/16` (your ingress
 range) so sign-in throttling sees real client addresses.
 
+## From the terminal, and for AI tools
+
+`corr` is a terminal reader and manager (`brew install arenzana/tap/corr`).
+Run it alone for a full-screen reader in your web theme; every command also
+speaks JSON with stable fields and meaningful exit codes, for scripts and
+agents.
+
+```sh
+corr auth login --server https://rss.example.org
+corr list --view unread --json | jq -r '.entries[].title'
+corr subscribe anthropic.com/research
+```
+
+AI tools connect to the server itself over MCP at `/mcp`, with a personal
+token from Settings → Account (read-only tokens can't change anything):
+
+```sh
+claude mcp add --transport http correspondent https://rss.example.org/mcp \
+  --header "Authorization: Bearer corr_…"
+```
+
+All commands, the JSON shapes and the MCP tools: [docs/cli.md](docs/cli.md).
+
 ## Several readers
 
 The first account is the admin. Invite others from **Admin** (in Settings,
@@ -170,9 +193,6 @@ make vuln    # govulncheck + npm audit
   API (the reader's own key and provider, set up like AI parsers), with
   playback in the article view and on the lock screen, audio kept for
   offline listening, and a queue that plays the unread list.
-- **A CLI reader and manager** for people and AI agents alike: the same
-  binary talking to `/api/v1` with personal API tokens, `--json` output with
-  stable schemas, no prompts, meaningful exit codes, and an MCP server.
 
 ## Layout
 

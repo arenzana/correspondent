@@ -35,6 +35,7 @@ func New(st *store.Store, a *api.API, g *greader.Server, images http.Handler, ui
 		mux.Handle("GET /img/", images)
 	}
 	mux.Handle("/api/v1/", a.Handler())
+	mux.Handle("/mcp", a.MCPHandler())
 	// Reeder's base URL is the literal /api/greader.php; route the whole suffix.
 	mux.Handle(greader.Prefix, g)
 	mux.Handle(greader.Prefix+"/", g)
