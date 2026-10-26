@@ -106,15 +106,15 @@ func unsafeHTML(s string) string {
 
 func TestUnsafeHTMLOracle(t *testing.T) {
 	for in, unsafe := range map[string]bool{
-		`onerror=`:                          false,
-		`<p>text</p>`:                       false,
-		`<a href="https://x/a:b">x</a>`:     false,
-		`<a href="/rel?x=a:b">x</a>`:        false,
-		`<img onerror="x">`:                 true,
-		`<script>x</script>`:                true,
-		`<a href="javascript:x">y</a>`:      true,
-		`<a href=" JavaScript:x">y</a>`:     true,
-		`<img src="data:image/png,AAA">`:    true,
+		`onerror=`:                       false,
+		`<p>text</p>`:                    false,
+		`<a href="https://x/a:b">x</a>`:  false,
+		`<a href="/rel?x=a:b">x</a>`:     false,
+		`<img onerror="x">`:              true,
+		`<script>x</script>`:             true,
+		`<a href="javascript:x">y</a>`:   true,
+		`<a href=" JavaScript:x">y</a>`:  true,
+		`<img src="data:image/png,AAA">`: true,
 	} {
 		if got := unsafeHTML(in) != ""; got != unsafe {
 			t.Errorf("unsafeHTML(%q) = %v, want %v", in, got, unsafe)
