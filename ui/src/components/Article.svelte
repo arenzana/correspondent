@@ -11,6 +11,11 @@
   const a = $derived(app.article)
   const feed = $derived(a ? app.feedById.get(a.entry.feedId) : undefined)
   const minutes = $derived(a?.entry.content ? readingMinutes(a.entry.content) : 0)
+  // A short body usually means the feed publishes only a summary.
+  const looksPartial = $derived(
+    !!a && !!a.entry.url && !a.entry.fullText && a.entry.content !== undefined &&
+      a.entry.content.replace(/<[^>]+>/g, '').trim().length < 600,
+  )
   const position = $derived(app.selectedIndex >= 0 ? `${app.selectedIndex + 1} of ${app.entries.length}${app.cursor ? '+' : ''}` : '')
   const audio = $derived(a?.enclosures.filter((e) => e.type.startsWith('audio/')) ?? [])
   const video = $derived(a?.enclosures.filter((e) => e.type.startsWith('video/')) ?? [])
@@ -75,6 +80,16 @@
         <Icon name={a.entry.read ? 'circle' : 'dot'} />
       </button>
       {#if a.entry.url}
+        <button
+          class="icon-btn"
+          aria-pressed={!!a.entry.fullText}
+          aria-label={a.entry.fullText ? 'Show the feed text' : 'Load the full article'}
+          title={a.entry.fullText ? 'Showing the full article. Click for the feed text' : 'Load the full article from its page'}
+          disabled={app.fetchingFull}
+          onclick={() => (a.entry.fullText ? app.showFeedText() : app.loadFullArticle())}
+        >
+          <Icon name="article" />
+        </button>
         <a class="icon-btn" href={a.entry.url} target="_blank" rel="noopener noreferrer" aria-label="Open original" title="Open original (v)">
           <Icon name="external" />
         </a>
@@ -129,11 +144,27 @@
           <div class="skeleton" aria-label="Loading article">
             <span></span><span></span><span></span><span class="short"></span>
           </div>
-        {:else if a.entry.content}
-          <!-- Content is sanitized server-side by an allowlist before storage. -->
-          <div class="prose">{@html a.entry.content}</div>
         {:else}
-          <p class="note">This feed publishes only titles. <a href={a.entry.url} target="_blank" rel="noopener noreferrer">Read it on the site</a>.</p>
+          {#if a.entry.fullText}
+            <p class="source-note">Full article from <a href={a.entry.url} target="_blank" rel="noopener noreferrer">{new URL(a.entry.url).hostname}</a>.
+              <button class="link" onclick={() => app.showFeedText()}>Show the feed text</button></p>
+          {/if}
+          {#if a.entry.content}
+            <!-- Content is sanitized server-side by an allowlist before storage. -->
+            <div class="prose">{@html a.entry.content}</div>
+          {/if}
+          {#if looksPartial}
+            <div class="partial">
+              <p>{a.entry.content ? 'This feed publishes only part of the article.' : 'This feed publishes only titles.'}
+                {#if a.entry.fullError}<span class="err">Last try: {a.entry.fullError}</span>{/if}</p>
+              <div class="partial-actions">
+                <button class="btn primary" disabled={app.fetchingFull} onclick={() => app.loadFullArticle()}>
+                  {app.fetchingFull ? 'Loading…' : 'Load the full article'}
+                </button>
+                <a class="btn" href={a.entry.url} target="_blank" rel="noopener noreferrer">Read it on the site</a>
+              </div>
+            </div>
+          {/if}
         {/if}
 
         <footer class="end">
@@ -363,6 +394,42 @@
 
   .note {
     color: var(--slate);
+  }
+  .source-note {
+    margin: -18px 0 22px;
+    font-size: 12.5px;
+    color: var(--slate);
+  }
+  .source-note a {
+    color: inherit;
+  }
+  .link {
+    color: var(--accent);
+    font-weight: 500;
+    margin-left: 6px;
+  }
+  .partial {
+    margin: 28px 0 0;
+    padding: 16px 18px;
+    border-radius: var(--radius-l);
+    background: var(--fog);
+  }
+  .partial p {
+    margin: 0 0 12px;
+  }
+  .partial .err {
+    display: block;
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: var(--slate);
+  }
+  .partial-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .partial-actions .btn {
+    text-decoration: none;
   }
   .skeleton {
     display: grid;

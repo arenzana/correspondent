@@ -856,6 +856,53 @@ class AppState {
     }
   }
 
+  fetchingFull = $state(false)
+
+  /** Replace the open article's text with the full article from its page. */
+  async loadFullArticle() {
+    const id = this.article?.entry.id
+    if (!id || this.fetchingFull) return
+    this.fetchingFull = true
+    try {
+      const r = await api.fullArticle(id)
+      if (this.selectedId === id) this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
+      this.patch([id], { fullText: true, fullError: '' })
+      offline.saveEntries([{ ...r.entry, content: r.entry.content ?? '' }]).catch(() => {})
+    } catch (e) {
+      this.toast((e as Error).message)
+      this.patch([id], { fullError: (e as Error).message })
+    } finally {
+      this.fetchingFull = false
+    }
+  }
+
+  /** Go back to the text the feed published. */
+  async showFeedText() {
+    const id = this.article?.entry.id
+    if (!id) return
+    try {
+      const r = await api.feedText(id)
+      if (this.selectedId === id) this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
+      this.patch([id], { fullText: false })
+      offline.saveEntries([{ ...r.entry, content: r.entry.content ?? '' }]).catch(() => {})
+    } catch (e) {
+      this.toast(`Couldn't switch back. ${(e as Error).message}`)
+    }
+  }
+
+  /** Fetch full articles for every new article in a feed (and its latest ones now). */
+  async setFeedFullText(id: number, on: boolean) {
+    const feed = this.feeds.find((f) => f.id === id)
+    if (feed) feed.fullText = on
+    try {
+      await api.updateFeed(id, { fullText: on })
+      this.toast(on ? `Fetching full articles for ${feed?.title ?? 'this feed'}. Recent ones are on their way.` : 'Back to the text the feed publishes.')
+    } catch (e) {
+      if (feed) feed.fullText = !on
+      this.toast(`Couldn't change it. ${(e as Error).message}`)
+    }
+  }
+
   /** Opt the feed in or out of notifications. */
   async setFeedNotify(id: number, notify: boolean) {
     const feed = this.feeds.find((f) => f.id === id)

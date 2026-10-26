@@ -15,14 +15,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arenzana/correspondent/internal/content"
+	"github.com/arenzana/correspondent/internal/extract"
 	"github.com/arenzana/correspondent/internal/feed"
 	"github.com/arenzana/correspondent/internal/fetch"
 	"github.com/arenzana/correspondent/internal/store"
 )
 
 type Service struct {
-	Store       *store.Store
-	Fetch       *fetch.Client
+	Store *store.Store
+	Fetch *fetch.Client
+	// Extract fetches full articles for feeds that publish only summaries.
+	Extract     *extract.Extractor
 	Log         *slog.Logger
 	Concurrency int
 	Tick        time.Duration
@@ -121,6 +125,9 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 		if perr != nil {
 			res.Err = "could not read the feed: " + perr.Error()
 			break
+		}
+		if f.FullText && s.Extract != nil {
+			s.fetchFullArticles(ctx, f, p.Items)
 		}
 		// Write in short transactions, never across the network fetch.
 		since := time.Now().UnixMicro() - 1 // every ID allocated below is above this
@@ -244,4 +251,100 @@ var urlPattern = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"']+`)
 // redact replaces any URL in a log message with a placeholder.
 func redact(msg string) string {
 	return urlPattern.ReplaceAllString(msg, "<url>")
+}
+
+const (
+	fullPerPoll     = 20 // full articles fetched per poll at most
+	fullConcurrency = 3
+	fullTimeout     = 20 * time.Second
+)
+
+// fetchFullArticles replaces the content of new items with the article
+// fetched from their page, keeping the feed's HTML. Items already stored
+// are left alone; failures are recorded per item and never fail the poll.
+func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []store.NewEntry) {
+	guids := make([]string, len(items))
+	for i, it := range items {
+		guids[i] = it.GUID
+	}
+	known, err := s.Store.KnownGUIDs(ctx, f.ID, guids)
+	if err != nil {
+		s.Log.Error("full text", "feed", f.ID, "err", err)
+		return
+	}
+	sem := make(chan struct{}, fullConcurrency)
+	var wg sync.WaitGroup
+	n := 0
+	for i := range items {
+		it := &items[i]
+		if known[it.GUID] || it.URL == "" || n >= fullPerPoll {
+			continue
+		}
+		n++
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			actx, cancel := context.WithTimeout(ctx, fullTimeout)
+			defer cancel()
+			r, err := s.Extract.Article(actx, it.URL)
+			if err != nil {
+				it.FullError = err.Error()
+				return
+			}
+			it.FullText, it.FeedContent, it.Content = true, it.Content, r.HTML
+			if it.Excerpt == "" {
+				it.Excerpt = content.Excerpt(r.Text, 320)
+			}
+			if it.ImageURL == "" {
+				it.ImageURL = r.ImageURL
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// Backfill fetches full articles for a feed's newest stored entries, after
+// its full-article switch is turned on.
+func (s *Service) Backfill(ctx context.Context, f store.Feed) {
+	if s.Extract == nil {
+		return
+	}
+	entries, err := s.Store.WithoutFullText(ctx, f.ID, fullPerPoll)
+	if err != nil {
+		s.Log.Error("full text backfill", "feed", f.ID, "err", err)
+		return
+	}
+	sem := make(chan struct{}, fullConcurrency)
+	var wg sync.WaitGroup
+	for _, e := range entries {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			if _, err := s.FullArticle(ctx, f.UserID, e); err != nil {
+				s.Log.Info("full text", "entry", e.ID, "error", redact(err.Error()))
+			}
+		}()
+	}
+	wg.Wait()
+	if s.Notify != nil {
+		s.Notify(f.UserID)
+	}
+}
+
+// FullArticle fetches one entry's full article and stores it, or records
+// why it couldn't.
+func (s *Service) FullArticle(ctx context.Context, userID int64, e store.Entry) (*extract.Result, error) {
+	if s.Extract == nil {
+		return nil, errors.New("full articles are not available")
+	}
+	actx, cancel := context.WithTimeout(ctx, fullTimeout)
+	defer cancel()
+	r, err := s.Extract.Article(actx, e.URL)
+	if err != nil {
+		s.Store.SetFullError(context.WithoutCancel(ctx), userID, e.ID, err.Error())
+		return nil, err
+	}
+	return r, s.Store.SetFullText(ctx, userID, e.ID, r.HTML, content.Excerpt(r.Text, 320), r.ImageURL)
 }

@@ -33,6 +33,8 @@ type Entry struct {
 	UpdatedAt   int64  `json:"updatedAt"`
 	Read        bool   `json:"read"`
 	Starred     bool   `json:"starred"`
+	FullText    bool   `json:"fullText"`  // content is the article fetched from its page
+	FullError   string `json:"fullError"` // why fetching the full article failed
 	StarredAt   int64  `json:"-"`
 	ReadAt      int64  `json:"-"`
 }
@@ -49,6 +51,11 @@ type NewEntry struct {
 	Enclosures  string
 	ContentHash string
 	PublishedAt time.Time // zero = unknown
+	// FullText marks Content as the article fetched from its page; the
+	// feed's own HTML (possibly empty, for title-only feeds) is FeedContent.
+	FullText    bool
+	FeedContent string
+	FullError   string
 }
 
 // UpsertEntries stores a feed's items in one short transaction. New items get
@@ -102,12 +109,18 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			if pub.Before(readBefore) || (it.PublishedAt.IsZero() && !readBefore.IsZero()) {
 				readAt = now.Unix()
 			}
+			var feedContent any // NULL: content is the feed's own
+			if it.FullText {
+				feedContent = it.FeedContent
+			}
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url,
-				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at,
+				                     feed_content, full_error)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				s.nextID(now), feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt,
-				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix())
+				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix(),
+				feedContent, it.FullError)
 			if err != nil {
 				return 0, 0, fmt.Errorf("insert %q: %w", it.GUID, err)
 			}
@@ -122,11 +135,16 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 				return 0, 0, err
 			}
 		case hash != it.ContentHash:
+			// An entry showing the fetched full article keeps it; the feed's
+			// new text goes to feed_content, to be shown if the user switches back.
 			_, err = tx.ExecContext(ctx, `
-				UPDATE entries SET url = ?, title = ?, author = ?, content = ?, excerpt = ?, image_url = ?,
+				UPDATE entries SET url = ?, title = ?, author = ?,
+				       content = CASE WHEN feed_content IS NULL THEN ? ELSE content END,
+				       feed_content = CASE WHEN feed_content IS NULL THEN NULL ELSE ? END,
+				       excerpt = ?, image_url = CASE WHEN ? <> '' THEN ? ELSE image_url END,
 				       enclosures = ?, content_hash = ?, updated_at = ? WHERE id = ?`,
-				it.URL, it.Title, it.Author, it.Content, it.Excerpt, it.ImageURL, it.Enclosures,
-				it.ContentHash, now.Unix(), id)
+				it.URL, it.Title, it.Author, it.Content, it.Content, it.Excerpt, it.ImageURL, it.ImageURL,
+				it.Enclosures, it.ContentHash, now.Unix(), id)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -255,11 +273,12 @@ func ftsQuery(q string) string {
 }
 
 const entryColumns = `e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.excerpt, e.image_url, e.enclosures,
-	e.published_at, e.updated_at, COALESCE(e.read_at, 0), COALESCE(e.starred_at, 0)`
+	e.published_at, e.updated_at, COALESCE(e.read_at, 0), COALESCE(e.starred_at, 0),
+	e.feed_content IS NOT NULL, e.full_error`
 
 func scanEntry(sc interface{ Scan(...any) error }, e *Entry, extra ...any) error {
 	dest := []any{&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Excerpt, &e.ImageURL,
-		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt}
+		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -602,4 +621,85 @@ func (s *Store) ImportEntries(ctx context.Context, feedID int64, items []Importe
 	s.lastID = max(s.lastID, maxID)
 	s.idMu.Unlock()
 	return n, nil
+}
+
+// KnownGUIDs returns which of the given GUIDs a feed already has, so a poll
+// can tell new articles apart before fetching their pages.
+func (s *Store) KnownGUIDs(ctx context.Context, feedID int64, guids []string) (map[string]bool, error) {
+	known := map[string]bool{}
+	for start := 0; start < len(guids); start += 500 {
+		batch := guids[start:min(start+500, len(guids))]
+		args := append([]any{feedID}, make([]any, len(batch))...)
+		for i, g := range batch {
+			args[i+1] = g
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT guid FROM entries WHERE feed_id = ? AND guid IN (`+placeholders(len(batch))+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var g string
+			if err := rows.Scan(&g); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			known[g] = true
+		}
+		rows.Close()
+	}
+	return known, nil
+}
+
+// SetFullText replaces an entry's content with the article fetched from its
+// page, keeping the feed's own HTML so the change can be undone. An empty
+// excerpt or image is filled from the article.
+func (s *Store) SetFullText(ctx context.Context, userID, entryID int64, html, excerpt, imageURL string) error {
+	return checkAffected(s.db.ExecContext(ctx, `
+		UPDATE entries SET feed_content = COALESCE(feed_content, content), content = ?, full_error = '',
+		       excerpt = CASE WHEN excerpt = '' THEN ? ELSE excerpt END,
+		       image_url = CASE WHEN image_url = '' THEN ? ELSE image_url END
+		 WHERE id = ? AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`,
+		html, excerpt, imageURL, entryID, userID))
+}
+
+// SetFullError records why fetching an entry's full article failed.
+func (s *Store) SetFullError(ctx context.Context, userID, entryID int64, msg string) error {
+	return checkAffected(s.db.ExecContext(ctx, `
+		UPDATE entries SET full_error = ? WHERE id = ? AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`,
+		msg, entryID, userID))
+}
+
+// RevertFullText puts the feed's own content back.
+func (s *Store) RevertFullText(ctx context.Context, userID, entryID int64) error {
+	return checkAffected(s.db.ExecContext(ctx, `
+		UPDATE entries SET content = feed_content, feed_content = NULL
+		 WHERE id = ? AND feed_content IS NOT NULL AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`,
+		entryID, userID))
+}
+
+// WithoutFullText lists a feed's newest entries (unread first) that still
+// show the feed's own content, for fetching full articles after the
+// feed's switch is turned on.
+func (s *Store) WithoutFullText(ctx context.Context, feedID int64, limit int) ([]Entry, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+entryColumns+` FROM entries e
+		WHERE e.feed_id = ? AND e.feed_content IS NULL AND e.url <> ''
+		ORDER BY e.read_at IS NOT NULL, e.id DESC LIMIT ?`, feedID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Entry
+	for rows.Next() {
+		var e Entry
+		if err := scanEntry(rows, &e); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// SetFeedFullText turns full-article fetching on or off for a feed.
+func (s *Store) SetFeedFullText(ctx context.Context, userID, feedID int64, on bool) error {
+	return checkAffected(s.db.ExecContext(ctx, `UPDATE feeds SET full_text = ? WHERE id = ? AND user_id = ?`, on, feedID, userID))
 }

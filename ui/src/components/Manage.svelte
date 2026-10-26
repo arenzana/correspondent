@@ -217,6 +217,12 @@
                   onclick={() => app.setFeedNotify(f.id, !f.notify)}>
                   <Icon name={f.notify ? 'bell' : 'bellOff'} size={16} />
                 </button>
+                <button class="icon-btn" aria-pressed={f.fullText}
+                  title={f.fullText ? 'Fetching full articles' : 'Fetch full articles from their pages'}
+                  aria-label={f.fullText ? `Stop fetching full articles for ${f.title}` : `Fetch full articles for ${f.title}`}
+                  onclick={() => app.setFeedFullText(f.id, !f.fullText)}>
+                  <Icon name="article" size={16} />
+                </button>
                 <button class="icon-btn" title="Update now" aria-label="Update {f.title} now" onclick={() => app.refreshFeedNow(f.id)}>
                   <Icon name="refresh" size={16} />
                 </button>

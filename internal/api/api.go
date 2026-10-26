@@ -54,6 +54,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/entries", a.auth(a.entries))
 	mux.HandleFunc("GET /api/v1/entries/{id}", a.auth(a.entry))
 	mux.HandleFunc("POST /api/v1/entries/state", a.auth(a.setState))
+	mux.HandleFunc("POST /api/v1/entries/{id}/full", a.auth(a.fullArticle))
+	mux.HandleFunc("DELETE /api/v1/entries/{id}/full", a.auth(a.revertFullArticle))
 	mux.HandleFunc("POST /api/v1/entries/mark-all-read", a.auth(a.markAllRead))
 	mux.HandleFunc("POST /api/v1/discover", a.auth(a.discover))
 	mux.HandleFunc("POST /api/v1/feeds", a.auth(a.subscribe))
@@ -393,6 +395,7 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 		Paused     *bool   `json:"paused"`
 		Notify     *bool   `json:"notify"`
 		URL        *string `json:"url"`
+		FullText   *bool   `json:"fullText"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -419,6 +422,18 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 		case err != nil:
 			a.result(w, err)
 			return
+		}
+	}
+	if in.FullText != nil {
+		if err := a.Store.SetFeedFullText(r.Context(), uid, id, *in.FullText); err != nil {
+			a.result(w, err)
+			return
+		}
+		if *in.FullText && a.Ingest != nil {
+			// Fetch full articles for what's already there, in the background.
+			if f, err := a.Store.Feed(r.Context(), uid, id); err == nil {
+				go a.Ingest.Backfill(context.WithoutCancel(r.Context()), *f)
+			}
 		}
 	}
 	if in.Notify != nil {
@@ -539,6 +554,42 @@ func (a *API) exportOPML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/x-opml; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="correspondent.opml"`)
 	opml.Write(w, "Correspondent subscriptions", subs)
+}
+
+// fullArticle fetches the entry's web page and shows the article in place
+// of the feed's text.
+func (a *API) fullArticle(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	uid := userID(r)
+	e, err := a.Store.Entry(r.Context(), uid, id)
+	if err != nil {
+		a.result(w, err)
+		return
+	}
+	if a.Ingest == nil {
+		fail(w, http.StatusNotImplemented, "Full articles are not available on this server.")
+		return
+	}
+	if _, err := a.Ingest.FullArticle(r.Context(), uid, *e); err != nil {
+		fail(w, http.StatusUnprocessableEntity, "Couldn't get the full article: "+err.Error()+".")
+		return
+	}
+	a.entry(w, r)
+}
+
+func (a *API) revertFullArticle(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.Store.RevertFullText(r.Context(), userID(r), id); err != nil {
+		a.result(w, err)
+		return
+	}
+	a.entry(w, r)
 }
 
 func (a *API) result(w http.ResponseWriter, err error) {

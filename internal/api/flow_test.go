@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/arenzana/correspondent/internal/extract"
+	"github.com/arenzana/correspondent/internal/fetch"
+	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 )
@@ -318,5 +321,57 @@ func TestPushSubscriptionAPI(t *testing.T) {
 	after := decodeJSON[struct{ Feeds []struct{ Notify bool } }](t, expect(t, e.do(t, c, "GET", "/api/v1/tree", "", false), 200))
 	if !after.Feeds[0].Notify {
 		t.Fatal("feed not opted in")
+	}
+}
+
+func TestFullArticleEndpoints(t *testing.T) {
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><body><article><h1>Story</h1><p>%s</p></article></body></html>`,
+			strings.Repeat("Only on the page, the whole story is told here. ", 8))
+	}))
+	t.Cleanup(page.Close)
+	e := newEnv(t)
+	fetcher := fetch.New(fetch.Options{AllowPrivate: true})
+	a := &API{Store: e.store, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute),
+		Ingest: &ingest.Service{Store: e.store, Fetch: fetcher, Extract: &extract.Extractor{Fetch: fetcher}, Log: slog.New(slog.DiscardHandler)}}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	e.srv = srv
+	c, entryID := e.user(t, "sam")
+	bob, _ := e.user(t, "bob")
+	uid, _ := e.store.UserIDByName(context.Background(), "sam")
+	id, _ := strconv.ParseInt(entryID, 10, 64)
+	if _, err := e.store.Entry(context.Background(), uid, id); err != nil {
+		t.Fatal(err)
+	}
+	setURL := func(u string) {
+		t.Helper()
+		if err := e.store.TestSetEntryURL(context.Background(), id, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setURL(page.URL + "/story")
+
+	expect(t, e.do(t, bob, "POST", "/api/v1/entries/"+entryID+"/full", "", true), 404) // not bob's
+	got := decodeJSON[struct {
+		Entry struct {
+			Content  string
+			FullText bool
+		}
+	}](t, expect(t, e.do(t, c, "POST", "/api/v1/entries/"+entryID+"/full", "", true), 200))
+	if !got.Entry.FullText || !strings.Contains(got.Entry.Content, "the whole story") {
+		t.Fatalf("full article: %+v", got)
+	}
+	back := decodeJSON[struct{ Entry struct{ FullText bool } }](t,
+		expect(t, e.do(t, c, "DELETE", "/api/v1/entries/"+entryID+"/full", "", true), 200))
+	if back.Entry.FullText {
+		t.Fatal("revert did not restore the feed's text")
+	}
+	setURL("http://127.0.0.1:1/nothing-listens-here")
+	r := expect(t, e.do(t, c, "POST", "/api/v1/entries/"+entryID+"/full", "", true), 422)
+	body, _ := io.ReadAll(r.Body)
+	if !strings.Contains(string(body), "Couldn't get the full article") {
+		t.Fatalf("error: %s", body)
 	}
 }

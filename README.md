@@ -17,6 +17,8 @@ clients are concerned.
 - **Swipe on phones.** Swipe right to mark read, left to star.
 - **Works offline.** Install it as an app; unread and starred articles are
   kept on the device, and changes made offline sync when you reconnect.
+- **Full articles.** For feeds that publish only titles or summaries, fetch
+  the article from its page, per article or for every new one in a feed.
 - **Notifications you choose.** Off by default; turn them on per device and
   pick feeds with the bell.
 - **Live across devices.** Read something in Reeder and it updates in the
@@ -124,7 +126,6 @@ make vuln    # govulncheck + npm audit
 
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
-- Full-article extraction for feeds that publish only titles or summaries.
 - Feeds for sites without one (for example a company's research page):
   exact methods first (h-feed, JSON-LD, sitemaps, link patterns), then an
   AI model, asked once per site, that works out extraction rules which are

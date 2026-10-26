@@ -7,6 +7,20 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-26
+
+### Added
+
+- Full articles for feeds that publish only titles or summaries. Any article:
+  "Load the full article" (or the article icon in the toolbar) fetches its
+  web page and shows the article itself, with a way back to the feed's text.
+  Per feed: "Fetch full articles" (feed header, Subscriptions, ⌘K) fetches
+  every new article in full as it arrives, so Reeder and the offline copy get
+  the whole text too; turning it on also fetches the latest 20.
+- Extraction uses Readability (as in Firefox's Reader View); pages are
+  fetched with the same address protections and limits as feeds, and the
+  result is sanitized like any feed content.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added
@@ -114,7 +128,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/arenzana/correspondent/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arenzana/correspondent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arenzana/correspondent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arenzana/correspondent/compare/v0.2.0...v0.3.0

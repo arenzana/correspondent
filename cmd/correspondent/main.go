@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/arenzana/correspondent/internal/api"
+	"github.com/arenzana/correspondent/internal/extract"
 	"github.com/arenzana/correspondent/internal/fetch"
 	"github.com/arenzana/correspondent/internal/greader"
 	"github.com/arenzana/correspondent/internal/ingest"
@@ -118,7 +119,8 @@ func run(log *slog.Logger, args []string) error {
 	defer st.Close()
 
 	fetcher := fetch.New(fetch.Options{AllowPrivate: *allowPrivate})
-	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log, RetentionDays: *retention}
+	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log, RetentionDays: *retention,
+		Extract: &extract.Extractor{Fetch: fetcher}}
 
 	switch cmd {
 	case "serve":

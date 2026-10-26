@@ -5,6 +5,8 @@ import type { Entry } from './api'
 vi.mock('./api', async (importOriginal) => ({
   ApiError: (await importOriginal<typeof import('./api')>()).ApiError,
   api: {
+    fullArticle: vi.fn(),
+    feedText: vi.fn(),
     updateFeed: vi.fn(),
     deleteFeed: vi.fn(),
     refreshFeed: vi.fn(),
@@ -38,7 +40,7 @@ beforeEach(async () => {
   vi.mocked(api.savePrefs).mockResolvedValue(undefined)
   app.entries = [entry('1'), entry('2'), entry('3', { read: true })]
   app.feeds = [{ id: 1, folderId: null, url: '', siteUrl: '', title: 'F', description: '', iconUrl: '', lastFetchAt: 0,
-    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
+    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, fullText: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
   app.folders = []
   app.counts = { unread: 2, starred: 0, today: 2, newest: '3' }
   app.toasts = []
@@ -113,6 +115,43 @@ describe('changes from other clients', () => {
     vi.mocked(api.entries).mockResolvedValue({ entries: [entry('1', { read: true, starred: true }), entry('3')], cursor: '' })
     await app.resyncStates()
     expect(app.entries.map((e) => [e.id, e.read, e.starred])).toEqual([['1', true, true], ['2', false, false], ['3', false, false]])
+  })
+})
+
+describe('full articles', () => {
+  it('replaces the open article with the full one, and can switch back', async () => {
+    app.entries = [entry('5', { url: 'https://x.example/5' })]
+    app.selectedId = '5'
+    app.article = { entry: { ...entry('5', { url: 'https://x.example/5' }), content: '<p>summary</p>' }, enclosures: [] }
+    vi.mocked(api.fullArticle).mockResolvedValue({ entry: { ...entry('5'), content: '<p>whole story</p>', fullText: true }, enclosures: [] })
+    await app.loadFullArticle()
+    expect(app.article?.entry.content).toBe('<p>whole story</p>')
+    expect(app.entries[0].fullText).toBe(true)
+    vi.mocked(api.feedText).mockResolvedValue({ entry: { ...entry('5'), content: '<p>summary</p>', fullText: false }, enclosures: [] })
+    await app.showFeedText()
+    expect(app.article?.entry.content).toBe('<p>summary</p>')
+    expect(app.entries[0].fullText).toBe(false)
+  })
+
+  it('explains a failure and remembers it on the row', async () => {
+    app.entries = [entry('6')]
+    app.selectedId = '6'
+    app.article = { entry: { ...entry('6'), content: '' }, enclosures: [] }
+    vi.mocked(api.fullArticle).mockRejectedValue(new ApiError(422, "Couldn't get the full article: the page has no readable article."))
+    await app.loadFullArticle()
+    expect(app.toasts.at(-1)?.message).toMatch(/no readable article/)
+    expect(app.entries[0].fullError).toMatch(/no readable article/)
+    expect(app.fetchingFull).toBe(false)
+  })
+
+  it('turns full articles on for a feed, rolling back if refused', async () => {
+    vi.mocked(api.updateFeed).mockRejectedValueOnce(new ApiError(404, 'Not found.'))
+    await app.setFeedFullText(1, true)
+    expect(app.feeds[0].fullText).toBe(false)
+    vi.mocked(api.updateFeed).mockResolvedValueOnce(undefined)
+    await app.setFeedFullText(1, true)
+    expect(api.updateFeed).toHaveBeenLastCalledWith(1, { fullText: true })
+    expect(app.feeds[0].fullText).toBe(true)
   })
 })
 

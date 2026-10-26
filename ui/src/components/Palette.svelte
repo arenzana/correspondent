@@ -36,6 +36,13 @@
       { id: 'a-sidebar', label: app.prefs.sidebar ? 'Hide feeds' : 'Show feeds', icon: 'sidebar', group: 'Actions', hint: '[', run: () => app.setPrefs({ sidebar: !app.prefs.sidebar }) },
       ...(app.source.kind === 'feed'
         ? [{
+            id: 'a-full', icon: 'article' as IconName, group: 'Actions',
+            label: app.feedById.get(app.source.id)?.fullText ? `Stop fetching full articles for ${app.title}` : `Fetch full articles for ${app.title}`,
+            run: () => app.source.kind === 'feed' && app.setFeedFullText(app.source.id, !app.feedById.get(app.source.id)?.fullText),
+          }]
+        : []),
+      ...(app.source.kind === 'feed'
+        ? [{
             id: 'a-notify', icon: 'bell' as IconName, group: 'Actions',
             label: app.feedById.get(app.source.id)?.notify ? `Stop notifications for ${app.title}` : `Notify me about ${app.title}`,
             run: () => app.source.kind === 'feed' && app.setFeedNotify(app.source.id, !app.feedById.get(app.source.id)?.notify),

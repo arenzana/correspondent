@@ -23,6 +23,8 @@ export interface Feed {
   lastError: string
   paused: boolean
   notify: boolean
+  /** New articles are fetched in full from their web page. */
+  fullText: boolean
   unread: number
   total: number
   starred: number
@@ -51,6 +53,10 @@ export interface Entry {
   updatedAt: number
   read: boolean
   starred: boolean
+  /** The content is the full article fetched from its web page. */
+  fullText?: boolean
+  /** Why fetching the full article failed, if it did. */
+  fullError?: string
 }
 
 export interface Enclosure {
@@ -132,6 +138,8 @@ export const api = {
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),
   entries: (q: EntryQuery) => request<{ entries: Entry[]; cursor: string }>('GET', '/entries' + qs(q)),
   entry: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('GET', '/entries/' + id),
+  fullArticle: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('POST', `/entries/${id}/full`),
+  feedText: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('DELETE', `/entries/${id}/full`),
   setState: (action: 'read' | 'unread' | 'star' | 'unstar', ids: ID[]) =>
     request<{ changed: number }>('POST', '/entries/state', { action, ids }),
   markAllRead: (scope: { feed?: number; folder?: number; view?: string }, before: ID) =>
@@ -150,7 +158,7 @@ export const api = {
   pushUnsubscribe: (endpoint: string) => request<void>('DELETE', '/push/subscriptions', { endpoint }),
   pushTest: () => request<{ sent: number }>('POST', '/push/test'),
   createFolder: (name: string) => request<{ id: number }>('POST', '/folders', { name }),
-  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean; notify?: boolean; url?: string }) =>
+  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean; notify?: boolean; url?: string; fullText?: boolean }) =>
     request<void>('PATCH', '/feeds/' + id, patch),
   deleteFeed: (id: number) => request<void>('DELETE', '/feeds/' + id),
   refreshFeed: (id: number) => request<void>('POST', `/feeds/${id}/refresh`),

@@ -119,6 +119,15 @@
       {#if currentFeed}
         <button
           class="icon-btn"
+          aria-pressed={currentFeed.fullText}
+          aria-label={currentFeed.fullText ? 'Stop fetching full articles for this feed' : 'Fetch full articles for this feed'}
+          title={currentFeed.fullText ? 'Fetching full articles' : 'Fetch full articles from their pages'}
+          onclick={() => app.setFeedFullText(currentFeed.id, !currentFeed.fullText)}
+        >
+          <Icon name="article" />
+        </button>
+        <button
+          class="icon-btn"
           aria-pressed={currentFeed.notify}
           aria-label={currentFeed.notify ? 'Turn off notifications for this feed' : 'Notify me about new articles in this feed'}
           title={currentFeed.notify ? 'Notifications on for this feed' : 'Notify me about new articles'}
