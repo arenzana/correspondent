@@ -34,6 +34,7 @@ type session struct {
 	userID   int64
 	username string
 	auth     string
+	legacy   string // FreshRSS token, when authenticated by it
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +57,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	switch {
 	case path == "/reader/api/0/token":
-		plain(w, editToken(sess.auth)+"\n")
+		plain(w, editToken(sess)+"\n")
 	case path == "/reader/api/0/user-info":
 		jsonOut(w, map[string]string{
 			"userId": strconv.FormatInt(sess.userID, 10), "userName": sess.username,
@@ -114,7 +115,12 @@ func (s *Server) clientLogin(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Error=BadAuthentication\n")
 		return
 	}
-	token, err := s.Store.CreateSession(r.Context(), u.ID, "greader", tokenTTL)
+	// While legacy auth is on, answer exactly as FreshRSS did, so a client
+	// that signs in again gets the token it already has.
+	_, token, err := s.Store.LegacyToken(r.Context(), u.Username)
+	if err == nil && token == "" {
+		token, err = s.Store.CreateSession(r.Context(), u.ID, "greader", tokenTTL)
+	}
 	if err != nil {
 		s.Log.Error("greader login", "err", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -138,21 +144,32 @@ func (s *Server) authenticate(r *http.Request) (session, bool) {
 	if !ok {
 		return session{}, false
 	}
-	uid, err := s.Store.SessionUser(r.Context(), token, "greader")
-	if err != nil {
+	if uid, err := s.Store.SessionUser(r.Context(), token, "greader"); err == nil {
+		if id, err := s.Store.UserIDByName(r.Context(), username); err == nil && id == uid {
+			return session{userID: uid, username: username, auth: auth}, true
+		}
 		return session{}, false
 	}
-	if id, err := s.Store.UserIDByName(r.Context(), username); err != nil || id != uid {
-		return session{}, false
+	// The static token FreshRSS issued, accepted after migration so Reeder
+	// keeps working without being reconfigured.
+	if uid, legacy, err := s.Store.LegacyToken(r.Context(), username); err == nil && store.EqualTokens(token, legacy) {
+		return session{userID: uid, username: username, auth: auth, legacy: legacy}, true
 	}
-	return session{userID: uid, username: username, auth: auth}, true
+	return session{}, false
 }
 
-// editToken derives the write token from the auth token, padded to the 57
-// characters FreshRSS returns.
-func editToken(auth string) string {
-	sum := sha256.Sum256([]byte("edit:" + auth))
-	return (hex.EncodeToString(sum[:]) + strings.Repeat("Z", 57))[:57]
+// editToken is the write token (T) for a session, 57 characters like
+// FreshRSS's. For a legacy session it is exactly FreshRSS's token.
+func editToken(sess session) string {
+	if sess.legacy != "" {
+		return padToken(sess.legacy)
+	}
+	sum := sha256.Sum256([]byte("edit:" + sess.auth))
+	return padToken(hex.EncodeToString(sum[:]))
+}
+
+func padToken(t string) string {
+	return (t + strings.Repeat("Z", 57))[:57]
 }
 
 // checkT validates the T write token. Reeder sends T=x on requests that are
@@ -160,7 +177,7 @@ func editToken(auth string) string {
 // require T; item contents only checks it when present.
 func (s *Server) checkT(w http.ResponseWriter, r *http.Request, sess session, required bool) bool {
 	t := r.Form.Get("T")
-	if (t == "" && !required) || t == "x" || (t != "" && t == editToken(sess.auth)) {
+	if (t == "" && !required) || t == "x" || store.EqualTokens(t, editToken(sess)) {
 		return true
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

@@ -7,6 +7,13 @@
 //	correspondent user api-password <username> (password read from stdin)
 //	correspondent demo <username>              (subscribe to a starter set of feeds)
 //	correspondent import-freshrss <username> -opml feeds.opml.xml [-starred starred.json] [-subscriptions subs.json]
+//
+// FreshRSS migration (see docs/migration.md):
+//
+//	correspondent migrate import <username> -export U.sqlite -system-config config.php -user-config users/U/config.php
+//	correspondent migrate verify <username> -freshrss URL -correspondent URL -api-password-file FILE
+//	correspondent migrate rollback <username> -freshrss URL -api-password-file FILE [-apply]
+//	correspondent legacy-auth on|off <username>
 package main
 
 import (
@@ -58,13 +65,22 @@ func run(log *slog.Logger, args []string) error {
 	starredPath := fs.String("starred", "", "import-freshrss: starred JSON export")
 	subsPath := fs.String("subscriptions", "", "import-freshrss: saved subscription/list JSON, to keep feed IDs")
 	allowPrivate := fs.Bool("allow-private-feeds", false, "allow fetching feeds on private networks (development only)")
+	noPoll := fs.Bool("no-poll", os.Getenv("CORRESPONDENT_NO_POLL") == "1", "serve without polling feeds (used during migration)")
+	exportPath := fs.String("export", "", "migrate import: FreshRSS SQLite export")
+	sysConfig := fs.String("system-config", "", "migrate import: FreshRSS data/config.php")
+	userConfig := fs.String("user-config", "", "migrate import: FreshRSS data/users/<name>/config.php")
+	noLegacy := fs.Bool("no-legacy-auth", false, "migrate import: do not accept the token FreshRSS issued to apps")
+	freshURL := fs.String("freshrss", "", "migrate verify/rollback: FreshRSS Google Reader API base, e.g. https://rss.example.org/api/greader.php")
+	corrURL := fs.String("correspondent", "http://127.0.0.1:8080/api/greader.php", "migrate verify: Correspondent Google Reader API base")
+	apiPWFile := fs.String("api-password-file", "", "migrate verify/rollback: file holding the API (app) password")
+	apply := fs.Bool("apply", false, "migrate rollback: send the changes (default: only show them)")
 
 	cmd := "serve"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
 	var sub string
-	if cmd == "user" && len(args) > 0 {
+	if (cmd == "user" || cmd == "migrate" || cmd == "legacy-auth") && len(args) > 0 {
 		sub, args = args[0], args[1:]
 	}
 	var positional []string
@@ -109,7 +125,7 @@ func run(log *slog.Logger, args []string) error {
 		if err := bootstrap(ctx, log, st); err != nil {
 			return err
 		}
-		return serve(ctx, log, st, ing, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies})
+		return serve(ctx, log, st, ing, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent user add|api-password <username>")
@@ -139,6 +155,35 @@ func run(log *slog.Logger, args []string) error {
 		}
 		fmt.Println("backup written and verified:", positional[0])
 		return nil
+	case "migrate":
+		if len(positional) != 1 {
+			return errors.New("usage: correspondent migrate import|verify|rollback <username> [flags]")
+		}
+		m := migration{st: st, user: positional[0], freshURL: *freshURL, corrURL: *corrURL, apiPWFile: *apiPWFile}
+		switch sub {
+		case "import":
+			return m.importExport(ctx, migrate.Export{SQLite: *exportPath, SystemConfig: *sysConfig, UserConfig: *userConfig,
+				Username: positional[0], LegacyAuth: !*noLegacy})
+		case "verify":
+			return m.verify(ctx)
+		case "rollback":
+			return m.rollback(ctx, *apply)
+		default:
+			return fmt.Errorf("unknown migrate command %q", sub)
+		}
+	case "legacy-auth":
+		if len(positional) != 1 || (sub != "on" && sub != "off") {
+			return errors.New("usage: correspondent legacy-auth on|off <username>")
+		}
+		id, err := st.UserIDByName(ctx, positional[0])
+		if err != nil {
+			return err
+		}
+		if err := st.SetLegacyAuth(ctx, id, sub == "on"); err != nil {
+			return err
+		}
+		fmt.Printf("FreshRSS app token for %s: %s\n", positional[0], sub)
+		return nil
 	case "demo":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent demo <username>")
@@ -154,7 +199,7 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, addr string, secure bool, ip ratelimit.ClientIP) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip}
@@ -167,7 +212,11 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 		MaxHeaderBytes:    64 << 10,
 		IdleTimeout:       120 * time.Second,
 	}
-	go ing.Run(ctx)
+	if poll {
+		go ing.Run(ctx)
+	} else {
+		log.Warn("feed polling is off (-no-poll)")
+	}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

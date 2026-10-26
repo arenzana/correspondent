@@ -2,6 +2,8 @@ package greader
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/arenzana/correspondent/internal/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestParseItemID(t *testing.T) {
@@ -241,5 +244,66 @@ func TestReaderFlow(t *testing.T) {
 	c.json("GET", "/reader/api/0/stream/items/ids", url.Values{"s": {stateList}, "xt": {stateRead}, "n": {"100"}}, &refs)
 	if len(refs.ItemRefs) != 2 {
 		t.Fatalf("after mark-all: %d unread, want 2", len(refs.ItemRefs))
+	}
+}
+
+// TestLegacyFreshRSSToken checks that a token issued by FreshRSS keeps working
+// after migration, computed independently as FreshRSS does:
+// sha1(salt . user . apiPasswordHash), with T padded to 57 characters by "Z".
+func TestLegacyFreshRSSToken(t *testing.T) {
+	c, st, ids := setup(t)
+	ctx := context.Background()
+	uid, _ := st.UserIDByName(ctx, "isma")
+	const salt = "0123456789abcdef0123456789abcdef01234567"
+	// A PHP-style $2y$ hash for the API password, as FreshRSS stores it.
+	h, _ := bcrypt.GenerateFromPassword([]byte("api-password-123"), 10)
+	apiHash := "$2y$" + string(h[4:])
+	webHash, _ := bcrypt.GenerateFromPassword([]byte("web-password-123"), 10)
+	if _, err := st.ImportUser(ctx, "isma", string(webHash), apiHash); err != nil {
+		t.Fatal(err)
+	}
+	st.SetSetting(ctx, store.SettingFreshRSSSalt, salt)
+	sum := sha1.Sum([]byte(salt + "isma" + apiHash))
+	freshToken := hex.EncodeToString(sum[:])
+	c.auth = "isma/" + freshToken
+
+	// Off by default: the FreshRSS token is refused.
+	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 401 {
+		t.Fatalf("legacy token accepted while disabled: %d", code)
+	}
+	st.SetLegacyAuth(ctx, uid, true)
+	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 200 {
+		t.Fatalf("legacy token refused: %d", code)
+	}
+	// T is FreshRSS's token, padded exactly as FreshRSS pads it.
+	_, tok := c.do("GET", "/reader/api/0/token", nil)
+	if want := freshToken + strings.Repeat("Z", 57-len(freshToken)); strings.TrimSpace(tok) != want {
+		t.Fatalf("T = %q, want %q", tok, want)
+	}
+	edit := url.Values{"T": {strings.TrimSpace(tok)}, "i": {strconv.FormatInt(ids[0], 10)}, "a": {stateStar}}
+	if code, body := c.do("POST", "/reader/api/0/edit-tag", edit); code != 200 || body != "OK" {
+		t.Fatalf("write with legacy T: %d %q", code, body)
+	}
+	// Signing in again returns the same token FreshRSS would.
+	login := &client{t: t, base: c.base}
+	_, body := login.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"isma"}, "Passwd": {"api-password-123"}})
+	if !strings.Contains(body, "Auth=isma/"+freshToken+"\n") {
+		t.Fatalf("ClientLogin under legacy auth: %q", body)
+	}
+	// A wrong token for the right user, or the right token for another user, fails.
+	bad := &client{t: t, base: c.base, auth: "isma/" + strings.Repeat("0", 40)}
+	if code, _ := bad.do("GET", "/reader/api/0/user-info", nil); code != 401 {
+		t.Fatal("wrong legacy token accepted")
+	}
+	// Changing the API password retires the token, as in FreshRSS.
+	st.SetAPIPassword(ctx, uid, "a-brand-new-api-password")
+	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 401 {
+		t.Fatal("legacy token still valid after password change")
+	}
+	// And it can be switched off outright.
+	st.ImportUser(ctx, "isma", string(webHash), apiHash)
+	st.SetLegacyAuth(ctx, uid, false)
+	if code, _ := c.do("GET", "/reader/api/0/user-info", nil); code != 401 {
+		t.Fatal("legacy token valid after disabling")
 	}
 }

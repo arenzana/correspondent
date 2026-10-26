@@ -34,7 +34,7 @@
         [['g', 'a'], 'All articles'],
         [['⌘', 'K'], 'Jump anywhere'],
         [['/'], 'Search'],
-        [['['], 'Toggle sidebar'],
+        [['['], 'Show or hide feeds'],
         [['a'], 'Add feed'],
         [['?'], 'This sheet'],
       ],

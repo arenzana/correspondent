@@ -87,16 +87,17 @@ range) so sign-in throttling sees real client addresses.
 
 ## Migrating from FreshRSS
 
+Move a FreshRSS account without touching Reeder: same feed and article IDs,
+same passwords, the token FreshRSS issued keeps working, no duplicates, and a
+tested way back. See [docs/migration.md](docs/migration.md).
+
 ```sh
-correspondent import-freshrss <name> \
-  -opml feeds.opml.xml -starred starred.json -subscriptions subscription-list.json
+correspondent migrate import isma -export isma.sqlite -system-config config.php -user-config users/isma/config.php
+correspondent migrate verify isma -freshrss https://old.example/api/greader.php -correspondent https://new.example/api/greader.php -api-password-file pw
+correspondent migrate rollback isma -freshrss https://old.example/api/greader.php -api-password-file pw -apply
 ```
 
-`subscription-list.json` is the response of
-`/api/greader.php/reader/api/0/subscription/list?output=json` from the old
-server. It is the only export that carries FreshRSS's numeric feed IDs, which
-Reeder has cached; with it, every feed keeps its ID. Starred articles keep
-their original item IDs.
+`make rehearse` runs the whole cutover against a real FreshRSS in Docker.
 
 ## Development
 
@@ -113,13 +114,14 @@ make vuln    # govulncheck + npm audit
 - **A complete PWA**, good enough that native apps are unnecessary: offline
   reading of recent articles, read and star changes queued offline and
   replayed through the mutation journal, and push notifications.
+- An image proxy that resizes thumbnails and stops article images from
+  reaching third parties directly.
+- Full-article extraction for feeds that publish only titles or summaries.
+- Fluid motion for the selection bar on the time spine as you move up and
+  down the list.
 - **A CLI reader and manager** for people and AI agents alike: the same
   binary talking to `/api/v1` with personal API tokens, `--json` output with
   stable schemas, no prompts, meaningful exit codes, and an MCP server.
-- Cutover tooling for the FreshRSS migration: mutation-journal export and
-  reverse replay for rollback, plus a rehearsal against a cloned account.
-- An image proxy that resizes thumbnails and stops article images from
-  reaching third parties directly.
 
 ## Layout
 

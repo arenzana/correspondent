@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel>
+<title>Change Log</title><link>http://fixtures/changes/</link><description>Fixture feed</description>
+<item><title>Change log 0</title><link>http://fixtures/changes/0</link><guid isPermaLink="false">changes-0</guid><pubDate>Sun, 25 Oct 2026 03:00:00 +0000</pubDate><description><![CDATA[<p>Change log 0. Fixture body for item 0 of Change Log.</p>]]></description></item>
+<item><title>Change log 1</title><link>http://fixtures/changes/1</link><guid isPermaLink="false">changes-1</guid><pubDate>Sat, 24 Oct 2026 03:00:00 +0000</pubDate><description><![CDATA[<p>Change log 1. Fixture body for item 1 of Change Log.</p>]]></description></item>
+<item><title>Change log 2</title><link>http://fixtures/changes/2</link><guid isPermaLink="false">changes-2</guid><pubDate>Fri, 23 Oct 2026 03:00:00 +0000</pubDate><description><![CDATA[<p>Change log 2. Fixture body for item 2 of Change Log.</p>]]></description></item>
+<item><title>Change log 3</title><link>http://fixtures/changes/3</link><guid isPermaLink="false">changes-3</guid><pubDate>Thu, 22 Oct 2026 03:00:00 +0000</pubDate><description><![CDATA[<p>Change log 3. Fixture body for item 3 of Change Log.</p>]]></description></item>
+</channel></rss>
