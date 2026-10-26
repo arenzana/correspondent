@@ -339,7 +339,9 @@ class AppState {
     try {
       const r = await api.entry(id)
       if (this.selectedId !== id) return
-      this.article = r
+      // The API omits an empty body; once loaded, "no content" must not look
+      // like "still loading" (title-only feeds would spin forever).
+      this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
     } catch (e) {
       if (this.selectedId === id) this.articleError = (e as Error).message
       return

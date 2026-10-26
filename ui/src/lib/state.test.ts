@@ -129,6 +129,17 @@ describe('navigation', () => {
   })
 })
 
+describe('opening articles', () => {
+  it('treats a missing body as empty once loaded, never as still loading', async () => {
+    const titleOnly = entry('9')
+    app.entries = [titleOnly]
+    vi.mocked(api.entry).mockResolvedValue({ entry: { ...titleOnly }, enclosures: [] }) // no content field
+    app.select('9', { push: false })
+    expect(app.article?.entry.content).toBeUndefined() // loading
+    await vi.waitFor(() => expect(app.article?.entry.content).toBe(''))
+  })
+})
+
 describe('themes', () => {
   it('maps Day to the default token set and passes others through', () => {
     app.setPrefs({ theme: 'day' })
