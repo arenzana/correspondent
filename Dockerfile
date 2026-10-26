@@ -27,6 +27,7 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="Correspondent" \
       org.opencontainers.image.description="Self-hosted feed reader with a Reeder-compatible API" \
       org.opencontainers.image.source="https://github.com/arenzana/correspondent" \
+      org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}"
 COPY --from=go /out/correspondent /correspondent
 # The data directory must exist, owned by the nonroot user, so a fresh named

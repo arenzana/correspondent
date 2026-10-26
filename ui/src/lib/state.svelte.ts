@@ -21,6 +21,9 @@ export interface Prefs {
   sidebar: boolean
   /** Coarse position (about 11 km) for the Sun theme; never more precise. */
   place: { lat: number; lon: number; estimated: boolean } | null
+  /** Pane widths in pixels; null means the responsive default. */
+  navWidth: number | null
+  listWidth: number | null
 }
 
 const defaultPrefs: Prefs = {
@@ -33,6 +36,8 @@ const defaultPrefs: Prefs = {
   markOnOpen: true,
   sidebar: true,
   place: null,
+  navWidth: null,
+  listWidth: null,
 }
 
 interface Toast {

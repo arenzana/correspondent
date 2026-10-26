@@ -9,7 +9,15 @@
   import Settings from './components/Settings.svelte'
   import Login from './components/Login.svelte'
   import Toasts from './components/Toasts.svelte'
+  import Resizer from './components/Resizer.svelte'
 
+  const NAV_DEFAULT = 264
+  const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
+  let navWidth = $derived(app.prefs.navWidth ?? NAV_DEFAULT)
+  let listWidth = $derived(app.prefs.listWidth ?? listDefault())
+  let resizing = $state(false)
+  // While dragging, widths update locally; they are saved once on release.
+  let live = $state<{ nav?: number; list?: number }>({})
   let article: ReturnType<typeof Article> | undefined = $state()
   let pendingG = false
   let gTimer: ReturnType<typeof setTimeout> | undefined
@@ -97,14 +105,32 @@
     class:no-sidebar={!app.prefs.sidebar}
     class:focus={app.focusMode}
     class:nav-open={app.navOpen}
+    class:resizing
     data-pane={app.pane}
+    style:--nav-w="{live.nav ?? navWidth}px"
+    style:--list-w="{live.list ?? listWidth}px"
   >
     <a class="skip" href="#reader">Skip to article</a>
-    <div class="nav"><Sidebar /></div>
+    <div class="nav">
+      <Sidebar />
+      <span class="handle nav-handle">
+        <Resizer label="Resize feeds" value={live.nav ?? navWidth} min={200} max={420} fallback={NAV_DEFAULT}
+          ondragging={(d) => (resizing = d)}
+          onresize={(w, done) => (done ? ((live = {}), app.setPrefs({ navWidth: w })) : (live = { ...live, nav: w }))} />
+      </span>
+    </div>
     {#if app.navOpen}
       <button class="scrim" aria-label="Close feeds" onclick={() => (app.navOpen = false)}></button>
     {/if}
-    <div class="list"><Wire /></div>
+    <div class="list">
+      <Wire />
+      <span class="handle list-handle">
+        <Resizer label="Resize article list" value={live.list ?? listWidth} min={300} max={Math.max(320, Math.round(window.innerWidth * 0.5))}
+          fallback={listDefault()}
+          ondragging={(d) => (resizing = d)}
+          onresize={(w, done) => (done ? ((live = {}), app.setPrefs({ listWidth: w })) : (live = { ...live, list: w }))} />
+      </span>
+    </div>
     <div class="read" id="reader"><Article bind:this={article} /></div>
   </div>
 
@@ -120,8 +146,6 @@
     height: 100%;
   }
   .shell {
-    --nav-w: 264px;
-    --list-w: clamp(360px, 30vw, 440px);
     display: grid;
     grid-template-columns: var(--nav-w) var(--list-w) minmax(0, 1fr);
     height: 100dvh;
@@ -131,9 +155,31 @@
   .nav,
   .list,
   .read {
+    position: relative;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+  }
+  .handle {
+    display: contents;
+  }
+  /* The resizer sits on the pane edge, which overflow would clip. */
+  .nav,
+  .list {
+    overflow: visible;
+  }
+  .nav > :global(nav),
+  .list > :global(section) {
+    overflow: hidden;
+  }
+  .shell.resizing {
+    transition: none;
+    cursor: col-resize;
+    user-select: none;
+  }
+  .no-sidebar .nav-handle,
+  .focus .handle {
+    display: none;
   }
   .list {
     border-left: 1px solid var(--rule);
@@ -189,6 +235,9 @@
     .list {
       border-left: 0;
     }
+    .nav-handle {
+      display: none;
+    }
     .scrim {
       position: fixed;
       inset: 0;
@@ -216,7 +265,8 @@
       border: 0;
       display: none;
     }
-    .scrim {
+    .scrim,
+    .handle {
       display: none;
     }
     [data-pane='nav'] .nav,
