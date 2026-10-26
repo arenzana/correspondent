@@ -72,6 +72,7 @@
       f: () => (app.focusMode = !app.focusMode),
       '[': () => app.setPrefs({ sidebar: !app.prefs.sidebar }),
       a: () => (app.addFeedOpen = true),
+      ',': () => app.openSettings(),
       '/': () => (app.paletteOpen = true),
       '?': () => (app.shortcutsOpen = true),
       Escape: () => {
@@ -111,7 +112,7 @@
     class:focus={app.focusMode}
     class:nav-open={app.navOpen}
     class:resizing
-    class:managing={app.page === 'manage'}
+    class:managing={app.page !== 'reader'}
     data-pane={app.pane}
     style:--nav-w="{live.nav ?? navWidth}px"
     style:--list-w="{live.list ?? listWidth}px"
@@ -130,6 +131,8 @@
     {/if}
     {#if app.page === 'manage'}
       <div class="list manage-pane"><Manage /></div>
+    {:else if app.page === 'settings'}
+      <div class="list manage-pane"><Settings /></div>
     {:else}
     <div class="list">
       <Wire />
@@ -148,7 +151,6 @@
   {#if app.paletteOpen}<Palette />{/if}
   {#if app.shortcutsOpen}<Shortcuts />{/if}
   {#if app.addFeedOpen}<AddFeed />{/if}
-  {#if app.settingsOpen}<Settings />{/if}
 {/if}
 <Toasts />
 

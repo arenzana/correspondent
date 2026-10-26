@@ -204,31 +204,34 @@ try {
   check(layout.pageScroll === 0 && layout.headTop >= 0, 'scrolling the list never moves the page or its header')
   check(Math.abs(layout.barBottom - layout.height) <= 1, 'the tab bar stays at the bottom edge')
   await tabbar.getByRole('button', { name: 'Feeds' }).tap()
-  check(await mobile.locator('nav.sidebar').isVisible(), 'Feeds opens the feed list')
+  check(await mobile.locator('nav.sidebar').waitFor({ timeout: 5000 }).then(() => true, () => false), 'Feeds opens the feed list')
   await mobile.locator('nav.sidebar').getByRole('button', { name: /Starred/ }).first().tap()
   check(await mobile.locator('.wire h1').innerText() === 'Starred', 'choosing a view from Feeds opens it')
   await tabbar.getByRole('button', { name: 'Settings' }).tap()
-  const settings = mobile.getByRole('dialog', { name: 'Settings' })
-  check(await settings.isVisible(), 'Settings opens from the tab bar')
-  // Interface text: size and typeface apply at once, everywhere.
+  const settings = mobile.locator('section.settings')
+  await settings.waitFor({ timeout: 5000 }).catch(() => {})
+  check(await settings.isVisible() && (await mobile.evaluate(() => location.hash)) === '#/settings', 'Settings opens from the tab bar, as a page')
+  // Interface text: size and typeface apply at once, everywhere, previews included.
   await settings.getByRole('button', { name: 'Larger' }).tap()
-  await settings.getByRole('button', { name: 'System' }).tap()
+  await settings.getByRole('button', { name: 'System', exact: true }).tap()
   const text = await mobile.evaluate(() => ({
-    size: getComputedStyle(document.querySelector('.wire h1')).fontSize,
+    size: getComputedStyle(document.querySelector('.settings h1')).fontSize,
+    preview: getComputedStyle(document.querySelector('.settings .pv-title')).fontSize,
     font: getComputedStyle(document.body).fontFamily,
     icons: [...document.querySelectorAll('.icon-choice img')].every((i) => i.complete && i.naturalWidth > 0),
   }))
-  check(Math.abs(parseFloat(text.size) - 23 * 1.2) < 0.01 && text.font.startsWith('system-ui'), `interface text size and typeface change from Settings (${text.size}, ${text.font.split(',')[0]})`)
+  check(Math.abs(parseFloat(text.size) - 23 * 1.2) < 0.01 && Math.abs(parseFloat(text.preview) - 16.5 * 1.2) < 0.01 && text.font.startsWith('system-ui'),
+    `interface text size and typeface change from Settings (${text.size}, ${text.font.split(',')[0]})`)
   check(text.icons, 'every app icon choice shows in Settings')
-  if (process.env.SHOT_DIR) {
-    await mobile.screenshot({ path: process.env.SHOT_DIR + '/settings-larger.png' })
-    await mobile.keyboard.press('Escape')
-    await mobile.screenshot({ path: process.env.SHOT_DIR + '/list-larger.png' })
-    await tabbar.getByRole('button', { name: 'Settings' }).tap()
-  }
+  // The section buttons move through the page and follow it.
+  await settings.locator('.chips').getByRole('button', { name: 'Apps & sync' }).tap()
+  await mobile.waitForTimeout(900)
+  check(await settings.locator('.chips [aria-current="true"]').innerText() === 'Apps & sync' && await settings.getByText('Reeder and other apps').isVisible(),
+    'the section buttons jump to a section and follow the page')
+  if (process.env.SHOT_DIR) await mobile.screenshot({ path: process.env.SHOT_DIR + '/settings-larger.png' })
+  await settings.locator('.chips').getByRole('button', { name: 'Appearance' }).tap()
   await settings.getByRole('button', { name: 'Default' }).tap()
   await settings.getByRole('button', { name: 'Grotesk' }).first().tap()
-  await mobile.keyboard.press('Escape')
   // Dispatch 0, the link post, is the one starred earlier.
   await tabbar.getByRole('button', { name: 'Starred' }).tap()
   await mobile.locator('.wire .row .hit', { hasText: 'Dispatch 0' }).tap()
@@ -311,7 +314,8 @@ try {
   check(labFeed && labFeed.total === 3 && labFeed.fullText, 'subscribing follows the page, with full articles')
   await page.goto(APP + '/#/manage')
   await page.reload()
-  check(await page.locator('.manage .row .kind').first().isVisible(), 'Subscriptions marks it as a page')
+  const badge = await page.locator('.manage .row .kind').first().waitFor({ timeout: 10_000 }).then(() => true, () => false)
+  check(badge, 'Subscriptions marks it as a page')
   const full = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=all&content=1')).json()).entries.filter((e) => e.fullText).length)
   check(full === 3, `its articles arrive in full (${full} of 3)`)
 

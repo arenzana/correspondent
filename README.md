@@ -42,11 +42,14 @@ clients are concerned.
 | ![Command palette](docs/screenshots/command-palette.png) | ![Add feed dialog with a discovered feed](docs/screenshots/add-feed.png) |
 | **Manage subscriptions** | **Deleting asks first** |
 | ![Subscriptions page with feed health](docs/screenshots/manage.png) | ![Delete confirmation](docs/screenshots/manage-delete.png) |
+| **Settings, with live previews** | **…in every theme** |
+| ![Settings page: appearance with a live preview of the list](docs/screenshots/settings.png) | ![Settings in the Night desk theme](docs/screenshots/settings-night.png) |
 
 <p>
   <img src="docs/screenshots/mobile-wire.png" alt="The wire on a phone" width="250">
   <img src="docs/screenshots/mobile-swipe.png" alt="Swiping a row to mark it read" width="250">
   <img src="docs/screenshots/mobile-article.png" alt="An article on a phone" width="250">
+  <img src="docs/screenshots/mobile-settings.png" alt="Settings on a phone" width="250">
 </p>
 
 Screenshots use invented feeds and are regenerated with `make screenshots`.
@@ -139,9 +142,6 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- A reworked Settings: a full page with clear sections (reading,
-  appearance, feeds and folders, apps and sync, data and backups, about),
-  feed management with health and cadence, and live previews.
 - **Listen to articles**: natural read-aloud through an AI text-to-speech
   API (the reader's own key and provider, set up like AI parsers), with
   playback in the article view and on the lock screen, audio kept for

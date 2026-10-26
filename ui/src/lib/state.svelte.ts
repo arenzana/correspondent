@@ -126,11 +126,10 @@ class AppState {
   focusMode = $state(false)
 
   /** Which page fills the main area: the reader, or subscription management. */
-  page = $state<'reader' | 'manage'>('reader')
+  page = $state<'reader' | 'manage' | 'settings'>('reader')
   paletteOpen = $state(false)
   shortcutsOpen = $state(false)
   addFeedOpen = $state(false)
-  settingsOpen = $state(false)
   readingOpen = $state(false)
   navOpen = $state(false) // drawer on medium widths
   toasts = $state<Toast[]>([])
@@ -565,6 +564,17 @@ class AppState {
     if (location.hash !== '#/manage') history.pushState(null, '', '#/manage')
   }
 
+  /** Open Settings, optionally at a section (its element ID). */
+  openSettings(section?: string) {
+    this.page = 'settings'
+    this.navOpen = false
+    this.pane = 'list'
+    this.settingsSection = section ?? ''
+    if (!location.hash.startsWith('#/settings')) history.pushState(null, '', '#/settings')
+  }
+  /** The section Settings should show first, if any. */
+  settingsSection = $state('')
+
   go(source: Source) {
     this.page = 'reader'
     this.source = source
@@ -586,8 +596,8 @@ class AppState {
   }
 
   readHash() {
-    if (location.hash === '#/manage') {
-      this.page = 'manage'
+    if (location.hash === '#/manage' || location.hash.startsWith('#/settings')) {
+      this.page = location.hash === '#/manage' ? 'manage' : 'settings'
       this.pane = 'list'
       return
     }
@@ -1033,5 +1043,5 @@ export const app = new AppState()
 
 /** Any modal overlay currently owns the keyboard. */
 export function overlayOpen(): boolean {
-  return app.paletteOpen || app.shortcutsOpen || app.addFeedOpen || app.settingsOpen
+  return app.paletteOpen || app.shortcutsOpen || app.addFeedOpen
 }

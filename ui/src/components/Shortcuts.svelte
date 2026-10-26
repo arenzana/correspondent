@@ -33,6 +33,7 @@
         [['g', 's'], 'Starred'],
         [['g', 'a'], 'All articles'],
         [['g', 'm'], 'Manage subscriptions'],
+        [[','], 'Settings'],
         [['⌘', 'K'], 'Jump anywhere'],
         [['/'], 'Search'],
         [['['], 'Show or hide feeds'],

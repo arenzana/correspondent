@@ -138,7 +138,7 @@
       <Icon name="rss" />
     </button>
     <span class="spacer"></span>
-    <button class="icon-btn" aria-label="Settings" title="Settings" onclick={() => (app.settingsOpen = true)}>
+    <button class="icon-btn" aria-label="Settings" title="Settings" onclick={() => app.openSettings()}>
       <Icon name="settings" />
     </button>
   </footer>

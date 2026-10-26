@@ -7,11 +7,21 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-26
+
 ### Added
 
 - The selection moves fluidly along the list: one highlight travels from
   article to article, its leading edge first and the trailing edge
   following, so it stretches and settles instead of jumping.
+- Settings is a page of its own (Settings in the sidebar or tab bar, or
+  press `,`), in five sections: Appearance, Reading, Feeds, Apps & sync and
+  About, with a rail that follows the page (section buttons on phones).
+  Live previews show the list and an article as theme, text size,
+  typefaces, density and line length change. Feeds gathers your
+  subscriptions at a glance, OPML and AI; Apps & sync has Reeder's details
+  with a copy button, notifications, and this device's offline copy. New
+  setting: show only unread articles in feeds and folders.
 - New articles slide in at the top of the list as they arrive, pushing it
   down, when you're at the top. Further down, or while you're touching the
   list, nothing moves: the "new articles" button appears instead. Reduced
@@ -240,7 +250,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/arenzana/correspondent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/arenzana/correspondent/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/arenzana/correspondent/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/arenzana/correspondent/compare/v0.7.2...v0.7.3

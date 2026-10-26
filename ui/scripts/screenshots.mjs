@@ -218,7 +218,7 @@ try {
     // Hash-only navigations don't reload; start every shot from a fresh page.
     await page.goto('about:blank')
     await page.goto(`${APP}/${hash}`)
-    await page.waitForSelector(hash.includes('manage') ? '.manage .row' : '.wire .row', { state: 'attached' })
+    await page.waitForSelector(hash.includes('manage') ? '.manage .row' : hash.includes('settings') ? '.settings .wire-preview' : '.wire .row', { state: 'attached' })
     await page.waitForLoadState('networkidle')
     if (setup) await setup()
     await page.waitForTimeout(400)
@@ -250,6 +250,8 @@ try {
     },
   })
   await shot('manage', { hash: '#/manage' })
+  await shot('settings', { hash: '#/settings' })
+  await shot('settings-night', { theme: 'night', hash: '#/settings' })
   await shot('manage-delete', {
     hash: '#/manage',
     theme: 'night',
@@ -260,6 +262,7 @@ try {
   await shot('mobile-wire', { viewport: { width: 390, height: 844 }, hash: '#/unread' })
   await shot('mobile-article', { viewport: { width: 390, height: 844 } })
   await shot('mobile-manage', { viewport: { width: 390, height: 844 }, hash: '#/manage' })
+  await shot('mobile-settings', { viewport: { width: 390, height: 844 }, hash: '#/settings' })
   await shot('mobile-swipe', {
     viewport: { width: 390, height: 844 },
     hash: '#/unread',

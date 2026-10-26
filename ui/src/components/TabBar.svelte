@@ -14,7 +14,7 @@
     },
     { id: 'starred', label: 'Starred', icon: 'star', active: () => isView('starred'), run: () => app.go({ kind: 'view', view: 'starred' }) },
     { id: 'search', label: 'Search', icon: 'search', active: () => app.paletteOpen, run: () => (app.paletteOpen = true) },
-    { id: 'settings', label: 'Settings', icon: 'settings', active: () => app.settingsOpen, run: () => (app.settingsOpen = true) },
+    { id: 'settings', label: 'Settings', icon: 'settings', active: () => app.page === 'settings', run: () => app.openSettings() },
   ]
 </script>
 
