@@ -133,3 +133,20 @@ func TestProcessDropsUnvalidatedURLAttributes(t *testing.T) {
 		t.Errorf("non-http lead image accepted: %q", r.ImageURL)
 	}
 }
+
+func TestLooksPartial(t *testing.T) {
+	words := func(n int) string { return strings.Repeat("word ", n) }
+	for html, want := range map[string]bool{
+		"":                           true,
+		"<p>A short teaser.</p>":     true,
+		"<p>" + words(150) + "…</p>": true,
+		"<p>" + words(150) + "</p><p><a href=x>Continue reading →</a></p><p><a href=y>Get the full-text RSS feed →</a></p>": true,
+		"<p>" + words(150) + ".</p>":                                  false,
+		"<p>" + words(600) + "…</p>":                                  false,
+		"<p>" + words(60) + " read more here " + words(150) + ".</p>": false,
+	} {
+		if got := LooksPartial(html); got != want {
+			t.Errorf("LooksPartial(%.60q…) = %v", html, got)
+		}
+	}
+}

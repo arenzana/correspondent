@@ -40,7 +40,7 @@ beforeEach(async () => {
   vi.mocked(api.savePrefs).mockResolvedValue(undefined)
   app.entries = [entry('1'), entry('2'), entry('3', { read: true })]
   app.feeds = [{ id: 1, folderId: null, url: '', siteUrl: '', title: 'F', description: '', iconUrl: '', lastFetchAt: 0,
-    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, fullText: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
+    lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, fullText: false, page: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
   app.folders = []
   app.counts = { unread: 2, starred: 0, today: 2, newest: '3' }
   app.toasts = []

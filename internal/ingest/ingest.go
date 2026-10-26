@@ -7,11 +7,9 @@ package ingest
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +17,7 @@ import (
 	"github.com/arenzana/correspondent/internal/extract"
 	"github.com/arenzana/correspondent/internal/feed"
 	"github.com/arenzana/correspondent/internal/fetch"
+	"github.com/arenzana/correspondent/internal/pagefeed"
 	"github.com/arenzana/correspondent/internal/store"
 )
 
@@ -26,7 +25,10 @@ type Service struct {
 	Store *store.Store
 	Fetch *fetch.Client
 	// Extract fetches full articles for feeds that publish only summaries.
-	Extract     *extract.Extractor
+	Extract *extract.Extractor
+	// AIFor gives a reader's own AI client, for pages with no feed added by
+	// apps (SubscribeAuto). Nil leaves AI to the web app.
+	AIFor       AIForUser
 	Log         *slog.Logger
 	Concurrency int
 	Tick        time.Duration
@@ -121,9 +123,9 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 	case resp.NotModified:
 		res.ETag, res.LastModified = f.ETag, f.LastModified
 	default:
-		p, perr := feed.Parse(resp.Body, resp.FinalURL)
+		p, perr := s.parse(ctx, resp.Body, resp.FinalURL, f)
 		if perr != nil {
-			res.Err = "could not read the feed: " + perr.Error()
+			res.Err = perr.Error()
 			break
 		}
 		if f.FullText && s.Extract != nil {
@@ -159,6 +161,30 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 	}
 }
 
+// parse reads a feed, or a page feed's listing with its parser.
+func (s *Service) parse(ctx context.Context, body []byte, url string, f store.Feed) (*feed.Parsed, error) {
+	if f.ParserID == 0 {
+		p, err := feed.Parse(body, url)
+		if err != nil {
+			return nil, errors.New("could not read the feed: " + err.Error())
+		}
+		return p, nil
+	}
+	parser, err := s.Store.Parser(ctx, f.ParserID)
+	if err != nil {
+		return nil, errors.New("this page feed has lost its parser; rebuild it in Subscriptions")
+	}
+	r, err := pagefeed.Decode(parser.Rules)
+	if err != nil {
+		return nil, errors.New("this page feed's parser is invalid; rebuild it in Subscriptions")
+	}
+	p, err := pagefeed.Parse(body, url, r)
+	if err != nil {
+		return nil, errors.New("the page no longer lists its articles the way it did; rebuild it in Subscriptions")
+	}
+	return p, nil
+}
+
 // nextFetch schedules the next poll: the feed's interval with ±10% jitter,
 // exponential backoff after errors (capped at a day), and Retry-After honoured.
 func nextFetch(f store.Feed, failed bool, resp *fetch.Response) time.Time {
@@ -186,39 +212,15 @@ type Candidate struct {
 	IconURL     string `json:"iconUrl"`
 	ItemCount   int    `json:"itemCount"`
 	LatestAt    int64  `json:"latestAt"`
-}
+	// Page candidates are web pages with no feed, read by a parser: Method
+	// says how it finds the articles, Shared that the server already had it
+	// (written for another reader), Sample shows a few titles.
+	Page   bool     `json:"page,omitempty"`
+	Method string   `json:"method,omitempty"`
+	Shared bool     `json:"shared,omitempty"`
+	Sample []string `json:"sample,omitempty"`
 
-// Discover resolves a site or feed URL to the feeds it offers.
-func (s *Service) Discover(ctx context.Context, raw string) ([]Candidate, error) {
-	u := strings.TrimSpace(raw)
-	if !strings.Contains(u, "://") {
-		u = "https://" + u
-	}
-	resp, err := s.Fetch.Get(ctx, fetch.Request{URL: u})
-	if err != nil {
-		return nil, fmt.Errorf("couldn't load %s: %w", u, err)
-	}
-	if p, err := feed.Parse(resp.Body, resp.FinalURL); err == nil {
-		return []Candidate{candidate(resp.FinalURL, p)}, nil
-	}
-	links := feed.Discover(resp.Body, resp.FinalURL)
-	if len(links) == 0 {
-		return nil, errors.New("no feed found at that address")
-	}
-	var out []Candidate
-	for _, l := range links[:min(len(links), 4)] {
-		r, err := s.Fetch.Get(ctx, fetch.Request{URL: l})
-		if err != nil {
-			continue
-		}
-		if p, err := feed.Parse(r.Body, r.FinalURL); err == nil {
-			out = append(out, candidate(l, p))
-		}
-	}
-	if len(out) == 0 {
-		return nil, errors.New("the page lists feeds, but none could be read")
-	}
-	return out, nil
+	builtin bool
 }
 
 func candidate(url string, p *feed.Parsed) Candidate {
@@ -243,6 +245,7 @@ func (s *Service) Subscribe(ctx context.Context, userID int64, url, title string
 		return 0, err
 	}
 	s.Poll(ctx, *f)
+	s.autoFullText(ctx, *f)
 	return id, nil
 }
 
@@ -298,6 +301,9 @@ func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []s
 			}
 			if it.ImageURL == "" {
 				it.ImageURL = r.ImageURL
+			}
+			if it.PublishedAt.IsZero() {
+				it.PublishedAt = r.Published
 			}
 		}()
 	}

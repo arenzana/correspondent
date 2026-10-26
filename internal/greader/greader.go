@@ -28,6 +28,8 @@ type Server struct {
 	Log      *slog.Logger
 	Limiter  *ratelimit.Limiter
 	ClientIP ratelimit.ClientIP
+	// Subscriber lets apps add subscriptions; nil makes them read-only.
+	Subscriber Subscriber
 }
 
 type session struct {
@@ -86,6 +88,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/reader/api/0/edit-tag" && r.Method == http.MethodPost:
 		if s.checkT(w, r, sess, true) {
 			s.editTag(ctx, w, r, sess)
+		}
+	case path == "/reader/api/0/subscription/quickadd" && r.Method == http.MethodPost:
+		if s.checkT(w, r, sess, true) {
+			s.quickadd(ctx, w, r, sess)
+		}
+	case path == "/reader/api/0/subscription/edit" && r.Method == http.MethodPost:
+		if s.checkT(w, r, sess, true) {
+			s.subscriptionEdit(ctx, w, r, sess)
 		}
 	case path == "/reader/api/0/mark-all-as-read" && r.Method == http.MethodPost:
 		if s.checkT(w, r, sess, true) {

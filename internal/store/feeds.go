@@ -31,10 +31,14 @@ type Feed struct {
 	Paused      bool   `json:"paused"`
 	Notify      bool   `json:"notify"`
 	FullText    bool   `json:"fullText"`
-	Unread      int    `json:"unread"`
-	Total       int    `json:"total"`
-	Starred     int    `json:"starred"`
-	LatestAt    int64  `json:"latestAt"` // newest publication time (seconds), 0 if none
+	// ParserID is set for feeds built from a web page that has no feed (a
+	// shared parser reads it); Page reports that to clients.
+	ParserID int64 `json:"-"`
+	Page     bool  `json:"page"`
+	Unread   int   `json:"unread"`
+	Total    int   `json:"total"`
+	Starred  int   `json:"starred"`
+	LatestAt int64 `json:"latestAt"` // newest publication time (seconds), 0 if none
 	// Cadence is the number of entries per day over the last 14 days, oldest
 	// first; the UI draws it as the feed's pulse.
 	Cadence []int `json:"cadence"`
@@ -90,18 +94,19 @@ func (s *Store) DeleteFolder(ctx context.Context, userID, folderID int64) error 
 }
 
 const feedColumns = `f.id, f.user_id, f.folder_id, f.url, f.site_url, f.title, f.description, f.icon_url,
-	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec, f.paused, f.notify, f.full_text`
+	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec, f.paused, f.notify, f.full_text, COALESCE(f.parser_id, 0)`
 
 func scanFeed(sc interface{ Scan(...any) error }, f *Feed, extra ...any) error {
 	var folder sql.NullInt64
 	dest := []any{&f.ID, &f.UserID, &folder, &f.URL, &f.SiteURL, &f.Title, &f.Description, &f.IconURL,
-		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec, &f.Paused, &f.Notify, &f.FullText}
+		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec, &f.Paused, &f.Notify, &f.FullText, &f.ParserID}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
 	if folder.Valid {
 		f.FolderID = &folder.Int64
 	}
+	f.Page = f.ParserID != 0
 	return nil
 }
 
@@ -178,6 +183,18 @@ func (s *Store) AddFeed(ctx context.Context, userID int64, url, title string, fo
 	}
 	var id int64
 	err = s.db.QueryRowContext(ctx, `SELECT id FROM feeds WHERE user_id = ? AND url = ?`, userID, url).Scan(&id)
+	return id, err
+}
+
+// AddPageFeed subscribes to a web page read by a parser. Page feeds fetch
+// full articles, since a listing carries only headlines. Subscribing again
+// to the same page switches it to this parser.
+func (s *Store) AddPageFeed(ctx context.Context, userID int64, url, title string, folderID *int64, parserID int64) (int64, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx, `
+		INSERT INTO feeds (user_id, folder_id, url, title, created_at, parser_id, full_text) VALUES (?, ?, ?, ?, ?, ?, 1)
+		ON CONFLICT (user_id, url) DO UPDATE SET parser_id = excluded.parser_id, full_text = 1
+		RETURNING id`, userID, folderID, url, title, time.Now().Unix(), parserID).Scan(&id)
 	return id, err
 }
 

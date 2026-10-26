@@ -45,6 +45,7 @@ import (
 	"github.com/arenzana/correspondent/internal/migrate"
 	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
+	"github.com/arenzana/correspondent/internal/secretbox"
 	"github.com/arenzana/correspondent/internal/server"
 	"github.com/arenzana/correspondent/internal/store"
 	"github.com/arenzana/correspondent/internal/version"
@@ -123,7 +124,6 @@ func run(log *slog.Logger, args []string) error {
 	fetcher := fetch.New(fetch.Options{AllowPrivate: *allowPrivate})
 	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log, RetentionDays: *retention,
 		Extract: &extract.Extractor{Fetch: fetcher}}
-
 	switch cmd {
 	case "serve":
 		proxies, err := parsePrefixes(*trusted)
@@ -131,6 +131,9 @@ func run(log *slog.Logger, args []string) error {
 			return err
 		}
 		if err := bootstrap(ctx, log, st); err != nil {
+			return err
+		}
+		if err := ing.SeedBuiltins(ctx); err != nil {
 			return err
 		}
 		var images *imgproxy.Proxy
@@ -147,7 +150,13 @@ func run(log *slog.Logger, args []string) error {
 				Log:      log,
 			}
 		}
-		return serve(ctx, log, st, ing, images, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
+		// Readers' AI keys are sealed with a key file beside the database,
+		// which backups leave out (see README).
+		keyring, err := secretbox.Load(filepath.Join(*dataDir, "keyring"))
+		if err != nil {
+			return err
+		}
+		return serve(ctx, log, st, ing, images, keyring, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent user add|api-password <username>")
@@ -226,15 +235,17 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	notifier := &push.Notifier{Store: st, Log: log}
-	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images}
+	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images,
+		Keyring: keyring, AITransport: ing.Fetch.Transport()}
+	ing.AIFor = a.AIForApps
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles
 	st.OnStateChange = a.NotifyState
-	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip}
+	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip, Subscriber: ing}
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           server.New(st, a, g, imageHandler(images), web.Dist(), secure),

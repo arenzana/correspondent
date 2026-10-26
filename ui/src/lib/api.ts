@@ -25,6 +25,8 @@ export interface Feed {
   notify: boolean
   /** New articles are fetched in full from their web page. */
   fullText: boolean
+  /** Built from a web page with no feed, read by a shared parser. */
+  page: boolean
   unread: number
   total: number
   starred: number
@@ -73,6 +75,22 @@ export interface Candidate {
   iconUrl: string
   itemCount: number
   latestAt: number
+  /** A page with no feed, read by a parser (method: how it finds articles). */
+  page?: boolean
+  method?: 'hfeed' | 'jsonld' | 'links' | 'css'
+  /** The server already had this parser (another reader's). */
+  shared?: boolean
+  sample?: string[]
+}
+
+export type AIProvider = 'anthropic' | 'openai'
+
+/** A reader's AI setup; the key itself never comes back, only its hint. */
+export interface AIConfig {
+  provider: AIProvider
+  baseUrl?: string
+  model: string
+  keyHint?: string
 }
 
 export class ApiError extends Error {
@@ -132,7 +150,17 @@ export const api = {
   login: (username: string, password: string) => request<{ username: string }>('POST', '/session', { username, password }),
   logout: () => request<void>('DELETE', '/session'),
   me: () =>
-    request<{ username: string; hasApiPassword: boolean; prefs: Record<string, unknown>; version: string; commit: string }>('GET', '/me'),
+    request<{
+      username: string
+      hasApiPassword: boolean
+      prefs: Record<string, unknown>
+      version: string
+      commit: string
+      aiAvailable: boolean
+      ai: AIConfig | null
+    }>('GET', '/me'),
+  setAI: (config: Omit<AIConfig, 'keyHint'> & { key: string }) => request<{ ai: AIConfig }>('PUT', '/ai', config),
+  deleteAI: () => request<void>('DELETE', '/ai'),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),
@@ -150,8 +178,10 @@ export const api = {
       before,
     }),
   discover: (url: string) => request<{ candidates: Candidate[] }>('POST', '/discover', { url }),
-  subscribe: (url: string, title: string, folderId: number | null, folderName?: string) =>
-    request<{ id: number }>('POST', '/feeds', { url, title, folderId, folderName }),
+  discoverAI: (url: string, rebuild = false) => request<{ candidates: Candidate[] }>('POST', '/discover/ai', { url, rebuild }),
+  subscribe: (url: string, title: string, folderId: number | null, folderName?: string, page = false) =>
+    request<{ id: number }>('POST', '/feeds', { url, title, folderId, folderName, page }),
+  rebuildFeed: (id: number) => request<{ feed: Feed }>('POST', `/feeds/${id}/rebuild`),
   pushStatus: (endpoint?: string) =>
     request<{ publicKey: string; subscribed: boolean }>('GET', '/push' + (endpoint ? '?endpoint=' + encodeURIComponent(endpoint) : '')),
   pushSubscribe: (sub: PushSubscriptionJSON) => request<void>('POST', '/push/subscriptions', sub),

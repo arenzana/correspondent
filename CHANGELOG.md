@@ -7,6 +7,35 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-26
+
+### Added
+
+- Sites without feeds. Add a page that lists articles and Correspondent
+  reads it like a feed, fetching each article in full. It looks for the
+  articles exactly first (h-feed microformats, JSON-LD, a repeated link
+  pattern; an article's address leads to the listing above it). Where that
+  fails, your AI writes a parser for the page: set it up in Settings with
+  Anthropic or any OpenAI-compatible service (your key is checked with the
+  provider, stored encrypted, and never shown again; up to 20 AI requests a
+  day). The model sees an outline of the page and only returns CSS
+  selectors, which are checked against the page before they are used;
+  checking for new articles never uses AI.
+- Parsers are shared: once a page has one, every reader on the server who
+  adds it gets it without asking any AI. "Rebuild its parser" in
+  Subscriptions repairs a page that changed, for everyone.
+- Built in: OpenAI News and Google DeepMind (their feeds, which their pages
+  don't advertise), and parsers for Anthropic News, Research and
+  Engineering, the Claude blog, xAI, Figure and Groq. Typing "openai.com"
+  or "anthropic.com" is enough.
+- Reeder can add and manage subscriptions (Google Reader quickadd and
+  subscription/edit): sites without feeds work there too, using your AI if
+  needed, and arrive as ordinary feeds.
+- New feeds whose articles turn out to be summaries fetch full articles
+  automatically, so Reeder gets whole articles without any switch.
+- Articles fetched in full take their publication date from the page when
+  the feed or listing gives none.
+
 ## [0.7.4] - 2026-10-26
 
 ### Changed
@@ -201,7 +230,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/arenzana/correspondent/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/arenzana/correspondent/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/arenzana/correspondent/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/arenzana/correspondent/compare/v0.7.1...v0.7.2

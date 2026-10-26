@@ -207,3 +207,7 @@ func parseRetryAfter(v string) time.Duration {
 	}
 	return 0
 }
+
+// Transport returns the guarded transport, for other clients (such as an AI
+// provider at a reader-chosen address) that must obey the same address rules.
+func (c *Client) Transport() http.RoundTripper { return c.http.Transport }

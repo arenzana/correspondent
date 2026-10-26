@@ -3,7 +3,7 @@
 // server refuses. Without a network, the reader works from its offline copy
 // (lib/offline) and queues changes until the connection returns.
 
-import { api, ApiError, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type AIConfig, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
@@ -84,6 +84,9 @@ class AppState {
   user = $state<string | null>(null)
   booting = $state(true)
   hasApiPassword = $state(false)
+  /** Whether this server can use AI, and the reader's setup if any. */
+  aiAvailable = $state(false)
+  ai = $state<AIConfig | null>(null)
   version = $state('')
   commit = $state('')
   /** Whether the server is reachable; the reader works offline when not. */
@@ -164,6 +167,8 @@ class AppState {
       }
       this.user = me.username
       this.hasApiPassword = me.hasApiPassword
+      this.aiAvailable = me.aiAvailable
+      this.ai = me.ai
       this.version = me.version
       this.commit = me.commit
       this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>) }
@@ -943,6 +948,18 @@ class AppState {
   async fullTextForFeed(id: number) {
     if (!(await this.setFeedFullText(id, true))) return
     if (this.article?.entry.feedId === id && !this.article.entry.fullText) await this.loadFullArticle()
+  }
+
+  /** Write a new parser for a page feed whose page changed. */
+  async rebuildFeed(id: number) {
+    try {
+      const { feed } = await api.rebuildFeed(id)
+      const i = this.feeds.findIndex((f) => f.id === id)
+      if (i >= 0) this.feeds[i] = { ...this.feeds[i], ...feed }
+      this.toast(`Rebuilt ${feed.title}. New articles will follow.`)
+    } catch (e) {
+      this.toast(`Couldn't rebuild it. ${(e as Error).message}`)
+    }
   }
 
   /** Opt the feed in or out of notifications. */

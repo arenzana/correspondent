@@ -1,0 +1,54 @@
+[
+  {
+    "name": "OpenAI News",
+    "match": ["openai.com", "openai.com/news", "openai.com/blog", "openai.com/research", "openai.com/research/index"],
+    "feed": "https://openai.com/news/rss.xml"
+  },
+  {
+    "name": "Google DeepMind Blog",
+    "match": ["deepmind.google", "deepmind.google/discover/blog", "deepmind.google/blog", "deepmind.com/blog"],
+    "feed": "https://deepmind.google/blog/rss.xml"
+  },
+  {
+    "name": "Anthropic News",
+    "match": ["anthropic.com", "anthropic.com/news"],
+    "page": "https://www.anthropic.com/news",
+    "rules": {"method": "css", "item": "li[class*=\"TableView-module\"][class*=\"__row\"]", "link": "a[class*=\"__title-link\"]", "title": "a[class*=\"__title-link\"] h3", "summary": "div[class*=\"__description\"] p"}
+  },
+  {
+    "name": "Anthropic Research",
+    "match": ["anthropic.com/research"],
+    "page": "https://www.anthropic.com/research",
+    "rules": {"method": "css", "item": "[class*='GalleryView-module'][class*='__card'] article", "link": "a[class*='metaTitleLink']", "title": "h3", "date": "time", "summary": "p[class*='metaDescription']", "image": "figure img"}
+  },
+  {
+    "name": "Anthropic Engineering",
+    "match": ["anthropic.com/engineering"],
+    "page": "https://www.anthropic.com/engineering",
+    "rules": {"method": "css", "item": "div[class*='GridView-module'][class*='__cardWrapper'] article", "link": "h3 a", "title": "h3", "date": "time", "image": "img"}
+  },
+  {
+    "name": "Claude Blog",
+    "match": ["claude.com/blog", "claude.ai/blog", "claude.com/resources/articles"],
+    "page": "https://claude.com/blog",
+    "rules": {"method": "css", "item": "[class*='ResourcesIndex-module'][class*='__grid'] > a[class*='ResourceCard-module'][class*='__card']", "title": "[class*='ResourceCard-module'][class*='__title']", "date": "[class*='ResourceCard-module'][class*='__meta']", "summary": "[class*='ResourceCard-module'][class*='__excerpt']"}
+  },
+  {
+    "name": "xAI News",
+    "match": ["x.ai", "x.ai/news", "x.ai/blog"],
+    "page": "https://x.ai/news",
+    "rules": {"method": "css", "item": "a[href^=\"/news/\"]:has(h1, h3)", "title": "h1, h3", "date": "time, div.shrink-0, p.font-medium", "summary": "p.text-lg, p.line-clamp-1", "image": "img"}
+  },
+  {
+    "name": "Figure News",
+    "match": ["figure.ai", "figure.ai/news"],
+    "page": "https://www.figure.ai/news",
+    "rules": {"method": "css", "item": "section.article-list a.article-list-item", "title": ".article-list-item__heading", "date": "time.article-list-item__publication-date", "image": "img.article-list-item__thumbnail"}
+  },
+  {
+    "name": "Groq News",
+    "match": ["groq.com", "groq.com/news", "groq.com/blog", "groq.com/newsroom"],
+    "page": "https://groq.com/news",
+    "rules": {"method": "css", "item": "ul[class*='Blog_cards'] > li[class*='PostCard_card']", "link": "a[class*='PostCard_cardLink']", "title": "h2[class*='PostCard_title']", "date": "time"}
+  }
+]

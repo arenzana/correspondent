@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	readability "codeberg.org/readeck/go-readability/v2"
 
@@ -25,9 +26,10 @@ const minText = 200
 var ErrNotArticle = errors.New("the page has no readable article")
 
 type Result struct {
-	HTML     string // sanitized
-	Text     string
-	ImageURL string
+	HTML      string // sanitized
+	Text      string
+	ImageURL  string
+	Published time.Time // from the page's metadata; zero if unknown
 }
 
 type Extractor struct {
@@ -65,6 +67,9 @@ func (x *Extractor) Article(ctx context.Context, pageURL string) (*Result, error
 		return nil, ErrNotArticle
 	}
 	r := &Result{HTML: body.HTML, Text: body.Text, ImageURL: body.ImageURL}
+	if t, err := article.PublishedTime(); err == nil && !t.IsZero() && t.Before(time.Now().Add(48*time.Hour)) {
+		r.Published = t
+	}
 	if r.ImageURL == "" {
 		if img := article.ImageURL(); strings.HasPrefix(img, "https://") || strings.HasPrefix(img, "http://") {
 			r.ImageURL = img

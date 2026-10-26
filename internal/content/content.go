@@ -172,3 +172,30 @@ func resolve(base *url.URL, ref string) string {
 func isHTTP(s string) bool {
 	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")
 }
+
+// Summaries are recognised as in the reader (ui/src/lib/partial.ts): short
+// bodies, or bodies that end by sending the reader onward.
+const (
+	partialMinFull   = 600
+	partialMaxTeaser = 2500
+	partialMaxOnward = 8000
+	partialTail      = 300
+)
+
+var (
+	ellipsisEnd = regexp.MustCompile(`(…|\.\.\.|\[…\]|\[\.\.\.\])[\s.»→›)\]]*$`)
+	onward      = regexp.MustCompile(`(?i)\b(read more|continue reading|read the (full|rest)|keep reading|the post .{1,200} appeared first on)\b`)
+)
+
+// LooksPartial reports whether article HTML looks like a summary of a longer
+// article on the web.
+func LooksPartial(html string) bool {
+	text := []rune(PlainText(html))
+	if len(text) < partialMinFull {
+		return true
+	}
+	if len(text) < partialMaxOnward && onward.MatchString(string(text[max(0, len(text)-partialTail):])) {
+		return true
+	}
+	return len(text) < partialMaxTeaser && ellipsisEnd.MatchString(string(text))
+}

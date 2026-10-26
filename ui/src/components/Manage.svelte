@@ -201,7 +201,13 @@
                 {:else}
                   <button class="name" title="Rename" onclick={() => (editing = f.id)}>{f.title || f.url}</button>
                 {/if}
-                <span class="url" title={f.url}>{f.url.replace(/^https?:\/\//, '')}</span>
+                <span class="url" title={f.url}>
+                  {#if f.page}<span class="kind" title="This site has no feed; a parser reads its page">Page</span>{/if}
+                  {f.url.replace(/^https?:\/\//, '')}
+                </span>
+                {#if f.page && f.errorCount > 0}
+                  <button class="rebuild" onclick={() => app.rebuildFeed(f.id)}>Rebuild its parser</button>
+                {/if}
               </div>
               <div class="health">
                 <Pulse days={f.cadence} label={f.title} />
@@ -308,6 +314,24 @@
 {/if}
 
 <style>
+  .kind {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--accent-wash-strong);
+    color: var(--accent);
+    font-size: calc(10.5px * var(--ui-scale));
+    font-weight: 600;
+    line-height: 16px;
+    vertical-align: 1px;
+  }
+  .rebuild {
+    justify-self: start;
+    color: var(--accent);
+    font-size: calc(12px * var(--ui-scale));
+    font-weight: 500;
+  }
   .manage {
     position: relative;
     display: flex;

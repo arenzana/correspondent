@@ -8,18 +8,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/arenzana/correspondent/internal/imgproxy"
 	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/opml"
+	"github.com/arenzana/correspondent/internal/pagefeed"
 	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
+	"github.com/arenzana/correspondent/internal/secretbox"
 	"github.com/arenzana/correspondent/internal/store"
 	"github.com/arenzana/correspondent/internal/version"
 )
@@ -43,8 +47,16 @@ type API struct {
 	// Images, when set, routes article images, thumbnails and feed icons
 	// through the server so third parties never see the reader.
 	Images *imgproxy.Proxy
+	// Keyring seals readers' AI keys; nil turns AI page reading off.
+	Keyring *secretbox.Box
+	// AITransport carries requests to AI providers (the fetcher's guarded
+	// transport); AIOptions add Anthropic client options (tests).
+	AITransport http.RoundTripper
+	AIOptions   []option.RequestOption
 
-	hub hub
+	hub    hub
+	aiOnce sync.Once
+	ai     *ratelimit.Limiter
 }
 
 func (a *API) Handler() http.Handler {
@@ -62,10 +74,14 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/entries/{id}/full", a.auth(a.revertFullArticle))
 	mux.HandleFunc("POST /api/v1/entries/mark-all-read", a.auth(a.markAllRead))
 	mux.HandleFunc("POST /api/v1/discover", a.auth(a.discover))
+	mux.HandleFunc("POST /api/v1/discover/ai", a.auth(a.discoverAI))
+	mux.HandleFunc("PUT /api/v1/ai", a.auth(a.putAI))
+	mux.HandleFunc("DELETE /api/v1/ai", a.auth(a.deleteAI))
 	mux.HandleFunc("POST /api/v1/feeds", a.auth(a.subscribe))
 	mux.HandleFunc("PATCH /api/v1/feeds/{id}", a.auth(a.updateFeed))
 	mux.HandleFunc("DELETE /api/v1/feeds/{id}", a.auth(a.deleteFeed))
 	mux.HandleFunc("POST /api/v1/feeds/{id}/refresh", a.auth(a.refreshFeed))
+	mux.HandleFunc("POST /api/v1/feeds/{id}/rebuild", a.auth(a.rebuildFeed))
 	mux.HandleFunc("POST /api/v1/folders", a.auth(a.createFolder))
 	mux.HandleFunc("PATCH /api/v1/folders/{id}", a.auth(a.renameFolder))
 	mux.HandleFunc("DELETE /api/v1/folders/{id}", a.auth(a.deleteFolder))
@@ -150,7 +166,17 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	cfg, _, hasAI, err := a.aiConfig(r.Context(), u.ID)
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+	var ai any
+	if hasAI {
+		ai = cfg
+	}
 	reply(w, map[string]any{"username": u.Username, "hasApiPassword": u.HasAPI, "prefs": json.RawMessage(u.Prefs),
+		"aiAvailable": a.Keyring != nil, "ai": ai,
 		// Only signed-in users learn the version, so it isn't advertised publicly.
 		"version": version.Version, "commit": version.Commit})
 }
@@ -343,17 +369,223 @@ func (a *API) discover(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
-	c, err := a.Ingest.Discover(ctx, in.URL)
-	if err != nil {
+	c, err := a.Ingest.Discover(ctx, userID(r), in.URL)
+	if err != nil && !errors.Is(err, ingest.ErrNoFeed) {
 		fail(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
+	a.replyCandidates(w, c)
+}
+
+// discoverAI finds a parser for a page with no feed: the server's own if
+// it has one that works, else one written by the reader's AI (which costs
+// money, so each reader gets a few a day).
+func (a *API) discoverAI(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URL string
+		// Rebuild asks for a new parser even if the server has one (which
+		// read the page poorly); a working built-in one is kept.
+		Rebuild bool
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	uid := userID(r)
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
+	defer cancel()
+	c, err := a.Ingest.DiscoverAI(ctx, uid, in.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) }, in.Rebuild)
+	if err != nil {
+		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
+		return
+	}
+	a.replyCandidates(w, []ingest.Candidate{c})
+}
+
+// rebuildFeed writes a new parser for a page feed whose page changed:
+// exactly if possible, else with the reader's AI. Every reader of the page
+// gets the new parser.
+func (a *API) rebuildFeed(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	uid := userID(r)
+	f, err := a.Store.Feed(r.Context(), uid, id)
+	if err != nil {
+		a.result(w, err)
+		return
+	}
+	if !f.Page {
+		fail(w, http.StatusBadRequest, "Only feeds built from a page can be rebuilt.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
+	defer cancel()
+	_, err = a.Ingest.Rebuild(ctx, uid, f.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) })
+	if err != nil {
+		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
+		return
+	}
+	if _, err := a.Ingest.SubscribePage(ctx, uid, f.URL, f.Title, f.FolderID); err != nil {
+		a.internal(w, err)
+		return
+	}
+	f, _ = a.Store.Feed(r.Context(), uid, id)
+	reply(w, map[string]any{"feed": f})
+}
+
+// AIPerDay is how many AI page readings each user may ask for per day.
+const AIPerDay = 20
+
+func (a *API) aiLimit() *ratelimit.Limiter {
+	a.aiOnce.Do(func() { a.ai = ratelimit.New(AIPerDay, 24*time.Hour) })
+	return a.ai
+}
+
+func (a *API) replyCandidates(w http.ResponseWriter, c []ingest.Candidate) {
 	for i := range c {
 		c[i].IconURL = a.image(c[i].IconURL, iconWidth)
 	}
+	if c == nil {
+		c = []ingest.Candidate{}
+	}
 	reply(w, map[string]any{"candidates": c})
+}
+
+const aiContext = "user:%d:ai-key"
+
+// aiConfig reads a user's AI setup; ok is false when none is saved.
+func (a *API) aiConfig(ctx context.Context, uid int64) (cfg pagefeed.Config, sealed []byte, ok bool, err error) {
+	sealed, raw, err := a.Store.AI(ctx, uid)
+	if err != nil || sealed == nil || raw == "" {
+		return cfg, nil, false, err
+	}
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return cfg, nil, false, err
+	}
+	return cfg, sealed, true, nil
+}
+
+// suggester returns an AI client with the user's own key.
+func (a *API) suggester(ctx context.Context, uid int64) (*pagefeed.Suggester, error) {
+	if a.Keyring == nil {
+		return nil, pagefeed.ErrAIUnavailable
+	}
+	cfg, sealed, ok, err := a.aiConfig(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("set up AI in Settings first")
+	}
+	key, err := a.Keyring.Open(sealed, fmt.Sprintf(aiContext, uid))
+	if err != nil {
+		return nil, err
+	}
+	return pagefeed.NewSuggester(cfg, string(key), a.aiTransport(), a.AIOptions...)
+}
+
+func (a *API) aiTransport() http.RoundTripper {
+	if a.AITransport != nil {
+		return a.AITransport
+	}
+	return http.DefaultTransport
+}
+
+// AIForApps gives apps (Reeder adding a site) the reader's AI, within the
+// same daily limit as the web app.
+func (a *API) AIForApps(ctx context.Context, uid int64) (*pagefeed.Suggester, error) {
+	ai, err := a.suggester(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	key := fmt.Sprintf("ai:%d", uid)
+	if !a.aiLimit().Allow(key) {
+		return nil, errors.New("the AI's limit for today is reached")
+	}
+	a.aiLimit().Fail(key)
+	return ai, nil
+}
+
+// putAI checks a reader's AI setup with the provider and stores it, the
+// key sealed. The key is never sent back; only its last four characters
+// are shown. Leaving the key empty keeps the saved one.
+func (a *API) putAI(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		pagefeed.Config
+		Key string `json:"key"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if a.Keyring == nil {
+		fail(w, http.StatusNotImplemented, "AI isn't available on this server.")
+		return
+	}
+	uid := userID(r)
+	cfg, err := in.Config.Normalize()
+	if err != nil {
+		fail(w, http.StatusBadRequest, sentence(err.Error()))
+		return
+	}
+	key := strings.TrimSpace(in.Key)
+	if key == "" {
+		old, sealed, ok, err := a.aiConfig(r.Context(), uid)
+		if err != nil || !ok {
+			fail(w, http.StatusBadRequest, "Enter your API key.")
+			return
+		}
+		plain, err := a.Keyring.Open(sealed, fmt.Sprintf(aiContext, uid))
+		if err != nil {
+			fail(w, http.StatusBadRequest, sentence(err.Error()))
+			return
+		}
+		key, cfg.KeyHint = string(plain), old.KeyHint
+	} else if len(key) < 20 || len(key) > 400 || strings.ContainsAny(key, " \t\r\n") {
+		fail(w, http.StatusBadRequest, "That doesn't look like an API key.")
+		return
+	} else {
+		cfg.KeyHint = key[len(key)-4:]
+	}
+	ai, err := pagefeed.NewSuggester(cfg, key, a.aiTransport(), a.AIOptions...)
+	if err != nil {
+		fail(w, http.StatusBadRequest, sentence(err.Error()))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if err := ai.Verify(ctx); err != nil {
+		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
+		return
+	}
+	raw, _ := json.Marshal(cfg)
+	if err := a.Store.SetAI(r.Context(), uid, a.Keyring.Seal([]byte(key), fmt.Sprintf(aiContext, uid)), string(raw)); err != nil {
+		a.internal(w, err)
+		return
+	}
+	reply(w, map[string]any{"ai": cfg})
+}
+
+func (a *API) deleteAI(w http.ResponseWriter, r *http.Request) {
+	if err := a.Store.SetAI(r.Context(), userID(r), nil, ""); err != nil {
+		a.internal(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// sentence capitalizes an error and ends it with a full stop.
+func sentence(s string) string {
+	if s == "" {
+		return s
+	}
+	s = strings.ToUpper(s[:1]) + s[1:]
+	if !strings.HasSuffix(s, ".") {
+		s += "."
+	}
+	return s
 }
 
 func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
@@ -362,6 +594,9 @@ func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 		Title      string `json:"title"`
 		FolderID   *int64 `json:"folderId"`
 		FolderName string `json:"folderName"`
+		// Page follows a web page that has no feed, with the parser that
+		// discovery found or wrote for it.
+		Page bool `json:"page"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -379,7 +614,13 @@ func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 		}
 		in.FolderID = &id
 	}
-	id, err := a.Ingest.Subscribe(r.Context(), uid, in.URL, in.Title, in.FolderID)
+	var id int64
+	var err error
+	if in.Page {
+		id, err = a.Ingest.SubscribePage(r.Context(), uid, in.URL, in.Title, in.FolderID)
+	} else {
+		id, err = a.Ingest.Subscribe(r.Context(), uid, in.URL, in.Title, in.FolderID)
+	}
 	if err != nil {
 		a.internal(w, err)
 		return

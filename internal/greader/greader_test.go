@@ -49,9 +49,10 @@ func TestMicroseconds(t *testing.T) {
 }
 
 type client struct {
-	t    *testing.T
-	base string
-	auth string
+	t      *testing.T
+	base   string
+	auth   string
+	server *Server
 }
 
 func (c *client) do(method, path string, form url.Values) (int, string) {
@@ -121,9 +122,10 @@ func setup(t *testing.T) (*client, *store.Store, []int64) {
 		t.Fatal(err)
 	}
 	ids, _, _ := st.EntryIDs(ctx, store.Filter{UserID: uid, Oldest: true})
-	srv := httptest.NewServer(&Server{Store: st, Log: slog.New(slog.DiscardHandler)})
+	gs := &Server{Store: st, Log: slog.New(slog.DiscardHandler)}
+	srv := httptest.NewServer(gs)
 	t.Cleanup(srv.Close)
-	return &client{t: t, base: srv.URL}, st, ids
+	return &client{t: t, base: srv.URL, server: gs}, st, ids
 }
 
 func TestReaderFlow(t *testing.T) {

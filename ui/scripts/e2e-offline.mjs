@@ -37,9 +37,18 @@ ${items.map((it) => `<item><title>${it.title}</title><link>${FEEDS}/${it.n}</lin
 <pubDate>${it.date}</pubDate><description><![CDATA[${it.body}]]></description></item>`).join('\n')}
 </channel></rss>`
 
+// A site with no feed: a listing of headlines under /lab/, and the posts.
+const labPage = `<html><head><title>Lab notes</title></head><body>${[1, 2, 3]
+  .map((n) => `<div><a href="/lab/note-${n}"><h2>Lab note number ${n}, in full</h2></a><time datetime="2026-10-0${n}">x</time></div>`)
+  .join('')}</body></html>`
+const labArticle = (path) => `<html><head><title>${path}</title></head><body><article><h1>${path}</h1><p>${
+  'The whole lab note, as published on its own page, with every detail the listing leaves out. '.repeat(5)}</p></article></body></html>`
+
 const fixtures = createServer((req, res) => {
   if (req.url === '/feed.xml') res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(rss)
   else if (req.url === '/wide.svg') res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(wideSVG)
+  else if (req.url === '/lab') res.writeHead(200, { 'Content-Type': 'text/html' }).end(labPage)
+  else if (req.url.startsWith('/lab/')) res.writeHead(200, { 'Content-Type': 'text/html' }).end(labArticle(req.url))
   else res.writeHead(404).end()
 })
 
@@ -243,6 +252,26 @@ try {
   await page.getByText('Deleted Renamed Wire.').waitFor({ timeout: 5_000 })
   const after = await page.evaluate(async () => (await (await fetch('/api/v1/tree')).json()).feeds.length)
   check(after === 0, 'deleting a feed after confirming removes it')
+
+  console.log('Sites without feeds')
+  await page.keyboard.press('Escape')
+  await page.goto(APP + '/#/manage')
+  await page.reload()
+  await page.getByRole('button', { name: 'Add feed' }).first().click()
+  const dialog = page.getByRole('dialog', { name: 'Add feed' })
+  await dialog.locator('#feed-url').fill(FEEDS + '/lab')
+  await dialog.getByRole('button', { name: 'Find feeds' }).click()
+  await dialog.getByText(/No feed: read from the page/).waitFor({ timeout: 15_000 })
+  check(await dialog.getByText('Lab note number 2, in full').isVisible(), 'a site without a feed is read from its page, with sample titles')
+  await dialog.getByRole('button', { name: 'Subscribe' }).click()
+  await dialog.waitFor({ state: 'detached', timeout: 15_000 })
+  const labFeed = await page.evaluate(async () => (await (await fetch('/api/v1/tree')).json()).feeds.find((f) => f.page))
+  check(labFeed && labFeed.total === 3 && labFeed.fullText, 'subscribing follows the page, with full articles')
+  await page.goto(APP + '/#/manage')
+  await page.reload()
+  check(await page.locator('.manage .row .kind').first().isVisible(), 'Subscriptions marks it as a page')
+  const full = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=all&content=1')).json()).entries.filter((e) => e.fullText).length)
+  check(full === 3, `its articles arrive in full (${full} of 3)`)
 
   console.log('Notifications')
   // Deliver a push message to the service worker through DevTools, as a push

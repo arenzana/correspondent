@@ -36,6 +36,21 @@ func (s *Store) CreateUser(ctx context.Context, username, password string) (int6
 
 // SetAPIPassword sets the separate password used by Reeder and other Google
 // Reader clients. The web password never authenticates the API.
+// SetAI stores a user's sealed AI key and AI config (JSON); nil and "" clear
+// them.
+func (s *Store) SetAI(ctx context.Context, userID int64, sealed []byte, config string) error {
+	return checkAffected(s.db.ExecContext(ctx, `UPDATE users SET ai_key = ?, ai_config = ? WHERE id = ?`, sealed, config, userID))
+}
+
+// AI returns a user's sealed AI key (nil if none) and AI config.
+func (s *Store) AI(ctx context.Context, userID int64) (sealed []byte, config string, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT ai_key, ai_config FROM users WHERE id = ?`, userID).Scan(&sealed, &config)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return sealed, config, err
+}
+
 func (s *Store) SetAPIPassword(ctx context.Context, userID int64, password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

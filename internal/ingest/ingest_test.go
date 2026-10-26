@@ -165,15 +165,15 @@ func TestDiscover(t *testing.T) {
 	svc, _, _ := newService(t)
 	ctx := context.Background()
 
-	got, err := svc.Discover(ctx, fs.URL+"/page")
+	got, err := svc.Discover(ctx, 0, fs.URL+"/page")
 	if err != nil || len(got) != 1 || got[0].URL != fs.URL+"/feed" || got[0].ItemCount != 2 {
 		t.Fatalf("from page: %+v %v", got, err)
 	}
-	got, err = svc.Discover(ctx, fs.URL+"/feed")
+	got, err = svc.Discover(ctx, 0, fs.URL+"/feed")
 	if err != nil || len(got) != 1 || got[0].Title != "Test feed" {
 		t.Fatalf("direct feed: %+v %v", got, err)
 	}
-	if _, err := svc.Discover(ctx, fs.URL+"/nofeed"); err == nil {
+	if _, err := svc.Discover(ctx, 0, fs.URL+"/nofeed"); err == nil {
 		t.Fatal("page without feeds returned candidates")
 	}
 }

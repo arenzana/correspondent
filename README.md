@@ -18,7 +18,16 @@ clients are concerned.
 - **Works offline.** Install it as an app; unread and starred articles are
   kept on the device, and changes made offline sync when you reconnect.
 - **Full articles.** For feeds that publish only titles or summaries, fetch
-  the article from its page, per article or for every new one in a feed.
+  the article from its page, per article or for every new one in a feed;
+  new feeds that turn out to be summaries switch on by themselves.
+- **Sites without feeds.** Add a page that lists articles (a lab's research
+  page, a company blog) and Correspondent reads it like a feed. It finds the
+  articles exactly where it can (microformats, structured data, link
+  patterns); otherwise your own AI (Anthropic, or any OpenAI-compatible
+  service) writes a parser for the page, once. Parsers are shared by everyone
+  on the server and ship built in for popular AI labs; checking for new
+  articles never uses AI, and the model only ever returns CSS selectors,
+  which are checked against the page before use. Works from Reeder too.
 - **Notifications you choose.** Off by default; turn them on per device and
   pick feeds with the bell.
 - **Live across devices.** Read something in Reeder and it updates in the
@@ -65,6 +74,11 @@ The first start creates the account named by `CORRESPONDENT_USER` from the
 secret files; passwords are only ever read from files. Put it behind a
 TLS-terminating proxy and set `CORRESPONDENT_TRUSTED_PROXIES` to the proxy's
 range. Useful commands inside the container:
+
+The data directory also holds `keyring`, the key that encrypts readers' AI
+API keys, and `imgcache/`. Keep both out of backups: without the keyring a
+backup holds no usable API key (readers enter theirs again after a
+restore), and the image cache refills itself.
 
 ```sh
 docker compose exec correspondent /correspondent backup /data/backup-$(date +%F).db
@@ -125,11 +139,6 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- Feeds for sites without one (for example a company's research page):
-  exact methods first (h-feed, JSON-LD, sitemaps, link patterns), then an
-  AI model, asked once per site, that works out extraction rules which are
-  then applied deterministically on every poll. The model only ever returns
-  validated selectors, never code; its API key is optional.
 - A reworked Settings: a full page with clear sections (reading,
   appearance, feeds and folders, apps and sync, data and backups, about),
   feed management with health and cadence, and live previews.

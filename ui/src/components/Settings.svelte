@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, APP_ICONS } from '../lib/state.svelte'
-  import { api } from '../lib/api'
+  import { api, type AIProvider } from '../lib/api'
   import { deviceSubscribed, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
   import Modal from './Modal.svelte'
   import TextControls from './TextControls.svelte'
@@ -65,6 +65,43 @@
       apiMessage = 'Saved. Use it as the password in Reeder.'
     } catch (err) {
       apiMessage = (err as Error).message
+    }
+  }
+
+  // AI for sites without feeds: the reader's own provider and key.
+  let aiProvider = $state<AIProvider>(app.ai?.provider ?? 'anthropic')
+  let aiModel = $state(app.ai?.model ?? '')
+  let aiBase = $state(app.ai?.baseUrl ?? '')
+  let aiKey = $state('')
+  let aiBusy = $state(false)
+  let aiMessage = $state('')
+
+  async function saveAI(e: SubmitEvent) {
+    e.preventDefault()
+    aiBusy = true
+    aiMessage = ''
+    try {
+      const { ai } = await api.setAI({ provider: aiProvider, model: aiModel.trim(), baseUrl: aiBase.trim(), key: aiKey.trim() })
+      app.ai = ai
+      aiModel = ai.model
+      aiKey = ''
+      aiMessage = 'Saved and checked with the provider.'
+    } catch (err) {
+      aiMessage = (err as Error).message
+    } finally {
+      aiBusy = false
+    }
+  }
+
+  async function removeAI() {
+    aiMessage = ''
+    try {
+      await api.deleteAI()
+      app.ai = null
+      aiKey = aiModel = aiBase = ''
+      aiMessage = 'Removed. Your key is no longer stored.'
+    } catch (err) {
+      aiMessage = (err as Error).message
     }
   }
 
@@ -139,6 +176,47 @@
       </div>
       <p class="hint">Changes the browser tab and home-screen icon. An installed app updates its icon when your device next checks; on iPhone, add it to the Home Screen again.</p>
     </section>
+
+    {#if app.aiAvailable}
+      <section>
+        <h3>AI for sites without feeds</h3>
+        <p class="hint">
+          When a site you add has no feed and its articles can’t be found on the page, your AI writes a parser for it,
+          once. Everyone on this server who follows that page shares it, and checking for new articles never uses AI.
+          It also reads sites added from Reeder.
+        </p>
+        <form class="ai" onsubmit={saveAI}>
+          <label>
+            <span>Provider</span>
+            <select class="field" bind:value={aiProvider}>
+              <option value="anthropic">Anthropic</option>
+              <option value="openai">OpenAI or compatible</option>
+            </select>
+          </label>
+          <label>
+            <span>Model</span>
+            <input class="field" bind:value={aiModel} autocomplete="off" spellcheck="false"
+              placeholder={aiProvider === 'anthropic' ? 'claude-opus-5-5' : 'Model name'} required={aiProvider === 'openai'} />
+          </label>
+          <label class="wide">
+            <span>Address <small>(optional, for a compatible service)</small></span>
+            <input class="field" type="url" bind:value={aiBase} autocomplete="off" spellcheck="false"
+              placeholder={aiProvider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'} />
+          </label>
+          <label class="wide">
+            <span>API key</span>
+            <input class="field" type="password" bind:value={aiKey} autocomplete="off" spellcheck="false"
+              placeholder={app.ai?.keyHint ? `Saved key ending ${app.ai.keyHint}` : 'Paste your API key'} required={!app.ai} />
+          </label>
+          <div class="ai-actions wide">
+            <button class="btn primary" disabled={aiBusy}>{aiBusy ? 'Checking…' : 'Save'}</button>
+            {#if app.ai}<button type="button" class="btn" onclick={removeAI}>Remove</button>{/if}
+          </div>
+        </form>
+        <p class="hint">The key is checked with the provider, stored encrypted, and never shown again. Up to 20 AI requests a day.</p>
+        {#if aiMessage}<p class="msg" role="status">{aiMessage}</p>{/if}
+      </section>
+    {/if}
 
     <section>
       <h3>Reeder and other apps</h3>
@@ -263,6 +341,34 @@
   .about {
     margin: 16px 0 0;
     font-size: calc(12.5px * var(--ui-scale));
+  }
+  .ai {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    margin: 12px 0 0;
+  }
+  .ai label {
+    display: grid;
+    gap: 4px;
+    font-size: calc(12.5px * var(--ui-scale));
+    font-weight: 560;
+  }
+  .ai label small {
+    font-weight: 400;
+    color: var(--slate);
+  }
+  .ai .wide {
+    grid-column: 1 / -1;
+  }
+  .ai-actions {
+    display: flex;
+    gap: 8px;
+  }
+  @media (max-width: 499px) {
+    .ai {
+      grid-template-columns: 1fr;
+    }
   }
   .check {
     display: flex;
