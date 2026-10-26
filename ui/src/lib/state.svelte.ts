@@ -891,16 +891,24 @@ class AppState {
   }
 
   /** Fetch full articles for every new article in a feed (and its latest ones now). */
-  async setFeedFullText(id: number, on: boolean) {
+  async setFeedFullText(id: number, on: boolean): Promise<boolean> {
     const feed = this.feeds.find((f) => f.id === id)
     if (feed) feed.fullText = on
     try {
       await api.updateFeed(id, { fullText: on })
       this.toast(on ? `Fetching full articles for ${feed?.title ?? 'this feed'}. Recent ones are on their way.` : 'Back to the text the feed publishes.')
+      return true
     } catch (e) {
       if (feed) feed.fullText = !on
       this.toast(`Couldn't change it. ${(e as Error).message}`)
+      return false
     }
+  }
+
+  /** Fetch every article of a feed in full, starting with the open one. */
+  async fullTextForFeed(id: number) {
+    if (!(await this.setFeedFullText(id, true))) return
+    if (this.article?.entry.feedId === id && !this.article.entry.fullText) await this.loadFullArticle()
   }
 
   /** Opt the feed in or out of notifications. */

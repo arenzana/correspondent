@@ -193,6 +193,18 @@ try {
   check(reading.pageX === 0 && reading.pageY === 0 && reading.paneX === 0 && reading.barTop === 0, 'dragging the article never moves the page or its toolbar')
   await mobile.getByRole('button', { name: 'Back to articles' }).tap()
   check(await mobile.locator('nav.tabbar').isVisible(), 'and comes back with the list')
+  // A summary-only article offers full articles for the whole feed.
+  await tabbar.getByRole('button', { name: 'Unread' }).tap()
+  await mobile.locator('.wire .row .hit').first().tap()
+  const always = mobile.getByRole('button', { name: /Always load full articles from Wire Service/ })
+  await always.waitFor()
+  if (process.env.SHOT) await mobile.screenshot({ path: process.env.SHOT })
+  check(await always.isVisible(), 'a summary offers full articles for its whole feed')
+  await always.tap()
+  await mobile.getByText(/Fetching full articles for Wire Service/).waitFor()
+  const fullOn = await mobile.evaluate(async () => (await (await fetch('/api/v1/tree')).json()).feeds[0].fullText)
+  check(fullOn && !(await always.isVisible()), 'which turns it on for the feed')
+  await mobile.getByRole('button', { name: 'Back to articles' }).tap()
   await phone.close()
 
   console.log('Subscriptions')

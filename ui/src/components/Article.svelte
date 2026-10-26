@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte'
   import { longDate, readingMinutes } from '../lib/time'
+  import { looksPartial as isPartial } from '../lib/partial'
   import Icon from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import ReadingSettings from './ReadingSettings.svelte'
@@ -11,10 +12,8 @@
   const a = $derived(app.article)
   const feed = $derived(a ? app.feedById.get(a.entry.feedId) : undefined)
   const minutes = $derived(a?.entry.content ? readingMinutes(a.entry.content) : 0)
-  // A short body usually means the feed publishes only a summary.
   const looksPartial = $derived(
-    !!a && !!a.entry.url && !a.entry.fullText && a.entry.content !== undefined &&
-      a.entry.content.replace(/<[^>]+>/g, '').trim().length < 600,
+    !!a && !!a.entry.url && !a.entry.fullText && a.entry.content !== undefined && isPartial(a.entry.content),
   )
   const position = $derived(app.selectedIndex >= 0 ? `${app.selectedIndex + 1} of ${app.entries.length}${app.cursor ? '+' : ''}` : '')
   const audio = $derived(a?.enclosures.filter((e) => e.type.startsWith('audio/')) ?? [])
@@ -147,7 +146,10 @@
         {:else}
           {#if a.entry.fullText}
             <p class="source-note">Full article from <a href={a.entry.url} target="_blank" rel="noopener noreferrer">{new URL(a.entry.url).hostname}</a>.
-              <button class="link" onclick={() => app.showFeedText()}>Show the feed text</button></p>
+              <button class="link" onclick={() => app.showFeedText()}>Show the feed text</button>
+              {#if feed && !feed.fullText}
+                <button class="link" onclick={() => app.setFeedFullText(feed.id, true)}>Do this for every article from {feed.title}</button>
+              {/if}</p>
           {/if}
           {#if a.entry.content}
             <!-- Content is sanitized server-side by an allowlist before storage. -->
@@ -163,6 +165,12 @@
                 </button>
                 <a class="btn" href={a.entry.url} target="_blank" rel="noopener noreferrer">Read it on the site</a>
               </div>
+              {#if feed && !feed.fullText}
+                <button class="always" disabled={app.fetchingFull} onclick={() => app.fullTextForFeed(feed.id)}>
+                  <Icon name="article" size={16} />
+                  <span><span class="t">Always load full articles from {feed.title}</span><small>New articles arrive complete, here and in your apps.</small></span>
+                </button>
+              {/if}
             </div>
           {/if}
         {/if}
@@ -433,6 +441,37 @@
   }
   .partial-actions .btn {
     text-decoration: none;
+  }
+  .always {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    text-align: left;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .always :global(svg) {
+    flex: none;
+    margin-top: 2px;
+    color: var(--accent);
+  }
+  .always small {
+    display: block;
+    margin-top: 2px;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--slate);
+  }
+  @media (hover: hover) {
+    .always:hover .t {
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
   }
   .skeleton {
     display: grid;

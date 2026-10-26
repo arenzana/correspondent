@@ -153,6 +153,20 @@ describe('full articles', () => {
     expect(api.updateFeed).toHaveBeenLastCalledWith(1, { fullText: true })
     expect(app.feeds[0].fullText).toBe(true)
   })
+
+  it('turns full articles on for the open article\'s feed and loads it in full', async () => {
+    app.entries = [entry('7')]
+    app.selectedId = '7'
+    app.article = { entry: { ...entry('7', { url: 'https://x.example/7' }), content: '<p>teaser…</p>' }, enclosures: [] }
+    vi.mocked(api.updateFeed).mockRejectedValueOnce(new ApiError(500, 'Down.'))
+    await app.fullTextForFeed(app.article.entry.feedId)
+    expect(api.fullArticle).not.toHaveBeenCalled()
+    vi.mocked(api.updateFeed).mockResolvedValueOnce(undefined)
+    vi.mocked(api.fullArticle).mockResolvedValue({ entry: { ...entry('7'), content: '<p>whole</p>', fullText: true }, enclosures: [] })
+    await app.fullTextForFeed(app.article.entry.feedId)
+    expect(api.updateFeed).toHaveBeenLastCalledWith(app.article.entry.feedId, { fullText: true })
+    expect(app.article?.entry.content).toBe('<p>whole</p>')
+  })
 })
 
 describe('subscription management', () => {

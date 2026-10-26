@@ -7,6 +7,8 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
 ### Added
 
 - An image proxy. Article pictures, list thumbnails and feed icons now load
@@ -19,6 +21,11 @@ change behaviour; the Google Reader API stays compatible throughout.
   from this server only. Cached images live in `imgcache/` beside the
   database (512 MB by default, `CORRESPONDENT_IMAGE_CACHE_MB`; `0` turns the
   proxy off). Reeder is unaffected.
+- Full articles for a whole feed, offered where you notice the need: an
+  article that looks like a summary now has "Always load full articles from
+  <feed>", which turns it on for the feed and loads the open article in full
+  (after "Load the full article" too). Summaries are recognised by length
+  and by endings such as "…", "Read more" or "Continue reading".
 - A tab bar on phones (Feeds, Unread, Starred, Search, Settings), so every
   menu is reachable; it steps aside while an article is open.
 
@@ -149,7 +156,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/arenzana/correspondent/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/arenzana/correspondent/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/arenzana/correspondent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arenzana/correspondent/compare/v0.3.0...v0.4.0
