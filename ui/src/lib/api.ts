@@ -97,6 +97,8 @@ async function request<T>(method: string, path: string, body?: unknown, raw = fa
 }
 
 export interface EntryQuery {
+  /** Include full article HTML (for offline reading). */
+  content?: boolean
   view?: 'unread' | 'all' | 'starred' | 'today'
   feed?: number
   folder?: number
@@ -108,7 +110,10 @@ export interface EntryQuery {
 
 function qs(q: object): string {
   const p = new URLSearchParams()
-  for (const [k, v] of Object.entries(q)) if (v !== undefined && v !== '' && v !== 0) p.set(k, String(v))
+  for (const [k, v] of Object.entries(q)) {
+    if (v === undefined || v === '' || v === 0 || v === false) continue
+    p.set(k, v === true ? '1' : String(v))
+  }
   const s = p.toString()
   return s ? '?' + s : ''
 }

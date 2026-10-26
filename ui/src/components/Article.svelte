@@ -172,8 +172,8 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 52px;
-    padding: 0 10px;
+    min-height: calc(52px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 10px 0;
     border-bottom: 1px solid var(--rule);
   }
   .position {
@@ -202,6 +202,7 @@
     overflow-y: auto;
     scrollbar-gutter: stable;
     outline: none;
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .column {
     max-width: calc(var(--read-measure) + 64px);

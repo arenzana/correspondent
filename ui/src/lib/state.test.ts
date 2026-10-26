@@ -1,7 +1,9 @@
+import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry } from './api'
 
-vi.mock('./api', () => ({
+vi.mock('./api', async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import('./api')>()).ApiError,
   api: {
     setState: vi.fn(),
     markAllRead: vi.fn(),
@@ -12,15 +14,20 @@ vi.mock('./api', () => ({
   },
 }))
 
-const { api } = await import('./api')
+const { api, ApiError } = await import('./api')
 const { app } = await import('./state.svelte')
+const offline = await import('./offline/db')
+const networkDown = () => new TypeError('Failed to fetch')
 
 const entry = (id: string, over: Partial<Entry> = {}): Entry => ({
   id, feedId: 1, url: 'https://x.example/' + id, title: 'T' + id, author: '', excerpt: '',
   imageUrl: '', publishedAt: 1_790_000_000, updatedAt: 1_790_000_000, read: false, starred: false, ...over,
 })
 
-beforeEach(() => {
+beforeEach(async () => {
+  await offline.clear()
+  app.outboxCount = 0
+  app.online = true
   vi.mocked(api.tree).mockResolvedValue({ folders: [], feeds: [], counts: { unread: 0, starred: 0, today: 0, newest: '0' } })
   vi.mocked(api.savePrefs).mockResolvedValue(undefined)
   app.entries = [entry('1'), entry('2'), entry('3', { read: true })]
@@ -52,15 +59,15 @@ describe('optimistic mutations', () => {
   })
 
   it('rolls back and explains when the server refuses', async () => {
-    vi.mocked(api.setState).mockRejectedValue(new Error('Server unavailable.'))
+    vi.mocked(api.setState).mockRejectedValue(new ApiError(503, 'Server unavailable.'))
     await app.setRead(['1'], true)
     expect(app.entries[0].read).toBe(false)
     expect(app.counts.unread).toBe(2)
     expect(app.toasts.at(-1)?.message).toMatch(/Couldn't update the article\. Server unavailable\./)
   })
 
-  it('rolls back a failed star', async () => {
-    vi.mocked(api.setState).mockRejectedValue(new Error('nope'))
+  it('rolls back a star the server refuses', async () => {
+    vi.mocked(api.setState).mockRejectedValue(new ApiError(400, 'nope'))
     await app.setStarred('2', true)
     expect(app.entries[1].starred).toBe(false)
     expect(app.counts.starred).toBe(0)
@@ -100,6 +107,53 @@ describe('changes from other clients', () => {
     vi.mocked(api.entries).mockResolvedValue({ entries: [entry('1', { read: true, starred: true }), entry('3')], cursor: '' })
     await app.resyncStates()
     expect(app.entries.map((e) => [e.id, e.read, e.starred])).toEqual([['1', true, true], ['2', false, false], ['3', false, false]])
+  })
+})
+
+describe('offline', () => {
+  it('queues a change instead of rolling it back when the network is down', async () => {
+    vi.mocked(api.setState).mockRejectedValue(networkDown())
+    await app.setRead(['1'], true)
+    expect(app.entries[0].read).toBe(true)
+    expect(app.counts.unread).toBe(1)
+    expect(app.outboxCount).toBe(1)
+    expect((await offline.pending())[0].op).toMatchObject({ kind: 'state', action: 'read', ids: ['1'] })
+    expect(app.toasts).toEqual([])
+  })
+
+  it('sends queued changes when the connection returns, then confirms', async () => {
+    vi.mocked(api.setState).mockRejectedValue(networkDown())
+    await app.setStarred('2', true)
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"changed":1}'))
+    vi.mocked(api.entries).mockResolvedValue({ entries: [], cursor: '' })
+    await app.flushNow()
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/entries/state', expect.objectContaining({ method: 'POST' }))
+    expect(app.outboxCount).toBe(0)
+    expect(app.toasts.at(-1)?.message).toBe('Synced your offline change.')
+  })
+
+  it('lists from the offline copy when the server is unreachable', async () => {
+    await offline.saveEntries([entry('7'), entry('8', { read: true })])
+    vi.mocked(api.entries).mockRejectedValue(networkDown())
+    await app.load() // the Unread view
+    expect(app.online).toBe(false)
+    expect(app.entries.map((e) => e.id)).toEqual(['7'])
+    expect(app.loadError).toBe('')
+  })
+
+  it('opens saved articles offline, and explains when one was not saved', async () => {
+    await offline.saveEntries([entry('7', { content: '<p>saved</p>' }), entry('8')])
+    vi.mocked(api.entry).mockRejectedValue(networkDown())
+    app.select('7', { push: false })
+    await vi.waitFor(() => expect(app.article?.entry.content).toBe('<p>saved</p>'))
+    app.select('8', { push: false })
+    await vi.waitFor(() => expect(app.articleError).toMatch(/wasn't saved for offline reading/))
+  })
+
+  it('still reports real server errors as errors', async () => {
+    vi.mocked(api.entries).mockRejectedValue(new ApiError(500, 'Something went wrong on the server.'))
+    await app.load()
+    expect(app.loadError).toBe('Something went wrong on the server.')
   })
 })
 

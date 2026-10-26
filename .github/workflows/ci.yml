@@ -45,6 +45,8 @@ jobs:
         run: |
           CGO_ENABLED=0 go build -o bin/correspondent ./cmd/correspondent
           test/migration/rehearse.sh
+      - name: PWA offline end to end (Chrome)
+        run: cd ui && node scripts/e2e-offline.mjs
       - name: Vulnerabilities
         run: |
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...

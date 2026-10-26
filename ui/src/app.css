@@ -116,6 +116,14 @@ body {
   height: 100%;
 }
 
+/* Installed on a phone the app draws edge to edge (viewport-fit=cover);
+   pane headers and footers add env(safe-area-inset-*) to their own padding
+   to stay clear of the notch and home indicator. */
+.shell {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 button,
 input,
 select,

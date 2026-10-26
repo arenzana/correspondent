@@ -100,6 +100,12 @@
     <div class="titles">
       <h1>{app.title}</h1>
       <p class="sub">
+        {#if !app.online}
+          <span class="chip" title={app.syncedAt ? `Offline copy from ${new Date(app.syncedAt).toLocaleString()}` : 'No offline copy yet'}>Offline</span>
+        {/if}
+        {#if app.outboxCount > 0}
+          <span class="chip">{app.outboxCount} {app.outboxCount === 1 ? 'change' : 'changes'} waiting</span>
+        {/if}
         {#if app.loading && !app.entries.length}
           Loading…
         {:else if app.unreadFilter || app.source.kind === 'view'}
@@ -246,7 +252,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 12px 12px 18px;
+    padding: calc(14px + env(safe-area-inset-top)) 12px 12px 18px;
     border-bottom: 1px solid var(--rule);
   }
   .titles {
@@ -269,6 +275,18 @@
     margin: 2px 0 0;
     color: var(--slate);
     font-size: 12.5px;
+  }
+  .chip {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 0 7px;
+    border-radius: 9px;
+    font-size: 11.5px;
+    font-weight: 560;
+    line-height: 18px;
+    color: var(--ink);
+    background: var(--fog);
+    box-shadow: inset 0 0 0 1px var(--rule);
   }
   .tools {
     display: flex;
@@ -342,6 +360,7 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding-bottom: env(safe-area-inset-bottom);
     scrollbar-width: thin;
     /* The spine runs the full height of the list. */
     background:

@@ -1,9 +1,18 @@
 // Application state. One reactive object, shared by every component.
 // Mutations are optimistic: the UI changes immediately and rolls back if the
-// server refuses.
+// server refuses. Without a network, the reader works from its offline copy
+// (lib/offline) and queues changes until the connection returns.
 
-import { api, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
+import * as offline from './offline/db'
+import { flush as flushOutbox } from './offline/outbox'
+
+/**
+ * A failure to reach the server at all, as opposed to the server saying no:
+ * fetch rejects with a TypeError ("Failed to fetch", "Load failed", …).
+ */
+const isNetworkError = (e: unknown) => e instanceof TypeError && !(e instanceof ApiError)
 
 export type View = 'unread' | 'today' | 'starred' | 'all'
 export type Source = { kind: 'view'; view: View } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
@@ -68,6 +77,12 @@ class AppState {
   hasApiPassword = $state(false)
   version = $state('')
   commit = $state('')
+  /** Whether the server is reachable; the reader works offline when not. */
+  online = $state(typeof navigator === 'undefined' ? true : navigator.onLine)
+  /** Changes made offline, waiting to be sent. */
+  outboxCount = $state(0)
+  /** When the offline copy was last refreshed (ms), or null. */
+  syncedAt = $state<number | null>(null)
   prefs = $state<Prefs>(loadLocalPrefs())
 
   folders = $state<Folder[]>([])
@@ -123,7 +138,17 @@ class AppState {
   async boot() {
     this.applyPrefs()
     try {
-      const me = await api.me()
+      let me: Awaited<ReturnType<typeof api.me>>
+      try {
+        me = await api.me()
+        offline.setMeta('me', me).catch(() => {})
+      } catch (e) {
+        // Opened without a network: carry on from the offline copy if there is one.
+        const saved = isNetworkError(e) ? await offline.getMeta<typeof me>('me').catch(() => undefined) : undefined
+        if (!saved) throw e
+        me = saved
+        this.online = false
+      }
       this.user = me.username
       this.hasApiPassword = me.hasApiPassword
       this.version = me.version
@@ -133,6 +158,12 @@ class AppState {
       this.readHash()
       await Promise.all([this.refreshTree(), this.load()])
       this.listen()
+      this.watchConnection()
+      this.syncedAt = (await offline.getMeta<number>('syncedAt').catch(() => undefined)) ?? null
+      this.outboxCount = (await offline.pending().catch(() => [])).length
+      void this.flushNow()
+      // Refresh the offline copy as soon as the first screen is up.
+      void this.syncOffline()
     } catch {
       this.user = null
     } finally {
@@ -148,6 +179,9 @@ class AppState {
 
   async signOut() {
     await api.logout().catch(() => {})
+    // Leave nothing readable behind on a shared device.
+    await offline.clear().catch(() => {})
+    if ('caches' in window) for (const k of await caches.keys()) if (k.startsWith('correspondent-')) await caches.delete(k)
     location.hash = ''
     location.reload()
   }
@@ -167,6 +201,81 @@ class AppState {
     })
     this.events.addEventListener('resync', () => this.resyncStates())
   }
+
+  // ---------------------------------------------------------------- offline
+
+  private watchConnection() {
+    window.addEventListener('online', () => {
+      this.online = true
+      void this.flushNow().then(() => this.syncOffline())
+      if (this.loadError || !this.entries.length) void this.load()
+    })
+    window.addEventListener('offline', () => (this.online = false))
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void this.flushNow()
+    })
+    // While changes are waiting, keep trying (iOS has no Background Sync).
+    setInterval(() => {
+      if (this.outboxCount > 0) void this.flushNow()
+    }, 30_000)
+    setInterval(() => void this.syncOffline(), 15 * 60_000)
+  }
+
+  /** Queue a change made without a network. */
+  private async queue(op: offline.OutboxOp) {
+    await offline.enqueue(op)
+    this.outboxCount = (await offline.pending()).length
+    // Chrome/Android send it from the service worker even if the app closes.
+    navigator.serviceWorker?.ready
+      .then((r) => (r as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } }).sync?.register('outbox'))
+      .catch(() => {})
+  }
+
+  /** Send queued changes, then pick up the server's view of them. */
+  async flushNow() {
+    if (!this.outboxCount && !(await offline.pending().catch(() => [])).length) return
+    const r = await flushOutbox()
+    this.outboxCount = (await offline.pending()).length
+    if (r.stopped === 'offline') this.online = false
+    if (r.sent) {
+      this.online = true
+      this.refreshTreeSoon()
+      void this.resyncStates()
+      if (!this.outboxCount) this.toast(`Synced ${r.sent === 1 ? 'your offline change' : 'your offline changes'}.`)
+    }
+  }
+
+  private syncing = false
+  /**
+   * Refresh the offline copy: the feed tree, plus the full text of unread
+   * (up to 600) and starred (up to 300) articles, so they read offline.
+   */
+  async syncOffline() {
+    if (this.syncing || !this.online || !this.user) return
+    this.syncing = true
+    try {
+      for (const [view, pages] of [['unread', 6], ['starred', 3]] as const) {
+        let cursor = ''
+        for (let i = 0; i < pages; i++) {
+          const r = await api.entries({ view, content: true, limit: 100, cursor: cursor || undefined })
+          await offline.saveEntries(r.entries.map((e) => ({ ...e, content: e.content ?? '' })))
+          if (!r.cursor) break
+          cursor = r.cursor
+        }
+      }
+      // A plain snapshot: IndexedDB cannot store Svelte's reactive proxies.
+      await offline.saveTree($state.snapshot({ folders: this.folders, feeds: this.feeds, counts: this.counts }))
+      await offline.prune()
+      this.syncedAt = Date.now()
+      await offline.setMeta('syncedAt', this.syncedAt)
+    } catch (e) {
+      if (isNetworkError(e)) this.online = false
+    } finally {
+      this.syncing = false
+    }
+  }
+
+  private feedsInFolder = (folder: number) => new Set(this.feeds.filter((f) => f.folderId === folder).map((f) => f.id))
 
   private treeTimer: ReturnType<typeof setTimeout> | undefined
   private refreshTreeSoon() {
@@ -190,6 +299,7 @@ class AppState {
     if (!change) return
     if (action === 'read' && this.selectedId && ids.includes(this.selectedId)) clearTimeout(this.dwell)
     this.patch(ids, change)
+    offline.patchEntries(ids, change).catch(() => {})
     this.refreshTreeSoon()
   }
 
@@ -206,7 +316,10 @@ class AppState {
     })
   }
 
+  private syncSoonTimer: ReturnType<typeof setTimeout> | undefined
   private async onNewEntries() {
+    clearTimeout(this.syncSoonTimer)
+    this.syncSoonTimer = setTimeout(() => void this.syncOffline(), 60_000)
     const before = BigInt(this.counts.newest || '0')
     await this.refreshTree()
     const starred = this.source.kind === 'view' && this.source.view === 'starred'
@@ -287,7 +400,17 @@ class AppState {
   // ------------------------------------------------------------------ data
 
   async refreshTree() {
-    const t = await api.tree()
+    let t: offline.Tree
+    try {
+      t = await api.tree()
+      this.online = true
+      offline.saveTree(t).catch(() => {})
+    } catch (e) {
+      const saved = isNetworkError(e) ? await offline.loadTree().catch(() => undefined) : undefined
+      if (!saved) throw e
+      t = saved
+      this.online = false
+    }
     this.folders = t.folders
     this.feeds = t.feeds
     this.counts = t.counts
@@ -311,18 +434,30 @@ class AppState {
     try {
       const r = await api.entries({ ...this.query_(), limit: 60 })
       if (seq !== this.loadSeq) return
+      this.online = true
       this.entries = r.entries
       this.cursor = r.cursor
       this.boundary = r.entries.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), this.counts.newest || '0')
+      offline.saveEntries(r.entries).catch(() => {})
     } catch (e) {
-      if (seq === this.loadSeq) this.loadError = (e as Error).message
+      if (seq !== this.loadSeq) return
+      if (isNetworkError(e)) {
+        // Offline: show what the offline copy has for this list.
+        this.online = false
+        const q = this.query_()
+        this.entries = await offline.queryEntries({ ...q, view: q.view ?? 'all' }, this.feedsInFolder).catch(() => [])
+        this.cursor = ''
+        this.boundary = this.entries.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), '0')
+      } else {
+        this.loadError = (e as Error).message
+      }
     } finally {
       if (seq === this.loadSeq) this.loading = false
     }
   }
 
   async loadMore() {
-    if (!this.cursor || this.loading) return
+    if (!this.cursor || this.loading || !this.online) return
     const seq = this.loadSeq
     this.loading = true
     try {
@@ -407,9 +542,19 @@ class AppState {
       // The API omits an empty body; once loaded, "no content" must not look
       // like "still loading" (title-only feeds would spin forever).
       this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
+      offline.saveEntries([this.article.entry]).catch(() => {})
     } catch (e) {
-      if (this.selectedId === id) this.articleError = (e as Error).message
-      return
+      if (this.selectedId !== id) return
+      const saved = isNetworkError(e) ? await offline.getEntry(id).catch(() => undefined) : undefined
+      if (saved?.content !== undefined) {
+        this.online = false
+        this.article = { entry: saved, enclosures: [] }
+      } else {
+        this.articleError = isNetworkError(e)
+          ? "This article wasn't saved for offline reading. It will open when you're back online."
+          : (e as Error).message
+        return
+      }
     }
     // Mark read after a short, cancelable dwell rather than instantly, so
     // skimming past with j/k does not consume articles.
@@ -476,9 +621,15 @@ class AppState {
     if (!targets.length) return
     this.adjustCounts(targets, read)
     this.patch(targets, { read })
+    offline.patchEntries(targets, { read }).catch(() => {})
     try {
       await api.setState(read ? 'read' : 'unread', targets)
     } catch (e) {
+      if (isNetworkError(e)) {
+        await this.queue({ kind: 'state', action: read ? 'read' : 'unread', ids: targets, at: Date.now() })
+        return
+      }
+      offline.patchEntries(targets, { read: !read }).catch(() => {})
       this.patch(targets, { read: !read })
       this.adjustCounts(targets, !read)
       this.toast(`Couldn't update the article. ${(e as Error).message}`)
@@ -488,9 +639,15 @@ class AppState {
   async setStarred(id: ID, starred: boolean) {
     this.patch([id], { starred })
     this.counts.starred += starred ? 1 : -1
+    offline.patchEntries([id], { starred }).catch(() => {})
     try {
       await api.setState(starred ? 'star' : 'unstar', [id])
     } catch (e) {
+      if (isNetworkError(e)) {
+        await this.queue({ kind: 'state', action: starred ? 'star' : 'unstar', ids: [id], at: Date.now() })
+        return
+      }
+      offline.patchEntries([id], { starred: !starred }).catch(() => {})
       this.patch([id], { starred: !starred })
       this.counts.starred -= starred ? 1 : -1
       this.toast(`Couldn't update the star. ${(e as Error).message}`)
@@ -532,7 +689,18 @@ class AppState {
         },
       })
     } catch (e) {
-      this.toast(`Couldn't mark as read. ${(e as Error).message}`)
+      if (!isNetworkError(e)) {
+        this.toast(`Couldn't mark as read. ${(e as Error).message}`)
+        return
+      }
+      // Offline: mark what's visible now; the server applies the same
+      // boundary when the change is sent.
+      const ids = this.entries.filter((x) => !x.read).map((x) => x.id)
+      this.adjustCounts(ids, true)
+      this.patch(ids, { read: true })
+      offline.patchEntries(ids, { read: true }).catch(() => {})
+      await this.queue({ kind: 'markAll', scope, before: this.boundary, at: Date.now() })
+      this.toast("Marked as read. It will sync when you're back online.")
     }
   }
 

@@ -1,4 +1,4 @@
-.PHONY: all ui build test check fuzz vuln dev screenshots image rehearse release clean
+.PHONY: all ui build test check fuzz vuln dev screenshots image rehearse e2e release clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
 COMMIT  := $(shell git rev-parse HEAD 2>/dev/null)
@@ -38,6 +38,10 @@ dev:
 # The FreshRSS cutover, end to end, against a real FreshRSS in Docker.
 rehearse: build
 	test/migration/rehearse.sh
+
+# The PWA's offline mode, end to end in Chrome against a real server.
+e2e: build
+	cd ui && node scripts/e2e-offline.mjs
 
 # README screenshots from invented fixture content (uses the installed Chrome).
 screenshots: build

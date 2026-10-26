@@ -15,6 +15,10 @@ clients are concerned.
 - **Follows the sun.** The Sun theme switches to Evening at sunset where you
   are, computed on your device from a location rounded to about 11 km.
 - **Swipe on phones.** Swipe right to mark read, left to star.
+- **Works offline.** Install it as an app; unread and starred articles are
+  kept on the device, and changes made offline sync when you reconnect.
+- **Live across devices.** Read something in Reeder and it updates in the
+  web reader within a second.
 
 ![The wire in Day theme: feeds, the time spine, and an open article](docs/screenshots/desktop-day.png)
 
@@ -106,6 +110,7 @@ correspondent migrate rollback reader -freshrss https://old.example/api/greader.
 ```sh
 make dev     # Go on :8080, Vite with hot reload on :5173
 make test    # gofmt, vet, Go race tests with coverage, UI unit tests (Vitest)
+make e2e     # the offline PWA, end to end in Chrome
 make image   # local Docker image
 make fuzz    # fuzz the sanitizer and feed parser
 make vuln    # govulncheck + npm audit
@@ -113,9 +118,8 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- **A complete PWA**, good enough that native apps are unnecessary: offline
-  reading of recent articles, read and star changes queued offline and
-  replayed through the mutation journal, and push notifications.
+- **Push notifications** for the installed app (the offline PWA shipped in
+  0.3.0).
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.

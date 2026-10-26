@@ -175,7 +175,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 18px 18px 14px;
+    padding: calc(18px + env(safe-area-inset-top)) 18px 14px;
   }
   .wordmark {
     font-family: var(--font-read);
@@ -323,7 +323,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 8px 10px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--rule-soft);
   }
   .spacer {

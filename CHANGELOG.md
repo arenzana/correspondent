@@ -7,6 +7,22 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-26
+
+### Added
+
+- Installable app (PWA) with offline reading: the feed list, recent lists
+  and the full text of unread (up to 600) and starred (up to 300) articles
+  are kept on the device, so the reader opens and reads without a network.
+- Changes made offline (read, unread, star, unstar, mark all read) are
+  queued, shown as "N changes waiting", and sent in order when the
+  connection returns; with Background Sync where the browser supports it.
+- An "Offline" indicator, and a prompt to reload when a new version is ready
+  (a new version never takes over an open reader by itself).
+- iPhone home-screen support: edge-to-edge layout clear of the notch and
+  home indicator.
+- Signing out removes the offline copy and the queue from the device.
+
 ## [0.2.0] - 2026-10-26
 
 ### Added
@@ -63,7 +79,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/arenzana/correspondent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arenzana/correspondent/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/arenzana/correspondent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/arenzana/correspondent/releases/tag/v0.1.0
