@@ -37,6 +37,7 @@
       { id: 'a-night', label: 'Switch to Night desk', icon: 'sun', group: 'Actions', run: () => app.setPrefs({ theme: 'night' }) },
       { id: 'a-evening', label: 'Switch to Evening', icon: 'sun', group: 'Actions', run: () => app.setPrefs({ theme: 'evening' }) },
       { id: 'a-auto', label: 'Match system theme', icon: 'sun', group: 'Actions', run: () => app.setPrefs({ theme: 'auto' }) },
+      { id: 'a-sun', label: 'Follow sunrise and sunset', icon: 'sun', group: 'Actions', run: () => app.useSunTheme() },
       { id: 'a-keys', label: 'Keyboard shortcuts', icon: 'keyboard', group: 'Actions', hint: '?', run: () => (app.shortcutsOpen = true) },
       { id: 'a-settings', label: 'Settings', icon: 'settings', group: 'Actions', run: () => (app.settingsOpen = true) },
     ]

@@ -1,6 +1,8 @@
 // Command correspondent runs the feed reader.
 //
 //	correspondent serve [-addr :8080] [-data ./data]
+//	correspondent healthcheck                  (exit 0 if the local server is ready; for Docker)
+//	correspondent backup <file>                (consistent online snapshot of the database)
 //	correspondent user add <username>          (password read from stdin)
 //	correspondent user api-password <username> (password read from stdin)
 //	correspondent demo <username>              (subscribe to a starter set of feeds)
@@ -14,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -33,6 +36,9 @@ import (
 	"github.com/arenzana/correspondent/internal/store"
 	"github.com/arenzana/correspondent/web"
 )
+
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -73,6 +79,15 @@ func run(log *slog.Logger, args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The health check must not touch the database: it runs alongside the
+	// server, often every few seconds.
+	if cmd == "healthcheck" {
+		return healthcheck(ctx, *addr)
+	}
+	if cmd == "version" {
+		fmt.Println(version)
+		return nil
+	}
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
 		return err
 	}
@@ -89,6 +104,9 @@ func run(log *slog.Logger, args []string) error {
 	case "serve":
 		proxies, err := parsePrefixes(*trusted)
 		if err != nil {
+			return err
+		}
+		if err := bootstrap(ctx, log, st); err != nil {
 			return err
 		}
 		return serve(ctx, log, st, ing, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies})
@@ -112,6 +130,15 @@ func run(log *slog.Logger, args []string) error {
 			return fmt.Errorf("unknown user command %q", sub)
 		}
 		return err
+	case "backup":
+		if len(positional) != 1 {
+			return errors.New("usage: correspondent backup <file>")
+		}
+		if err := st.Backup(ctx, positional[0]); err != nil {
+			return err
+		}
+		fmt.Println("backup written and verified:", positional[0])
+		return nil
 	case "demo":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent demo <username>")
@@ -147,9 +174,83 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	log.Info("listening", "addr", addr)
+	log.Info("listening", "addr", addr, "version", version)
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	return nil
+}
+
+// bootstrap creates the first account from Docker-style secret files, so a
+// fresh container is usable without an interactive step. Passwords are only
+// ever read from files, never from environment variables, which leak into
+// process listings and `docker inspect`.
+func bootstrap(ctx context.Context, log *slog.Logger, st *store.Store) error {
+	username := os.Getenv("CORRESPONDENT_USER")
+	if username == "" {
+		return nil
+	}
+	if _, err := st.UserIDByName(ctx, username); err == nil {
+		return nil // already set up; secrets are not re-applied on restart
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	pw, err := secretFile("CORRESPONDENT_PASSWORD_FILE")
+	if err != nil {
+		return err
+	}
+	if pw == "" {
+		return errors.New("CORRESPONDENT_USER is set but CORRESPONDENT_PASSWORD_FILE is not")
+	}
+	id, err := st.CreateUser(ctx, username, pw)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", username, err)
+	}
+	apiPW, err := secretFile("CORRESPONDENT_API_PASSWORD_FILE")
+	if err != nil {
+		return err
+	}
+	if apiPW != "" {
+		if err := st.SetAPIPassword(ctx, id, apiPW); err != nil {
+			return err
+		}
+	}
+	log.Info("created account from secrets", "user", username, "api", apiPW != "")
+	return nil
+}
+
+func secretFile(env string) (string, error) {
+	path := os.Getenv(env)
+	if path == "" {
+		return "", nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", env, err)
+	}
+	pw := strings.TrimRight(string(b), "\r\n")
+	if len(pw) < 10 {
+		return "", fmt.Errorf("%s: use a password of at least 10 characters", env)
+	}
+	return pw, nil
+}
+
+// healthcheck asks the local server whether it is ready.
+func healthcheck(ctx context.Context, addr string) error {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:"+port+"/ready", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("not ready: HTTP %d", resp.StatusCode)
 	}
 	return nil
 }

@@ -10,7 +10,11 @@ clients are concerned.
 - **Reeder-compatible.** `/api/greader.php` serves the Google Reader API with
   FreshRSS's identifiers and timestamps, so an existing Reeder account keeps
   working after cutover.
-- **One binary.** Go service with an embedded Svelte 5 UI and SQLite.
+- **One binary, one container.** Go service with an embedded Svelte 5 UI and
+  SQLite, shipped as a 27 MB signed, distroless image.
+- **Follows the sun.** The Sun theme switches to Evening at sunset where you
+  are, computed on your device from a location rounded to about 11 km.
+- **Swipe on phones.** Swipe right to mark read, left to star.
 
 ![The wire in Day theme: feeds, the time spine, and an open article](docs/screenshots/desktop-day.png)
 
@@ -21,13 +25,53 @@ clients are concerned.
 | ![Command palette](docs/screenshots/command-palette.png) | ![Add feed dialog with a discovered feed](docs/screenshots/add-feed.png) |
 
 <p>
-  <img src="docs/screenshots/mobile-wire.png" alt="The wire on a phone" width="260">
-  <img src="docs/screenshots/mobile-article.png" alt="An article on a phone" width="260">
+  <img src="docs/screenshots/mobile-wire.png" alt="The wire on a phone" width="250">
+  <img src="docs/screenshots/mobile-swipe.png" alt="Swiping a row to mark it read" width="250">
+  <img src="docs/screenshots/mobile-article.png" alt="An article on a phone" width="250">
 </p>
 
 Screenshots use invented feeds and are regenerated with `make screenshots`.
 
-## Build and run
+## Run with Docker
+
+```sh
+mkdir -p secrets
+openssl rand -base64 24 > secrets/password       # web sign-in
+openssl rand -base64 24 > secrets/api_password   # Reeder and other apps
+docker compose up -d
+```
+
+The image (`ghcr.io/arenzana/correspondent`, amd64 and arm64) is distroless,
+runs as a non-root user, works with a read-only root filesystem, and is
+signed with cosign:
+
+```sh
+cosign verify ghcr.io/arenzana/correspondent:latest \
+  --certificate-identity-regexp 'https://github.com/arenzana/correspondent/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The first start creates the account named by `CORRESPONDENT_USER` from the
+secret files; passwords are only ever read from files. Put it behind a
+TLS-terminating proxy and set `CORRESPONDENT_TRUSTED_PROXIES` to the proxy's
+range. Useful commands inside the container:
+
+```sh
+docker compose exec correspondent /correspondent backup /data/backup-$(date +%F).db
+docker compose exec correspondent /correspondent version
+```
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CORRESPONDENT_ADDR` | `:8080` | Listen address |
+| `CORRESPONDENT_DATA` | `/data` | SQLite directory (local disk, not NFS) |
+| `CORRESPONDENT_USER` | | Account to create on first start |
+| `CORRESPONDENT_PASSWORD_FILE` | | Web password file for that account |
+| `CORRESPONDENT_API_PASSWORD_FILE` | | App (Reeder) password file |
+| `CORRESPONDENT_TRUSTED_PROXIES` | | CIDRs whose `X-Forwarded-For` is trusted |
+| `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
+
+## Build from source
 
 ```sh
 make build                                   # UI + Go binary in bin/
@@ -58,7 +102,8 @@ their original item IDs.
 
 ```sh
 make dev     # Go on :8080, Vite with hot reload on :5173
-make test    # vet + race tests
+make test    # gofmt, vet, Go race tests with coverage, UI unit tests (Vitest)
+make image   # local Docker image
 make fuzz    # fuzz the sanitizer and feed parser
 make vuln    # govulncheck + npm audit
 ```

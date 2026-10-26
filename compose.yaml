@@ -1,0 +1,48 @@
+# Correspondent with Docker Compose.
+#
+#   mkdir -p secrets
+#   openssl rand -base64 24 > secrets/password       # web sign-in
+#   openssl rand -base64 24 > secrets/api_password   # Reeder / Google Reader apps
+#   docker compose up -d
+#
+# Put it behind a TLS-terminating reverse proxy: session cookies are Secure.
+# Set CORRESPONDENT_TRUSTED_PROXIES to the proxy's address range so sign-in
+# throttling sees real client addresses.
+
+services:
+  correspondent:
+    image: ghcr.io/arenzana/correspondent:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      CORRESPONDENT_USER: ${CORRESPONDENT_USER:-reader}
+      CORRESPONDENT_PASSWORD_FILE: /run/secrets/password
+      CORRESPONDENT_API_PASSWORD_FILE: /run/secrets/api_password
+      CORRESPONDENT_TRUSTED_PROXIES: ${CORRESPONDENT_TRUSTED_PROXIES:-}
+    secrets:
+      - password
+      - api_password
+    volumes:
+      - data:/data
+    # Hardening: nothing but /data is writable, no privileges can be gained.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+
+secrets:
+  password:
+    file: ./secrets/password
+  api_password:
+    file: ./secrets/api_password
+
+volumes:
+  data:

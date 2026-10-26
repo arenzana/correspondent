@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -129,4 +130,29 @@ func int64Args(ids []int64) []any {
 		args[i] = id
 	}
 	return args
+}
+
+// Backup writes a consistent snapshot of the live database to dest using
+// VACUUM INTO (safe while the server is writing, unlike copying the file and
+// its WAL), then verifies the copy with an integrity check.
+func (s *Store) Backup(ctx context.Context, dest string) error {
+	if _, err := os.Stat(dest); err == nil {
+		return fmt.Errorf("%s already exists", dest)
+	}
+	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, dest); err != nil {
+		return err
+	}
+	copyDB, err := sql.Open("sqlite", "file:"+dest+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer copyDB.Close()
+	var result string
+	if err := copyDB.QueryRowContext(ctx, `PRAGMA integrity_check`).Scan(&result); err != nil {
+		return err
+	}
+	if result != "ok" {
+		return fmt.Errorf("backup failed integrity check: %s", result)
+	}
+	return os.Chmod(dest, 0o600)
 }

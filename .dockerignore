@@ -2,3 +2,6 @@ data/
 bin/
 ui/node_modules/
 .git/
+secrets/
+docs/
+*.md

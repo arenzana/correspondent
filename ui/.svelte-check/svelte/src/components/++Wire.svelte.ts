@@ -7,10 +7,12 @@
 import { app } from '../lib/state.svelte'
 import { arrivedAt, dayKey, dayLabel, gutterTime } from '../lib/time'
 import { api, type Entry } from '../lib/api'
+import { swipe } from '../lib/swipe'
 import Icon from './Icon.svelte'
 import FeedIcon from './FeedIcon.svelte';
 function $$render() {
 
+  
   
   
   
@@ -161,7 +163,11 @@ async () => {
              { svelteHTML.createElement("ol", { "class":`rows`,});
                  for(let e of __sveltets_2_ensureArray(g.entries)){e.id;
                 const selected = e.id === app.selectedId;
-                 { svelteHTML.createElement("li", {       "class":`row`,...__sveltets_2_empty({"data-id":e.id}),});e.read;selected;
+                 {const $$action_0 = __sveltets_2_ensureAction(swipe(svelteHTML.mapElementTag('li'),({ onCommit: (a) => (a === 'read' ? app.setRead([e.id], !e.read) : app.setStarred(e.id, !e.starred)) })));{ svelteHTML.createElement("li", __sveltets_2_union($$action_0), {         "class":`row`,...__sveltets_2_empty({"data-id":e.id}),});e.read;selected;
+                   { svelteHTML.createElement("span", {   "class":`reveal`,"aria-hidden":`true`,});
+                     { svelteHTML.createElement("span", { "class":`reveal-read`,}); { const $$_nocI8C = __sveltets_2_ensureComponent(Icon); new $$_nocI8C({ target: __sveltets_2_any(), props: {    "name":e.read ? 'dot' : 'check',"size":18,}});}e.read ? 'Unread' : 'Read'; }
+                     { svelteHTML.createElement("span", { "class":`reveal-star`,}); { const $$_nocI8C = __sveltets_2_ensureComponent(Icon); new $$_nocI8C({ target: __sveltets_2_any(), props: {      "name":`star`,"size":18,"fill":!e.starred,}});}e.starred ? 'Unstar' : 'Star'; }
+                   }
                    { svelteHTML.createElement("button", {       "class":`hit`,"aria-current":selected ? 'true' : undefined,"onclick":() => app.select(e.id),});
                      { svelteHTML.createElement("span", { "class":`gutter`,});
                        { svelteHTML.createElement("time", {   "class":`clock`,"datetime":new Date(e.publishedAt * 1000).toISOString(),});gutterTime(e.publishedAt, arrivedAt(e.id)); }
@@ -181,7 +187,7 @@ async () => {
                        { svelteHTML.createElement("img", {          "class":`thumb`,"src":e.imageUrl,"alt":"","loading":`lazy`,"referrerpolicy":`no-referrer`,"onerror":(ev) => ((ev.currentTarget as HTMLElement).style.display = 'none'),});}
                     }
                    }
-                 }
+                 }}
               }
              }
            }
