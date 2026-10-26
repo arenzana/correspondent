@@ -175,3 +175,60 @@ func TestCommands(t *testing.T) {
 		t.Errorf("bad token: %v", err)
 	}
 }
+
+// TestWatch streams new articles as NDJSON over the live connection.
+func TestWatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	a := &api.API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute)}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	uid, _ := st.CreateUser(ctx, "alice", "password-alice")
+	fid, _ := st.AddFeed(ctx, uid, "https://notes.example/feed", "Notes", nil)
+	st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "old", Title: "Before watching", Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+	token, _, _ := st.CreateToken(ctx, uid, "test", store.ScopeRead)
+
+	app := &app{ctx: ctx, asJSON: true}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	app.setup(srv.URL, token)
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	done := make(chan error)
+	go func() { done <- app.run([]string{"watch"}) }()
+
+	// Once watching, an article arrives.
+	time.Sleep(300 * time.Millisecond)
+	st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "new", Title: "Fresh off the wire", URL: "https://notes.example/new", Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+	a.Notify(uid)
+
+	line := make(chan string)
+	go func() {
+		buf := make([]byte, 4096)
+		n, _ := r.Read(buf)
+		line <- string(buf[:n])
+	}()
+	var got string
+	select {
+	case got = <-line:
+	case <-time.After(5 * time.Second):
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("watch ended with %v", err)
+	}
+	w.Close()
+	os.Stdout = old
+	var ev map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(got)), &ev); err != nil || ev["title"] != "Fresh off the wire" || ev["feed"] != "Notes" {
+		t.Fatalf("watch printed %q (%v)", got, err)
+	}
+	if strings.Contains(got, "Before watching") {
+		t.Error("watch replayed an article from before it started")
+	}
+}

@@ -19,6 +19,10 @@ change behaviour; the Google Reader API stays compatible throughout.
   OPML. Every command prints stable JSON with --json, never prompts (except
   signing in on a terminal), and exits with codes that say what went wrong.
   Install with `brew install arenzana/tap/corr` or from the release.
+- corr is live: the reader shows reads, stars and new articles from
+  anywhere as they happen, and `corr watch` prints new articles as they
+  arrive (one JSON object per line with --json; desktop notifications with
+  --notify).
 - MCP for AI tools at /mcp (Streamable HTTP): list and read articles (as
   Markdown), mark them, list, find, add, change and remove feeds. Tools are
   marked read-only or destructive so clients can ask first, and reading

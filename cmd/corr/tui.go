@@ -37,7 +37,11 @@ func (a *app) tui() error {
 	}
 	chooseTheme(a.theme, webTheme).apply()
 	m := newReader(a)
-	_, err := tea.NewProgram(m, tea.WithContext(a.ctx)).Run()
+	p := tea.NewProgram(m, tea.WithContext(a.ctx))
+	// Live: reads, stars and new articles from anywhere (the web app,
+	// Reeder, another terminal) show up as they happen.
+	go a.api.Watch(a.ctx, func(ev client.Event) { p.Send(liveMsg(ev)) })
+	_, err := p.Run()
 	return err
 }
 
@@ -82,6 +86,7 @@ type reader struct {
 	searchOn bool
 
 	help    bool
+	keepID  string // the article to stay on when the list reloads
 	status  string
 	confirm string // a second press confirms (mark all read)
 	err     error
@@ -100,6 +105,7 @@ type (
 	}
 	statusMsg string
 	errMsg    struct{ err error }
+	liveMsg   client.Event
 )
 
 // Styles from the current palette (theme.go), set before the reader starts.
@@ -227,6 +233,12 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.entries = append(m.entries, msg.page.Entries...)
 		} else {
 			m.entries, m.sel, m.offset = msg.page.Entries, 0, 0
+			for i, e := range m.entries {
+				if e.ID == m.keepID {
+					m.sel = i
+				}
+			}
+			m.keepID = ""
 		}
 		m.cursor = msg.page.Cursor
 		return m, nil
@@ -239,6 +251,8 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = paneArticle
 		m.status = ""
 		return m, nil
+	case liveMsg:
+		return m, m.live(client.Event(msg))
 	case statusMsg:
 		m.status = string(msg)
 		return m, nil
@@ -288,6 +302,9 @@ func (m *reader) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.loading = true
+		if e := m.current(); e != nil && m.sel > 0 {
+			m.keepID = e.ID
+		}
 		return m, tea.Batch(m.loadTree(), m.loadEntries(false))
 	}
 	switch m.focus {
@@ -432,6 +449,42 @@ func (m *reader) articleKey(key string) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// live applies a change made elsewhere.
+func (m *reader) live(ev client.Event) tea.Cmd {
+	switch ev.Name {
+	case "state":
+		read, star := ev.Action == "read", ev.Action == "star"
+		for _, id := range ev.IDs {
+			m.patch(id, func(e *client.Entry) {
+				switch ev.Action {
+				case "read", "unread":
+					e.Read = read
+				case "star", "unstar":
+					e.Starred = star
+				}
+			})
+			if m.article != nil && m.article.ID == id {
+				m.patch(id, func(e *client.Entry) { m.article.Read, m.article.Starred = e.Read, e.Starred })
+			}
+		}
+		return m.loadTree()
+	case "refresh":
+		// New articles: show them if the reader is at the top of the list;
+		// never move a list someone is reading further down.
+		if m.focus == paneList && m.sel == 0 && m.query == "" {
+			return tea.Batch(m.loadTree(), m.loadEntries(false))
+		}
+		m.status = "New articles arrived. Press r to show them."
+		return m.loadTree()
+	case "resync":
+		if e := m.current(); e != nil {
+			m.keepID = e.ID
+		}
+		return tea.Batch(m.loadTree(), m.loadEntries(false))
+	}
+	return nil
 }
 
 // move changes the selection; near the end it loads the next page.

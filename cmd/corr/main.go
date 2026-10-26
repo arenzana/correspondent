@@ -45,6 +45,7 @@ Usage:
   corr feed FEED-ID rename TITLE | move FOLDER | unfile | pause | resume |
                     refresh | full-text on|off | notify on|off | url ADDRESS
   corr opml export [FILE] | opml import FILE
+  corr watch [--feed ID] [--folder ID] [--notify]   new articles as they arrive
   corr version
 
 Global flags (before or after the command):
@@ -180,6 +181,8 @@ func (a *app) run(args []string) error {
 		return a.feed(rest)
 	case "opml":
 		return a.opml(rest)
+	case "watch":
+		return a.watch(rest)
 	case "version":
 		return emit(a.asJSON, map[string]string{"version": version.Version, "commit": version.Commit}, func(w io.Writer) {
 			line(w, "corr "+version.String())

@@ -59,6 +59,11 @@ Night desk; System and Sun use the terminal's background), or pass
 
 Links in an article are numbered (`text [1]`) and listed at its end.
 
+The reader is live: articles you read or star anywhere (the web app,
+Reeder, another terminal) update as it happens, and new articles appear at
+the top of the list as they arrive. Further down the list it tells you
+instead of moving.
+
 ## Commands
 
 | Command | |
@@ -73,6 +78,7 @@ Links in an article are numbered (`text [1]`) and listed at its end.
 | `corr unsubscribe FEED-ID` | unsubscribe; its articles are deleted |
 | `corr feed FEED-ID rename T \| move FOLDER \| unfile \| pause \| resume \| refresh \| full-text on\|off \| notify on\|off \| url ADDRESS` | change a feed |
 | `corr opml export [FILE]`, `corr opml import FILE\|-` | OPML |
+| `corr watch [--feed ID] [--folder ID] [--notify]` | new articles as they arrive, until Ctrl-C; with `--json`, one JSON object per line; `--notify` also shows desktop notifications |
 | `corr version` | |
 
 Flags work before or after the command: `--json`, `--server URL`,
@@ -98,6 +104,9 @@ only ever added, never renamed or removed. Errors go to stderr as
 // corr feeds --json
 { "feeds": [ { "id": 2, "title": "…", "url": "…", "folder": "AI & tech", "unread": 8, "total": 40,
     "paused": false, "fullText": true, "page": true, "notify": false, "error": "", "latestAt": "…" } ] }
+
+// corr watch --json: one object per line, as articles arrive
+{"id":"…","title":"…","feed":"…","feedId":2,"url":"…","excerpt":"…","publishedAt":"…"}
 
 // corr mark … --json, corr mark-all-read --json
 { "action": "star", "changed": 1 }
