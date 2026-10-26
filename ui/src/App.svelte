@@ -11,6 +11,7 @@
   import Toasts from './components/Toasts.svelte'
   import Resizer from './components/Resizer.svelte'
   import Manage from './components/Manage.svelte'
+  import TabBar from './components/TabBar.svelte'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -141,6 +142,7 @@
     </div>
     <div class="read" id="reader"><Article bind:this={article} /></div>
     {/if}
+    {#if app.pane !== 'article'}<div class="tabs"><TabBar /></div>{/if}
   </div>
 
   {#if app.paletteOpen}<Palette />{/if}
@@ -216,6 +218,9 @@
   }
   .shell.focus .list {
     border: 0;
+  }
+  .tabs {
+    display: none;
   }
   .skip {
     position: absolute;
@@ -296,6 +301,14 @@
     [data-pane='list'] .list,
     [data-pane='article'] .read {
       display: block;
+    }
+    /* The tab bar sits under the feeds and list panes; panes end above it. */
+    .tabs {
+      display: block;
+    }
+    [data-pane='nav'] .nav,
+    [data-pane='list'] .list {
+      bottom: calc(56px + env(safe-area-inset-bottom));
     }
     .nav-open .nav {
       display: block;

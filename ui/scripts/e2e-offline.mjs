@@ -122,6 +122,43 @@ try {
   const starred = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=starred')).json()).entries.map((e) => e.title))
   check(starred.length === 1 && starred[0] === 'Dispatch 0', 'the server has the star made offline')
 
+  console.log('Phone')
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 })
+  const mobile = await phone.newPage()
+  await mobile.goto(APP)
+  await mobile.fill('input[autocomplete=username]', USER)
+  await mobile.fill('input[type=password]', PASSWORD)
+  await mobile.click('button.primary')
+  await mobile.waitForSelector('.wire .row', { state: 'attached' })
+  const tabbar = mobile.locator('nav.tabbar')
+  check(await tabbar.isVisible(), 'the tab bar shows on a phone')
+  // Scroll the list hard, past its end, as a finger would.
+  await mobile.locator('.wire-scroll').hover()
+  for (let i = 0; i < 6; i++) await mobile.mouse.wheel(0, 2000)
+  await mobile.waitForTimeout(300)
+  const layout = await mobile.evaluate(() => ({
+    pageScroll: document.scrollingElement.scrollTop + window.scrollY,
+    headTop: document.querySelector('.wire .head').getBoundingClientRect().top,
+    barBottom: document.querySelector('nav.tabbar').getBoundingClientRect().bottom,
+    height: window.innerHeight,
+  }))
+  check(layout.pageScroll === 0 && layout.headTop >= 0, 'scrolling the list never moves the page or its header')
+  check(Math.abs(layout.barBottom - layout.height) <= 1, 'the tab bar stays at the bottom edge')
+  await tabbar.getByRole('button', { name: 'Feeds' }).tap()
+  check(await mobile.locator('nav.sidebar').isVisible(), 'Feeds opens the feed list')
+  await mobile.locator('nav.sidebar').getByRole('button', { name: /Starred/ }).first().tap()
+  check(await mobile.locator('.wire h1').innerText() === 'Starred', 'choosing a view from Feeds opens it')
+  await tabbar.getByRole('button', { name: 'Settings' }).tap()
+  check(await mobile.getByRole('dialog', { name: 'Settings' }).isVisible(), 'Settings opens from the tab bar')
+  await mobile.keyboard.press('Escape')
+  await tabbar.getByRole('button', { name: 'Unread' }).tap()
+  await mobile.locator('.wire .row .hit').first().tap()
+  await mobile.locator('article.pane .bar').waitFor()
+  check(!(await tabbar.isVisible()), 'the tab bar steps aside while reading')
+  await mobile.getByRole('button', { name: 'Back to articles' }).tap()
+  check(await mobile.locator('nav.tabbar').isVisible(), 'and comes back with the list')
+  await phone.close()
+
   console.log('Subscriptions')
   await page.goto(APP + '/#/manage')
   await page.reload()

@@ -7,6 +7,16 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- A tab bar on phones (Feeds, Unread, Starred, Search, Settings), so every
+  menu is reachable; it steps aside while an article is open.
+
+### Fixed
+
+- On iPhone the whole page could be dragged, taking the header (and the way
+  to the feeds) off screen. Only the list and the article scroll now.
+
 ## [0.6.0] - 2026-10-26
 
 ### Added
