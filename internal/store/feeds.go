@@ -221,7 +221,8 @@ func (s *Store) DeleteFeed(ctx context.Context, userID, feedID int64) error {
 // DueFeeds returns feeds whose next fetch time has passed, across all users.
 func (s *Store) DueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+feedColumns+` FROM feeds f WHERE f.paused = 0 AND f.next_fetch_at <= ? ORDER BY f.next_fetch_at LIMIT ?`,
+		`SELECT `+feedColumns+` FROM feeds f JOIN users u ON u.id = f.user_id
+		  WHERE f.paused = 0 AND f.next_fetch_at <= ? AND u.disabled_at IS NULL ORDER BY f.next_fetch_at LIMIT ?`,
 		now.Unix(), limit)
 	if err != nil {
 		return nil, err

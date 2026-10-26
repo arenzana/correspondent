@@ -5,6 +5,8 @@
 //	correspondent backup <file>                (consistent online snapshot of the database)
 //	correspondent user add <username>          (password read from stdin)
 //	correspondent user api-password <username> (password read from stdin)
+//	correspondent user role <username> admin|user
+//	correspondent invite [-admin] [-public-url URL]  (a one-time link for a new account)
 //	correspondent demo <username>              (subscribe to a starter set of feeds)
 //	correspondent import-freshrss <username> -opml feeds.opml.xml [-starred starred.json] [-subscriptions subs.json]
 //
@@ -24,6 +26,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"log/slog"
 	"net"
 	"net/http"
@@ -72,6 +75,8 @@ func run(log *slog.Logger, args []string) error {
 	allowPrivate := fs.Bool("allow-private-feeds", false, "allow fetching feeds on private networks (development only)")
 	retention := fs.Int("retention-days", envInt("CORRESPONDENT_RETENTION_DAYS", 0), "delete read, unstarred articles older than this that have left their feed (0 = keep everything)")
 	imageCache := fs.Int("image-cache-mb", envInt("CORRESPONDENT_IMAGE_CACHE_MB", 512), "disk space for proxied images (0 = load images directly from their sites)")
+	publicURL := fs.String("public-url", os.Getenv("CORRESPONDENT_PUBLIC_URL"), "the https address readers use (enables passkeys; used in invite links)")
+	inviteAdmin := fs.Bool("admin", false, "invite: the new account is an admin")
 	noPoll := fs.Bool("no-poll", os.Getenv("CORRESPONDENT_NO_POLL") == "1", "serve without polling feeds (used during migration)")
 	exportPath := fs.String("export", "", "migrate import: FreshRSS SQLite export")
 	sysConfig := fs.String("system-config", "", "migrate import: FreshRSS data/config.php")
@@ -156,10 +161,28 @@ func run(log *slog.Logger, args []string) error {
 		if err != nil {
 			return err
 		}
-		return serve(ctx, log, st, ing, images, keyring, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
+		var wa *webauthn.WebAuthn
+		if *publicURL != "" {
+			if wa, err = api.NewWebAuthn(*publicURL); err != nil {
+				return err
+			}
+		} else {
+			log.Warn("passkeys are off: set CORRESPONDENT_PUBLIC_URL to the address readers use")
+		}
+		return serve(ctx, log, st, ing, images, keyring, wa, *dataDir, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
+		if sub == "role" {
+			if len(positional) != 2 {
+				return errors.New("usage: correspondent user role <username> admin|user")
+			}
+			id, err := st.UserIDByName(ctx, positional[0])
+			if err != nil {
+				return err
+			}
+			return st.SetRole(ctx, id, positional[1])
+		}
 		if len(positional) != 1 {
-			return errors.New("usage: correspondent user add|api-password <username>")
+			return errors.New("usage: correspondent user add|api-password|role <username>")
 		}
 		pw, err := readPassword()
 		if err != nil {
@@ -177,6 +200,23 @@ func run(log *slog.Logger, args []string) error {
 			return fmt.Errorf("unknown user command %q", sub)
 		}
 		return err
+	case "invite":
+		// An invitation link from the command line, for the first readers or
+		// when no admin can sign in.
+		role := store.RoleUser
+		if *inviteAdmin {
+			role = store.RoleAdmin
+		}
+		token, err := st.CreateInvite(ctx, store.InviteAccount, 0, role, "from the command line", 0, 7*24*time.Hour)
+		if err != nil {
+			return err
+		}
+		base := strings.TrimRight(*publicURL, "/")
+		if base == "" {
+			base = "https://<your server>"
+		}
+		fmt.Printf("%s/#/invite/%s\n(valid for 7 days, once)\n", base, token)
+		return nil
 	case "backup":
 		if len(positional) != 1 {
 			return errors.New("usage: correspondent backup <file>")
@@ -235,12 +275,12 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, dataDir, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	notifier := &push.Notifier{Store: st, Log: log}
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images,
-		Keyring: keyring, AITransport: ing.Fetch.Transport()}
+		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir}
 	ing.AIFor = a.AIForApps
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles

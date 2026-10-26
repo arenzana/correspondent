@@ -18,15 +18,28 @@ type User struct {
 	Username string
 	HasAPI   bool
 	Prefs    string // opaque JSON owned by the UI
+	Role     string // RoleAdmin or RoleUser
 }
+
+// Roles.
+const (
+	RoleAdmin = "admin"
+	RoleUser  = "user"
+)
+
+// ErrDisabled is returned for a disabled account, but only once its
+// password was right, so it never reveals which accounts exist.
+var ErrDisabled = errors.New("this account is disabled")
 
 func (s *Store) CreateUser(ctx context.Context, username, password string) (int64, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return 0, err
 	}
+	// The first account on a server is its admin.
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)`,
+		`INSERT INTO users (username, password_hash, created_at, role)
+		 VALUES (?, ?, ?, CASE WHEN EXISTS (SELECT 1 FROM users) THEN 'user' ELSE 'admin' END)`,
 		username, string(hash), time.Now().Unix())
 	if err != nil {
 		return 0, err
@@ -34,8 +47,6 @@ func (s *Store) CreateUser(ctx context.Context, username, password string) (int6
 	return res.LastInsertId()
 }
 
-// SetAPIPassword sets the separate password used by Reeder and other Google
-// Reader clients. The web password never authenticates the API.
 // SetAI stores a user's sealed AI key and AI config (JSON); nil and "" clear
 // them.
 func (s *Store) SetAI(ctx context.Context, userID int64, sealed []byte, config string) error {
@@ -51,6 +62,8 @@ func (s *Store) AI(ctx context.Context, userID int64) (sealed []byte, config str
 	return sealed, config, err
 }
 
+// SetAPIPassword sets the separate password used by Reeder and other Google
+// Reader clients. The web password never authenticates the API.
 func (s *Store) SetAPIPassword(ctx context.Context, userID int64, password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -66,13 +79,14 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("correspondent"), bcrypt.D
 // CheckPassword verifies a web (api=false) or API (api=true) password.
 func (s *Store) CheckPassword(ctx context.Context, username, password string, api bool) (*User, error) {
 	var (
-		u       User
-		webHash string
-		apiHash sql.NullString
+		u        User
+		webHash  string
+		apiHash  sql.NullString
+		disabled sql.NullInt64
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, api_hash, prefs FROM users WHERE username = ?`, username).
-		Scan(&u.ID, &u.Username, &webHash, &apiHash, &u.Prefs)
+		`SELECT id, username, password_hash, api_hash, prefs, role, disabled_at FROM users WHERE username = ?`, username).
+		Scan(&u.ID, &u.Username, &webHash, &apiHash, &u.Prefs, &u.Role, &disabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 		return nil, ErrNotFound
@@ -91,6 +105,9 @@ func (s *Store) CheckPassword(ctx context.Context, username, password string, ap
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
 		return nil, ErrNotFound
 	}
+	if disabled.Valid {
+		return nil, ErrDisabled
+	}
 	u.HasAPI = apiHash.Valid
 	return &u, nil
 }
@@ -100,8 +117,8 @@ func (s *Store) UserByID(ctx context.Context, id int64) (*User, error) {
 		u       User
 		apiHash sql.NullString
 	)
-	err := s.db.QueryRowContext(ctx, `SELECT id, username, api_hash, prefs FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Username, &apiHash, &u.Prefs)
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, api_hash, prefs, role FROM users WHERE id = ?`, id).
+		Scan(&u.ID, &u.Username, &apiHash, &u.Prefs, &u.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -129,26 +146,42 @@ func hashToken(token string) string {
 }
 
 // CreateSession issues an opaque random token; only its hash is stored.
-func (s *Store) CreateSession(ctx context.Context, userID int64, kind string, ttl time.Duration) (string, error) {
+// client names the device ("Safari on iPhone"), for the reader's list of
+// sessions.
+func (s *Store) CreateSession(ctx context.Context, userID int64, kind string, ttl time.Duration, client ...string) (string, error) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(buf)
 	now := time.Now()
+	name := ""
+	if len(client) > 0 {
+		name = client[0]
+	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions (token_hash, user_id, kind, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`,
-		hashToken(token), userID, kind, now.Unix(), now.Add(ttl).Unix())
+		`INSERT INTO sessions (token_hash, user_id, kind, created_at, expires_at, client, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		hashToken(token), userID, kind, now.Unix(), now.Add(ttl).Unix(), name, now.Unix())
 	return token, err
 }
 
+// SessionUser returns the account a session belongs to, if the session is
+// current and the account enabled. It notes when the session was last used
+// (at most every few minutes, to keep writes rare).
 func (s *Store) SessionUser(ctx context.Context, token, kind string) (int64, error) {
-	var userID int64
+	var userID, seen int64
+	hash := hashToken(token)
+	now := time.Now().Unix()
 	err := s.db.QueryRowContext(ctx,
-		`SELECT user_id FROM sessions WHERE token_hash = ? AND kind = ? AND expires_at > ?`,
-		hashToken(token), kind, time.Now().Unix()).Scan(&userID)
+		`SELECT s.user_id, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id
+		  WHERE s.token_hash = ? AND s.kind = ? AND s.expires_at > ? AND u.disabled_at IS NULL`,
+		hash, kind, now).Scan(&userID, &seen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
+	}
+	if err == nil && now-seen > 300 {
+		s.db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?`, now, hash)
+		s.db.ExecContext(ctx, `UPDATE users SET last_seen_at = ? WHERE id = ?`, now, userID)
 	}
 	return userID, err
 }

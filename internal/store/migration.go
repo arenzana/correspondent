@@ -90,7 +90,7 @@ func (s *Store) LegacyToken(ctx context.Context, username string) (userID int64,
 		apiHash sql.NullString
 		on      bool
 	)
-	err = s.db.QueryRowContext(ctx, `SELECT id, api_hash, legacy_auth FROM users WHERE username = ?`, username).
+	err = s.db.QueryRowContext(ctx, `SELECT id, api_hash, legacy_auth FROM users WHERE username = ? AND disabled_at IS NULL`, username).
 		Scan(&userID, &apiHash, &on)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", ErrNotFound

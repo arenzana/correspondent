@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"io"
 	"log/slog"
 	"net/http"
@@ -53,10 +54,16 @@ type API struct {
 	// transport); AIOptions add Anthropic client options (tests).
 	AITransport http.RoundTripper
 	AIOptions   []option.RequestOption
+	// WebAuthn signs readers in with passkeys; nil when the server has no
+	// public address configured.
+	WebAuthn *webauthn.WebAuthn
+	// DataDir is where the database lives, for the admin's server view.
+	DataDir string
 
-	hub    hub
-	aiOnce sync.Once
-	ai     *ratelimit.Limiter
+	hub        hub
+	ceremonies ceremonies
+	aiOnce     sync.Once
+	ai         *ratelimit.Limiter
 }
 
 func (a *API) Handler() http.Handler {
@@ -64,6 +71,29 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/session", a.login)
 	mux.HandleFunc("DELETE /api/v1/session", a.auth(a.logout))
 	mux.HandleFunc("GET /api/v1/me", a.auth(a.me))
+	mux.HandleFunc("GET /api/v1/sessions", a.auth(a.sessions))
+	mux.HandleFunc("DELETE /api/v1/sessions/{id}", a.auth(a.endSession))
+	mux.HandleFunc("PUT /api/v1/password", a.auth(a.changePassword))
+	mux.HandleFunc("GET /api/v1/invites/{token}", a.invite)
+	mux.HandleFunc("POST /api/v1/invites/{token}", a.acceptInvite)
+	mux.HandleFunc("GET /api/v1/admin/accounts", a.admin(a.adminAccounts))
+	mux.HandleFunc("POST /api/v1/admin/invites", a.admin(a.createInvite))
+	mux.HandleFunc("DELETE /api/v1/admin/invites/{id}", a.admin(a.revokeInvite))
+	mux.HandleFunc("PATCH /api/v1/admin/accounts/{id}", a.admin(a.updateAccount))
+	mux.HandleFunc("POST /api/v1/admin/accounts/{id}/reset", a.admin(a.resetLink))
+	mux.HandleFunc("DELETE /api/v1/admin/accounts/{id}", a.admin(a.deleteAccount))
+	mux.HandleFunc("GET /api/v1/admin/server", a.admin(a.adminServer))
+	mux.HandleFunc("GET /api/v1/admin/parsers", a.admin(a.adminParsers))
+	mux.HandleFunc("POST /api/v1/admin/parsers/{id}/test", a.admin(a.testParser))
+	mux.HandleFunc("POST /api/v1/admin/parsers/{id}/rebuild", a.admin(a.rebuildParser))
+	mux.HandleFunc("DELETE /api/v1/admin/parsers/{id}", a.admin(a.deleteParser))
+	mux.HandleFunc("POST /api/v1/session/passkey", a.passkeyLoginBegin)
+	mux.HandleFunc("POST /api/v1/session/passkey/finish", a.passkeyLoginFinish)
+	mux.HandleFunc("GET /api/v1/passkeys", a.auth(a.passkeys))
+	mux.HandleFunc("POST /api/v1/passkeys", a.auth(a.passkeyRegisterBegin))
+	mux.HandleFunc("POST /api/v1/passkeys/finish", a.auth(a.passkeyRegisterFinish))
+	mux.HandleFunc("PATCH /api/v1/passkeys/{id}", a.auth(a.renamePasskey))
+	mux.HandleFunc("DELETE /api/v1/passkeys/{id}", a.auth(a.deletePasskey))
 	mux.HandleFunc("PUT /api/v1/prefs", a.auth(a.putPrefs))
 	mux.HandleFunc("PUT /api/v1/api-password", a.auth(a.putAPIPassword))
 	mux.HandleFunc("GET /api/v1/tree", a.auth(a.tree))
@@ -137,18 +167,18 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := a.Store.CheckPassword(r.Context(), in.Username, in.Password, false)
+	if errors.Is(err, store.ErrDisabled) {
+		fail(w, http.StatusForbidden, "This account is disabled. Ask your admin.")
+		return
+	}
 	if err != nil {
 		a.Limiter.Fail(ip)
 		fail(w, http.StatusUnauthorized, "That username and password don't match.")
 		return
 	}
-	token, err := a.Store.CreateSession(r.Context(), u.ID, "web", sessionTTL)
-	if err != nil {
-		a.internal(w, err)
+	if !a.startSession(w, r, u.ID) {
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: token, Path: "/", HttpOnly: true,
-		Secure: a.Secure, SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL.Seconds())})
 	reply(w, map[string]any{"username": u.Username})
 }
 
@@ -176,7 +206,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		ai = cfg
 	}
 	reply(w, map[string]any{"username": u.Username, "hasApiPassword": u.HasAPI, "prefs": json.RawMessage(u.Prefs),
-		"aiAvailable": a.Keyring != nil, "ai": ai,
+		"aiAvailable": a.Keyring != nil, "ai": ai, "role": u.Role, "passkeysAvailable": a.WebAuthn != nil,
 		// Only signed-in users learn the version, so it isn't advertised publicly.
 		"version": version.Version, "commit": version.Commit})
 }
