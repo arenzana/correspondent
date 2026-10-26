@@ -146,6 +146,10 @@ make vuln    # govulncheck + npm audit
   down the list, and new articles sliding in at the top and pushing the list
   down as they arrive (when you're at the top; a list you're reading further
   down stays still).
+- **Listen to articles**: natural read-aloud through an AI text-to-speech
+  API (the reader's own key and provider, set up like AI parsers), with
+  playback in the article view and on the lock screen, audio kept for
+  offline listening, and a queue that plays the unread list.
 - **A CLI reader and manager** for people and AI agents alike: the same
   binary talking to `/api/v1` with personal API tokens, `--json` output with
   stable schemas, no prompts, meaningful exit codes, and an MCP server.
