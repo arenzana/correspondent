@@ -14,6 +14,8 @@
 //	correspondent migrate verify <username> -freshrss URL -correspondent URL -api-password-file FILE
 //	correspondent migrate rollback <username> -freshrss URL -api-password-file FILE [-apply]
 //	correspondent legacy-auth on|off <username>
+//	correspondent feeds list <username>
+//	correspondent feeds resume <username> [feed-id...]   (no IDs: every paused feed)
 package main
 
 import (
@@ -83,7 +85,7 @@ func run(log *slog.Logger, args []string) error {
 		cmd, args = args[0], args[1:]
 	}
 	var sub string
-	if (cmd == "user" || cmd == "migrate" || cmd == "legacy-auth") && len(args) > 0 {
+	if (cmd == "user" || cmd == "migrate" || cmd == "legacy-auth" || cmd == "feeds") && len(args) > 0 {
 		sub, args = args[0], args[1:]
 	}
 	var positional []string
@@ -174,6 +176,11 @@ func run(log *slog.Logger, args []string) error {
 		default:
 			return fmt.Errorf("unknown migrate command %q", sub)
 		}
+	case "feeds":
+		if len(positional) < 1 {
+			return errors.New("usage: correspondent feeds list|resume <username> [feed-id...]")
+		}
+		return feedsCommand(ctx, st, sub, positional[0], positional[1:])
 	case "legacy-auth":
 		if len(positional) != 1 || (sub != "on" && sub != "off") {
 			return errors.New("usage: correspondent legacy-auth on|off <username>")
