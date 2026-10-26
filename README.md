@@ -119,6 +119,11 @@ make vuln    # govulncheck + npm audit
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.
+- Feeds for sites without one (for example a company's research page):
+  exact methods first (h-feed, JSON-LD, sitemaps, link patterns), then an
+  AI model, asked once per site, that works out extraction rules which are
+  then applied deterministically on every poll. The model only ever returns
+  validated selectors, never code; its API key is optional.
 - A reworked Settings: a full page with clear sections (reading,
   appearance, feeds and folders, apps and sync, data and backups, about),
   feed management with health and cadence, and live previews.
