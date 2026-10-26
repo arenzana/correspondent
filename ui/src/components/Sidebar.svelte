@@ -4,6 +4,7 @@
   import Icon, { type IconName } from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import Pulse from './Pulse.svelte'
+  import Mark from './Mark.svelte'
 
   const views: { view: View; label: string; icon: IconName }[] = [
     { view: 'unread', label: 'Unread', icon: 'inbox' },
@@ -54,7 +55,7 @@
 
 <nav class="sidebar" aria-label="Feeds">
   <header class="brand">
-    <span class="mark" aria-hidden="true"><i></i><b></b></span>
+    <Mark height={28} />
     <span class="wordmark">Correspondent</span>
   </header>
 
@@ -183,40 +184,6 @@
     font-variation-settings: 'opsz' 48;
     letter-spacing: -0.01em;
   }
-  /* The mark is a miniature wire: a spine, one filled dot, one ring. */
-  .mark {
-    position: relative;
-    width: 14px;
-    height: 22px;
-  }
-  .mark::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 0;
-    bottom: 0;
-    width: 1.5px;
-    background: var(--ink);
-    opacity: 0.35;
-  }
-  .mark i,
-  .mark b {
-    position: absolute;
-    left: 2.5px;
-    width: 8.5px;
-    height: 8.5px;
-    border-radius: 50%;
-  }
-  .mark i {
-    top: 1px;
-    background: var(--accent);
-  }
-  .mark b {
-    bottom: 1px;
-    border: 1.5px solid var(--ring);
-    background: var(--fog);
-  }
-
   .search {
     display: flex;
     align-items: center;

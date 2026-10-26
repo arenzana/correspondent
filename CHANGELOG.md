@@ -7,6 +7,13 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-26
+
+### Changed
+
+- The mark beside the wordmark is now the refined "wire" artwork used for
+  the app icon, instead of an approximation.
+
 ## [0.1.0] - 2026-10-26
 
 The first release: a self-hosted reader that can take over from FreshRSS
@@ -44,5 +51,6 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/arenzana/correspondent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/arenzana/correspondent/releases/tag/v0.1.0
