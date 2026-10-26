@@ -8,6 +8,11 @@ updates:
     directory: /ui
     schedule: { interval: weekly }
     groups: { ui: { patterns: ["*"] } }
+    ignore:
+      # svelte-check needs TypeScript 6 as "typescript"; TypeScript 7 is
+      # already used through @typescript/native (svelte-check --tsgo).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
