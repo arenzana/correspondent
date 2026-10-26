@@ -133,3 +133,7 @@ make vuln    # govulncheck + npm audit
 | `internal/greader` | Google Reader facade for Reeder |
 | `internal/migrate` | FreshRSS import preserving legacy IDs |
 | `ui/` | Svelte 5 reader |
+
+## License
+
+MIT. See [LICENSE](LICENSE).
