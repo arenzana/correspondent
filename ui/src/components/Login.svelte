@@ -1,13 +1,50 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte'
+  import { api } from '../lib/api'
+  import { conditionalAvailable, passkeysSupported, signInWithPasskey } from '../lib/passkey'
 
   let username = $state('')
   let password = $state('')
   let error = $state('')
   let busy = $state(false)
 
+  let passkeys = $state(false)
+  let autofill: AbortController | undefined
+
+  // Offer passkeys when the server has them: in the username field's
+  // autofill where the browser can, and as a button.
+  $effect(() => {
+    if (!passkeysSupported()) return
+    api
+      .authOptions()
+      .then(async (o) => {
+        passkeys = o.passkeys
+        if (!o.passkeys || !(await conditionalAvailable())) return
+        autofill = new AbortController()
+        const name = await signInWithPasskey('conditional', autofill.signal)
+        if (name) await app.signedIn()
+      })
+      .catch(() => {})
+    return () => autofill?.abort()
+  })
+
+  async function withPasskey() {
+    autofill?.abort()
+    busy = true
+    error = ''
+    try {
+      await signInWithPasskey()
+      await app.signedIn()
+    } catch (err) {
+      const e = err as Error
+      error = e.name === 'NotAllowedError' || e.name === 'AbortError' ? '' : e.message
+      busy = false
+    }
+  }
+
   async function submit(e: SubmitEvent) {
     e.preventDefault()
+    autofill?.abort()
     busy = true
     error = ''
     try {
@@ -26,7 +63,7 @@
     <label>
       <span>Username</span>
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="field" bind:value={username} autocomplete="username" autofocus required />
+      <input class="field" bind:value={username} autocomplete="username webauthn" autofocus required />
     </label>
     <label>
       <span>Password</span>
@@ -34,10 +71,16 @@
     </label>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     <button class="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+    {#if passkeys}
+      <button type="button" class="btn passkey" disabled={busy} onclick={withPasskey}>Sign in with a passkey</button>
+    {/if}
   </form>
 </main>
 
 <style>
+  .passkey {
+    justify-content: center;
+  }
   .login {
     min-height: 100%;
     display: grid;

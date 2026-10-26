@@ -162,6 +162,9 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, kind string, tt
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO sessions (token_hash, user_id, kind, created_at, expires_at, client, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		hashToken(token), userID, kind, now.Unix(), now.Add(ttl).Unix(), name, now.Unix())
+	if err == nil {
+		_, err = s.db.ExecContext(ctx, `UPDATE users SET last_seen_at = ? WHERE id = ?`, now.Unix(), userID)
+	}
 	return token, err
 }
 

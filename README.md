@@ -42,8 +42,8 @@ clients are concerned.
 | ![Command palette](docs/screenshots/command-palette.png) | ![Add feed dialog with a discovered feed](docs/screenshots/add-feed.png) |
 | **Manage subscriptions** | **Deleting asks first** |
 | ![Subscriptions page with feed health](docs/screenshots/manage.png) | ![Delete confirmation](docs/screenshots/manage-delete.png) |
-| **Settings, with live previews** | **…in every theme** |
-| ![Settings page: appearance with a live preview of the list](docs/screenshots/settings.png) | ![Settings in the Night desk theme](docs/screenshots/settings-night.png) |
+| **Settings, with live previews** | **Admin: accounts, server, shared parsers** |
+| ![Settings page: account and appearance with a live preview of the list](docs/screenshots/settings.png) | ![Admin page with accounts and an invitation form](docs/screenshots/admin.png) |
 
 <p>
   <img src="docs/screenshots/mobile-wire.png" alt="The wire on a phone" width="250">
@@ -99,6 +99,7 @@ docker compose exec correspondent /correspondent version
 | `CORRESPONDENT_RETENTION_DAYS` | `0` (keep all) | Delete read, unstarred articles older than this that have left their feed |
 | `CORRESPONDENT_NO_POLL` | | `1` to serve without fetching feeds (used during migration) |
 | `CORRESPONDENT_IMAGE_CACHE_MB` | `512` | Disk for proxied images; `0` turns the image proxy off and images load straight from their sites |
+| `CORRESPONDENT_PUBLIC_URL` | | The https address readers use; turns on passkeys (they're bound to it) and appears in invitation links |
 | `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
 
 ## Build from source
@@ -114,6 +115,29 @@ Session cookies are `Secure` by default, so serve it over HTTPS (or on
 localhost). Pass `-insecure-cookies` only for plain-HTTP development.
 Behind a reverse proxy, pass `-trusted-proxies 10.42.0.0/16` (your ingress
 range) so sign-in throttling sees real client addresses.
+
+## Several readers
+
+The first account is the admin. Invite others from **Admin** (in Settings,
+or ⌘K): each invitation is a one-time link, valid for a week, where the
+person chooses their own username and password; a password reset is a
+one-time link too, so passwords never pass through the admin. Each reader
+has their own feeds, folders, read state, settings, Reeder password and AI
+key; parsers for sites without feeds and the image cache are shared.
+
+The admin can make others admins, disable an account (it is signed out
+everywhere at once, Reeder included, and its feeds stop updating; its data
+is kept), delete one with all its data, see the server's health, and test,
+rebuild or remove shared parsers. The last admin can't be removed.
+
+Readers can add passkeys in Settings → Account and sign in with Face ID or
+Touch ID (set `CORRESPONDENT_PUBLIC_URL`), change their password, and sign
+out other devices. From the command line:
+
+```sh
+docker compose exec correspondent /correspondent invite [-admin] [-public-url https://rss.example.org]
+docker compose exec correspondent /correspondent user role <username> admin
+```
 
 ## Migrating from FreshRSS
 
@@ -149,8 +173,6 @@ make vuln    # govulncheck + npm audit
 - **A CLI reader and manager** for people and AI agents alike: the same
   binary talking to `/api/v1` with personal API tokens, `--json` output with
   stable schemas, no prompts, meaningful exit codes, and an MCP server.
-- **Multiple users**: accounts managed by an admin, per-user feeds and
-  state (the data model is already scoped per user).
 
 ## Layout
 

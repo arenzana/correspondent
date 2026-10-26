@@ -12,6 +12,8 @@
   import Resizer from './components/Resizer.svelte'
   import Manage from './components/Manage.svelte'
   import TabBar from './components/TabBar.svelte'
+  import Invite from './components/Invite.svelte'
+  import Admin from './components/Admin.svelte'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -94,14 +96,16 @@
   }
 </script>
 
-<svelte:window {onkeydown} onpopstate={() => app.onPopState()} />
+<svelte:window {onkeydown} onpopstate={() => app.onPopState()} onhashchange={() => app.readInvite()} />
 <svelte:document
   onvisibilitychange={() => {
     if (document.visibilityState === 'visible' && app.user) app.refreshTree()
   }}
 />
 
-{#if app.booting}
+{#if app.inviteToken}
+  <Invite token={app.inviteToken} />
+{:else if app.booting}
   <div class="boot" aria-label="Loading"></div>
 {:else if !app.user}
   <Login />
@@ -133,6 +137,8 @@
       <div class="list manage-pane"><Manage /></div>
     {:else if app.page === 'settings'}
       <div class="list manage-pane"><Settings /></div>
+    {:else if app.page === 'admin'}
+      <div class="list manage-pane"><Admin /></div>
     {:else}
     <div class="list">
       <Wire />

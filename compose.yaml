@@ -21,6 +21,9 @@ services:
       CORRESPONDENT_PASSWORD_FILE: /run/secrets/password
       CORRESPONDENT_API_PASSWORD_FILE: /run/secrets/api_password
       CORRESPONDENT_TRUSTED_PROXIES: ${CORRESPONDENT_TRUSTED_PROXIES:-}
+      # The https address readers use, e.g. https://rss.example.org: turns on
+      # passkeys and goes into invitation links.
+      CORRESPONDENT_PUBLIC_URL: ${CORRESPONDENT_PUBLIC_URL:-}
     secrets:
       - password
       - api_password

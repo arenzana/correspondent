@@ -87,6 +87,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/parsers/{id}/test", a.admin(a.testParser))
 	mux.HandleFunc("POST /api/v1/admin/parsers/{id}/rebuild", a.admin(a.rebuildParser))
 	mux.HandleFunc("DELETE /api/v1/admin/parsers/{id}", a.admin(a.deleteParser))
+	mux.HandleFunc("GET /api/v1/auth", a.authOptions)
 	mux.HandleFunc("POST /api/v1/session/passkey", a.passkeyLoginBegin)
 	mux.HandleFunc("POST /api/v1/session/passkey/finish", a.passkeyLoginFinish)
 	mux.HandleFunc("GET /api/v1/passkeys", a.auth(a.passkeys))

@@ -5,6 +5,8 @@
   import Icon from './Icon.svelte'
   import ThemePicker from './ThemePicker.svelte'
   import { relative } from '../lib/time'
+  import { addPasskey, passkeysSupported } from '../lib/passkey'
+  import type { Passkey, Session } from '../lib/api'
   import TextControls from './TextControls.svelte'
 
   let apiPassword = $state('')
@@ -121,6 +123,7 @@
   }
 
   const sections = [
+    { id: 'account', label: 'Account' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'reading', label: 'Reading' },
     { id: 'feeds', label: 'Feeds' },
@@ -128,7 +131,7 @@
     { id: 'about', label: 'About' },
   ]
   let scroller: HTMLElement | undefined = $state()
-  let current = $state('appearance')
+  let current = $state('account')
 
   function show(id: string) {
     current = id
@@ -172,6 +175,59 @@
     }
   }
 
+  // Account: password, passkeys, sessions.
+  let pwCurrent = $state('')
+  let pwNew = $state('')
+  let pwMessage = $state('')
+  async function changePassword(e: SubmitEvent) {
+    e.preventDefault()
+    pwMessage = ''
+    try {
+      await api.changePassword(pwCurrent, pwNew)
+      pwCurrent = pwNew = ''
+      pwMessage = 'Password changed. Other browsers were signed out.'
+      loadAccount()
+    } catch (err) {
+      pwMessage = (err as Error).message
+    }
+  }
+
+  let keys = $state<Passkey[]>([])
+  let sessionList = $state<Session[]>([])
+  let keyMessage = $state('')
+  let renaming = $state<number | null>(null)
+  const canPasskey = passkeysSupported()
+  function loadAccount() {
+    api.sessions().then((r) => (sessionList = r.sessions)).catch(() => {})
+    if (app.passkeysAvailable) api.passkeys().then((r) => (keys = r.passkeys)).catch(() => {})
+  }
+  $effect(loadAccount)
+
+  async function newPasskey() {
+    keyMessage = ''
+    try {
+      await addPasskey('')
+      keyMessage = 'Passkey added. Use it to sign in on this device.'
+      loadAccount()
+    } catch (err) {
+      const e = err as Error
+      keyMessage = e.name === 'NotAllowedError' || e.name === 'AbortError' ? '' : e.name === 'InvalidStateError' ? 'This device already has a passkey for your account.' : e.message
+    }
+  }
+  async function renameKey(id: number, name: string) {
+    renaming = null
+    await api.renamePasskey(id, name).catch((e) => (keyMessage = (e as Error).message))
+    loadAccount()
+  }
+  async function removeKey(k: Passkey) {
+    await api.deletePasskey(k.id).catch((e) => (keyMessage = (e as Error).message))
+    loadAccount()
+  }
+  async function endSession(x: Session) {
+    await api.endSession(x.id).catch(() => {})
+    loadAccount()
+  }
+
   let syncing = $state(false)
   async function syncNow() {
     syncing = true
@@ -211,6 +267,73 @@
     </nav>
 
     <div class="content">
+      <section id="settings-account">
+        <h2>Account</h2>
+        <div class="whoami">
+          <span class="avatar" aria-hidden="true">{(app.user ?? '?').slice(0, 1).toUpperCase()}</span>
+          <span><strong>{app.user}</strong>{#if app.role === 'admin'}<span class="role">Admin</span>{/if}</span>
+          {#if app.role === 'admin'}<button class="btn" onclick={() => app.openAdmin()}>Open admin</button>{/if}
+        </div>
+
+        {#if app.passkeysAvailable}
+          <div class="card">
+            <h3>Passkeys</h3>
+            <p class="hint">Sign in with Face ID, Touch ID or your device’s screen lock instead of a password. Each device keeps its own.</p>
+            {#if keys.length}
+              <ul class="list">
+                {#each keys as k (k.id)}
+                  <li>
+                    {#if renaming === k.id}
+                      <!-- svelte-ignore a11y_autofocus -->
+                      <input class="field" value={k.name} aria-label="Passkey name" autofocus
+                        onkeydown={(e) => { if (e.key === 'Enter') renameKey(k.id, e.currentTarget.value); if (e.key === 'Escape') renaming = null }}
+                        onblur={(e) => renameKey(k.id, e.currentTarget.value)} />
+                    {:else}
+                      <span class="item"><strong>{k.name}</strong>
+                        <small>Added {relative(k.createdAt)}{#if k.lastUsedAt}, last used {relative(k.lastUsedAt)}{:else}, not used yet{/if}</small></span>
+                      <span class="row-actions">
+                        <button class="link" onclick={() => (renaming = k.id)}>Rename</button>
+                        <button class="link danger" onclick={() => removeKey(k)}>Remove</button>
+                      </span>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if canPasskey}
+              <button class="btn" onclick={newPasskey}>Add a passkey on this device</button>
+            {:else}
+              <p class="hint">This browser can’t create passkeys.</p>
+            {/if}
+            {#if keyMessage}<p class="msg" role="status">{keyMessage}</p>{/if}
+          </div>
+        {/if}
+
+        <div class="card">
+          <h3>Password</h3>
+          <form class="pw" onsubmit={changePassword}>
+            <input type="text" autocomplete="username" value={app.user} hidden readonly />
+            <input class="field" type="password" bind:value={pwCurrent} autocomplete="current-password" placeholder="Current password" required />
+            <input class="field" type="password" bind:value={pwNew} autocomplete="new-password" placeholder="New password (10 characters or more)" minlength="10" required />
+            <button class="btn">Change password</button>
+          </form>
+          {#if pwMessage}<p class="msg" role="status">{pwMessage}</p>{/if}
+        </div>
+
+        <div class="card">
+          <h3>Signed in</h3>
+          <ul class="list">
+            {#each sessionList as x (x.id)}
+              <li>
+                <span class="item"><strong>{x.kind === 'greader' ? 'Reader app' : x.client || 'Browser'}{#if x.current}<span class="role">This device</span>{/if}</strong>
+                  <small>Signed in {relative(x.createdAt)}{#if x.lastSeenAt && !x.current}, active {relative(x.lastSeenAt)}{/if}</small></span>
+                {#if !x.current}<button class="link danger" onclick={() => endSession(x)}>Sign out</button>{/if}
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </section>
+
       <section id="settings-appearance">
         <h2>Appearance</h2>
         <div class="preview wire-preview" aria-hidden="true">
@@ -728,6 +851,86 @@
     background: var(--accent-wash);
     color: var(--ink);
     font-weight: 600;
+  }
+
+  .whoami {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .whoami > span:nth-child(2) {
+    flex: 1;
+  }
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent-wash-strong);
+    color: var(--accent);
+    font-family: var(--font-read);
+    font-size: calc(19px * var(--ui-scale));
+    font-weight: 600;
+  }
+  .role {
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--fog);
+    color: var(--slate);
+    font-size: calc(11px * var(--ui-scale));
+    font-weight: 600;
+    vertical-align: 1px;
+  }
+  .list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .list li:first-child {
+    border-top: 0;
+  }
+  .item {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .item strong {
+    font-weight: 500;
+  }
+  .item small {
+    font-size: calc(12.5px * var(--ui-scale));
+    color: var(--slate);
+  }
+  .row-actions {
+    display: flex;
+    gap: 12px;
+  }
+  .link.danger {
+    color: var(--danger);
+  }
+  .pw {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+  }
+  @media (max-width: 559px) {
+    .pw {
+      grid-template-columns: 1fr;
+    }
+    .pw .btn {
+      justify-self: start;
+    }
   }
 
   /* A setting that is on or off: label left, switch right. */

@@ -230,6 +230,11 @@ func (a *API) deletePasskey(w http.ResponseWriter, r *http.Request) {
 
 // --- sign-in (signed out) --------------------------------------------------
 
+// authOptions tells the sign-in page which ways to sign in exist.
+func (a *API) authOptions(w http.ResponseWriter, r *http.Request) {
+	reply(w, map[string]any{"passkeys": a.WebAuthn != nil})
+}
+
 // passkeyLoginBegin starts a sign-in with any passkey for this site: the
 // device offers the reader's passkeys, no username needed.
 func (a *API) passkeyLoginBegin(w http.ResponseWriter, r *http.Request) {

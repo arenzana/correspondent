@@ -7,6 +7,33 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-26
+
+### Added
+
+- Several readers on one server. The first account is the admin; others
+  join through invitation links (one-time, valid for a week) where they
+  choose their own username and password. Everyone has their own feeds,
+  state, settings, Reeder password and AI key; shared parsers and the image
+  cache serve everyone.
+- Admin page: accounts (make admin, disable, password-reset link, delete
+  with all data; the last admin can't be removed), pending invitations,
+  server health (feeds failing across accounts, database and image-cache
+  size, last backup, polling), and shared parsers (test, rebuild, remove).
+- Passkeys: add them in Settings → Account and sign in with Face ID, Touch
+  ID or a security key, offered right in the username field where the
+  browser can. Needs `CORRESPONDENT_PUBLIC_URL`.
+- Settings → Account: change your password (other browsers are signed out)
+  and see and sign out the devices and apps signed in to your account.
+- `correspondent invite [-admin]` and `correspondent user role` on the
+  command line.
+
+### Security
+
+- A disabled account can't sign in, its sessions and app tokens stop
+  working at once, and its feeds stop updating. Signing in as a different
+  reader on a device first erases the previous reader's offline copy.
+
 ## [0.9.0] - 2026-10-26
 
 ### Added
@@ -250,7 +277,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/arenzana/correspondent/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/arenzana/correspondent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/arenzana/correspondent/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/arenzana/correspondent/compare/v0.7.3...v0.7.4

@@ -167,6 +167,9 @@ let server
 try {
   await new Promise((r) => fixtures.listen(8098, '127.0.0.1', r))
   run(['user', 'add', USER], PASSWORD + '\n')
+  // Other readers on the server, for the admin page.
+  run(['user', 'add', 'marguerite'], 'another-password-1\n')
+  run(['user', 'add', 'tomas'], 'another-password-2\n')
   const opmlPath = join(data, 'feeds.opml')
   await import('node:fs').then((fs) => fs.writeFileSync(opmlPath, opml()))
   run(['import-freshrss', USER, '-opml', opmlPath])
@@ -218,7 +221,7 @@ try {
     // Hash-only navigations don't reload; start every shot from a fresh page.
     await page.goto('about:blank')
     await page.goto(`${APP}/${hash}`)
-    await page.waitForSelector(hash.includes('manage') ? '.manage .row' : hash.includes('settings') ? '.settings .wire-preview' : '.wire .row', { state: 'attached' })
+    await page.waitForSelector(hash.includes('manage') ? '.manage .row' : hash.includes('settings') ? '.settings .wire-preview' : hash.includes('admin') ? '.admin .account' : '.wire .row', { state: 'attached' })
     await page.waitForLoadState('networkidle')
     if (setup) await setup()
     await page.waitForTimeout(400)
@@ -251,7 +254,7 @@ try {
   })
   await shot('manage', { hash: '#/manage' })
   await shot('settings', { hash: '#/settings' })
-  await shot('settings-night', { theme: 'night', hash: '#/settings' })
+  await shot('admin', { hash: '#/admin' })
   await shot('manage-delete', {
     hash: '#/manage',
     theme: 'night',

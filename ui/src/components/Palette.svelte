@@ -56,6 +56,9 @@
       { id: 'a-sun', label: 'Follow sunrise and sunset', icon: 'sun', group: 'Actions', run: () => app.useSunTheme() },
       { id: 'a-keys', label: 'Keyboard shortcuts', icon: 'keyboard', group: 'Actions', hint: '?', run: () => (app.shortcutsOpen = true) },
       { id: 'a-settings', label: 'Settings', icon: 'settings', group: 'Actions', run: () => app.openSettings() },
+      ...(app.role === 'admin'
+        ? [{ id: 'a-admin', label: 'Admin: accounts, server, parsers', icon: 'settings' as const, group: 'Actions', run: () => app.openAdmin() }]
+        : []),
     ]
     return out
   })

@@ -85,6 +85,84 @@ export interface Candidate {
 
 export type AIProvider = 'anthropic' | 'openai'
 
+export type Role = 'admin' | 'user'
+
+export interface Account {
+  id: number
+  username: string
+  role: Role
+  disabled: boolean
+  createdAt: number
+  lastSeenAt: number
+  feeds: number
+  articles: number
+  passkeys: number
+  hasApiPassword: boolean
+  hasAI: boolean
+}
+
+export interface Invite {
+  id: number
+  kind: 'invite' | 'reset'
+  userId?: number
+  username?: string
+  role: Role
+  note: string
+  createdBy: string
+  createdAt: number
+  expiresAt: number
+}
+
+export interface Session {
+  id: number
+  kind: 'web' | 'greader'
+  client: string
+  createdAt: number
+  lastSeenAt: number
+  current: boolean
+}
+
+export interface Passkey {
+  id: number
+  name: string
+  createdAt: number
+  lastUsedAt: number
+}
+
+export interface ServerInfo {
+  version: string
+  commit: string
+  go: string
+  startedAt: number
+  passkeys: boolean
+  databaseBytes?: number
+  imageCacheBytes?: number
+  backupAt?: number
+  stats: {
+    accounts: number
+    disabled: number
+    feeds: number
+    failing: number
+    paused: number
+    articles: number
+    parsers: number
+    lastFetchAt: number
+    polledLastHour: number
+  }
+  failing: { id: number; title: string; url: string; owner: string; errorCount: number; lastError: string }[]
+}
+
+export interface ParserInfo {
+  id: number
+  url: string
+  method: string
+  builtin: boolean
+  createdBy: string
+  updatedAt: number
+  feeds: number
+  failing: number
+}
+
 /** A reader's AI setup; the key itself never comes back, only its hint. */
 export interface AIConfig {
   provider: AIProvider
@@ -158,7 +236,39 @@ export const api = {
       commit: string
       aiAvailable: boolean
       ai: AIConfig | null
+      role: Role
+      passkeysAvailable: boolean
     }>('GET', '/me'),
+  authOptions: () => request<{ passkeys: boolean }>('GET', '/auth'),
+  sessions: () => request<{ sessions: Session[] }>('GET', '/sessions'),
+  endSession: (id: number) => request<void>('DELETE', `/sessions/${id}`),
+  changePassword: (current: string, next: string) => request<void>('PUT', '/password', { current, new: next }),
+  invite: (token: string) =>
+    request<{ kind: 'invite' | 'reset'; username: string; invitedBy: string; expiresAt: number }>('GET', `/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, username: string, password: string) =>
+    request<{ username: string }>('POST', `/invites/${encodeURIComponent(token)}`, { username, password }),
+  passkeys: () => request<{ passkeys: Passkey[] }>('GET', '/passkeys'),
+  renamePasskey: (id: number, name: string) => request<void>('PATCH', `/passkeys/${id}`, { name }),
+  deletePasskey: (id: number) => request<void>('DELETE', `/passkeys/${id}`),
+  /** WebAuthn ceremonies: the server's options and the device's answer, as JSON. */
+  passkeyRegisterBegin: () => request<{ publicKey: Record<string, unknown> }>('POST', '/passkeys'),
+  passkeyRegisterFinish: (credential: unknown, name: string) =>
+    request<{ id: number }>('POST', `/passkeys/finish?name=${encodeURIComponent(name)}`, credential),
+  passkeyLoginBegin: () => request<{ publicKey: Record<string, unknown> }>('POST', '/session/passkey'),
+  passkeyLoginFinish: (credential: unknown) => request<{ username: string }>('POST', '/session/passkey/finish', credential),
+  admin: {
+    accounts: () => request<{ accounts: Account[]; invites: Invite[] }>('GET', '/admin/accounts'),
+    invite: (role: Role, note: string) => request<{ token: string; expiresAt: number }>('POST', '/admin/invites', { role, note }),
+    revokeInvite: (id: number) => request<void>('DELETE', `/admin/invites/${id}`),
+    updateAccount: (id: number, patch: { role?: Role; disabled?: boolean }) => request<void>('PATCH', `/admin/accounts/${id}`, patch),
+    resetLink: (id: number) => request<{ token: string; expiresAt: number }>('POST', `/admin/accounts/${id}/reset`),
+    deleteAccount: (id: number) => request<void>('DELETE', `/admin/accounts/${id}`),
+    server: () => request<ServerInfo>('GET', '/admin/server'),
+    parsers: () => request<{ parsers: ParserInfo[] }>('GET', '/admin/parsers'),
+    testParser: (id: number) => request<{ ok: boolean; items?: number; sample?: string[]; error?: string }>('POST', `/admin/parsers/${id}/test`),
+    rebuildParser: (id: number) => request<{ method: string; items: number; sample: string[] }>('POST', `/admin/parsers/${id}/rebuild`),
+    deleteParser: (id: number) => request<void>('DELETE', `/admin/parsers/${id}`),
+  },
   setAI: (config: Omit<AIConfig, 'keyHint'> & { key: string }) => request<{ ai: AIConfig }>('PUT', '/ai', config),
   deleteAI: () => request<void>('DELETE', '/ai'),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),

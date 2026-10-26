@@ -3,7 +3,7 @@
 // server refuses. Without a network, the reader works from its offline copy
 // (lib/offline) and queues changes until the connection returns.
 
-import { api, ApiError, type AIConfig, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type AIConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
@@ -84,6 +84,13 @@ class AppState {
   user = $state<string | null>(null)
   booting = $state(true)
   hasApiPassword = $state(false)
+  role = $state<Role>('user')
+  /** An invitation or reset link being opened (#/invite/<token>). */
+  inviteToken = $state(inviteFromHash())
+  readInvite() {
+    this.inviteToken = inviteFromHash()
+  }
+  passkeysAvailable = $state(false)
   /** Whether this server can use AI, and the reader's setup if any. */
   aiAvailable = $state(false)
   ai = $state<AIConfig | null>(null)
@@ -126,7 +133,7 @@ class AppState {
   focusMode = $state(false)
 
   /** Which page fills the main area: the reader, or subscription management. */
-  page = $state<'reader' | 'manage' | 'settings'>('reader')
+  page = $state<'reader' | 'manage' | 'settings' | 'admin'>('reader')
   paletteOpen = $state(false)
   shortcutsOpen = $state(false)
   addFeedOpen = $state(false)
@@ -163,6 +170,10 @@ class AppState {
       let me: Awaited<ReturnType<typeof api.me>>
       try {
         me = await api.me()
+        // Another reader's offline copy never shows to this one: a device
+        // signed in as someone else is wiped first.
+        const before = await offline.getMeta<{ username: string }>('me').catch(() => undefined)
+        if (before && before.username !== me.username) await offline.clear().catch(() => {})
         offline.setMeta('me', me).catch(() => {})
       } catch (e) {
         // Opened without a network: carry on from the offline copy if there is one.
@@ -175,6 +186,8 @@ class AppState {
       this.hasApiPassword = me.hasApiPassword
       this.aiAvailable = me.aiAvailable
       this.ai = me.ai
+      this.role = me.role ?? 'user'
+      this.passkeysAvailable = !!me.passkeysAvailable
       this.version = me.version
       this.commit = me.commit
       this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>) }
@@ -197,6 +210,13 @@ class AppState {
 
   async signIn(username: string, password: string) {
     await api.login(username, password)
+    await this.signedIn()
+  }
+
+  /** After any sign-in (password, passkey, invitation): start the app. */
+  async signedIn() {
+    if (location.hash.startsWith('#/invite/')) history.replaceState(null, '', '#/unread')
+    this.inviteToken = ''
     this.booting = true
     await this.boot()
   }
@@ -572,6 +592,15 @@ class AppState {
     this.settingsSection = section ?? ''
     if (!location.hash.startsWith('#/settings')) history.pushState(null, '', '#/settings')
   }
+  /** Open the admin page (admins only). */
+  openAdmin() {
+    if (this.role !== 'admin') return
+    this.page = 'admin'
+    this.navOpen = false
+    this.pane = 'list'
+    if (location.hash !== '#/admin') history.pushState(null, '', '#/admin')
+  }
+
   /** The section Settings should show first, if any. */
   settingsSection = $state('')
 
@@ -596,8 +625,8 @@ class AppState {
   }
 
   readHash() {
-    if (location.hash === '#/manage' || location.hash.startsWith('#/settings')) {
-      this.page = location.hash === '#/manage' ? 'manage' : 'settings'
+    if (location.hash === '#/manage' || location.hash.startsWith('#/settings') || location.hash === '#/admin') {
+      this.page = location.hash === '#/manage' ? 'manage' : location.hash === '#/admin' && this.role === 'admin' ? 'admin' : 'settings'
       this.pane = 'list'
       return
     }
@@ -1037,6 +1066,11 @@ class AppState {
   dismiss(id: number) {
     this.toasts = this.toasts.filter((t) => t.id !== id)
   }
+}
+
+function inviteFromHash(): string {
+  const m = typeof location === 'undefined' ? null : location.hash.match(/^#\/invite\/([A-Za-z0-9_-]{16,64})$/)
+  return m ? m[1] : ''
 }
 
 export const app = new AppState()

@@ -66,7 +66,7 @@ try {
   const opml = join(data, 'feeds.opml')
   writeFileSync(opml, `<opml version="2.0"><body><outline type="rss" text="Wire Service" xmlUrl="${FEEDS}/feed.xml"/></body></opml>`)
   execFileSync(bin, ['import-freshrss', USER, '-opml', opml, '-data', data], { stdio: 'ignore' })
-  server = spawn(bin, ['serve', '-addr', '127.0.0.1:8097', '-data', data, '-insecure-cookies', '-allow-private-feeds'], {
+  server = spawn(bin, ['serve', '-addr', '127.0.0.1:8097', '-data', data, '-insecure-cookies', '-allow-private-feeds', '-public-url', 'http://localhost:8097'], {
     stdio: ['ignore', 'ignore', 'inherit'],
   })
 
@@ -83,7 +83,7 @@ try {
       await new Promise((r) => setTimeout(r, 200))
     }
   }
-  await page.fill('input[autocomplete=username]', USER)
+  await page.fill('input[autocomplete^=username]', USER)
   await page.fill('input[type=password]', PASSWORD)
   await page.click('button.primary')
   await page.waitForSelector('.wire .row', { state: 'attached', timeout: 30_000 })
@@ -185,7 +185,7 @@ try {
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 })
   const mobile = await phone.newPage()
   await mobile.goto(APP)
-  await mobile.fill('input[autocomplete=username]', USER)
+  await mobile.fill('input[autocomplete^=username]', USER)
   await mobile.fill('input[type=password]', PASSWORD)
   await mobile.click('button.primary')
   await mobile.waitForSelector('.wire .row', { state: 'attached' })
@@ -341,6 +341,75 @@ try {
   check(shown.length === 1 && shown[0].title === 'Wire Service' && shown[0].body === 'Dispatch 9', 'a push message shows a notification')
   check(shown[0]?.tag === 'feed-1', 'notifications are tagged per feed, so newer ones replace older')
   check(shown[0]?.url === '/', 'a notification can only open an in-app address')
+
+  console.log('Several readers')
+  // Passkeys need a domain, not an IP: this part runs on localhost.
+  const HOST = 'http://localhost:8097'
+  const adminCtx = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+  const admin = await adminCtx.newPage()
+  await admin.goto(HOST)
+  await admin.fill('input[autocomplete="username webauthn"]', USER)
+  await admin.fill('input[type=password]', PASSWORD)
+  await admin.click('button.primary')
+  await admin.locator('.shell').waitFor()
+  await admin.goto(HOST + '/#/admin')
+  await admin.reload()
+  const adminPage = admin.locator('section.admin')
+  await adminPage.waitFor()
+  const adminRow = adminPage.locator('.account', { hasText: USER })
+  const sawAdmin = await adminRow.waitFor({ timeout: 10_000 }).then(() => adminRow.getByText('Admin').isVisible(), () => false)
+  check(sawAdmin, 'the first account is the admin and sees the admin page')
+  await adminPage.getByPlaceholder(/Who is it for/).fill('Carol')
+  await adminPage.getByRole('button', { name: 'Create invite link' }).click()
+  const link = await adminPage.locator('.fresh code').innerText()
+  check(link.startsWith(HOST + '/#/invite/'), 'an invitation link is made, shown once')
+
+  const carolCtx = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+  const carol = await carolCtx.newPage()
+  // A virtual authenticator, as on a phone with Face ID.
+  const authn = await carolCtx.newCDPSession(carol)
+  await authn.send('WebAuthn.enable')
+  await authn.send('WebAuthn.addVirtualAuthenticator', {
+    options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  })
+  await carol.goto(link)
+  await carol.getByText(`${USER} invited you.`, { exact: false }).waitFor()
+  await carol.getByLabel('Username').fill('carol')
+  await carol.getByLabel('Password', { exact: true }).fill('carol-password-1')
+  await carol.getByLabel('Password again').fill('carol-password-1')
+  await carol.getByRole('button', { name: 'Create account' }).click()
+  await carol.locator('.shell').waitFor({ timeout: 15_000 })
+  const carolMe = await carol.evaluate(async () => (await (await fetch('/api/v1/me')).json()))
+  check(carolMe.username === 'carol' && carolMe.role === 'user', 'opening the link creates the account and signs in, as a reader')
+  await carol.goto(HOST + '/#/admin')
+  await carol.reload()
+  check(!(await carol.locator('section.admin').isVisible()), 'readers never see the admin page')
+  const adminAPI = await carol.evaluate(async () => (await fetch('/api/v1/admin/accounts')).status)
+  check(adminAPI === 403, 'and the server refuses them its admin API')
+
+  // A passkey, then signing in with it.
+  await carol.goto(HOST + '/#/settings')
+  await carol.reload()
+  await carol.getByRole('button', { name: 'Add a passkey on this device' }).click()
+  await carol.locator('.settings .list li', { hasText: 'Added' }).first().waitFor({ timeout: 10_000 })
+  check(await carol.locator('.settings .list li', { hasText: 'not used yet' }).count() === 1, 'a passkey can be added from Settings')
+  await carol.getByRole('button', { name: 'Sign out' }).last().click()
+  await carol.locator('main.login').waitFor({ timeout: 10_000 })
+  const button = carol.getByRole('button', { name: 'Sign in with a passkey' })
+  // The browser may already have signed in through passkey autofill.
+  await Promise.race([button.click().catch(() => {}), carol.locator('.shell').waitFor({ timeout: 10_000 })])
+  await carol.locator('.shell').waitFor({ timeout: 10_000 })
+  const viaPasskey = await carol.evaluate(async () => (await (await fetch('/api/v1/me')).json()).username)
+  check(viaPasskey === 'carol', 'and signs in with it, no password')
+
+  // Disabling signs the reader out at once.
+  await admin.reload()
+  await adminPage.locator('.account', { hasText: 'carol' }).getByRole('button', { name: 'Disable' }).click()
+  await adminPage.locator('.account', { hasText: 'carol' }).getByText('Disabled').waitFor()
+  const afterDisable = await carol.evaluate(async () => (await fetch('/api/v1/me')).status)
+  check(afterDisable === 401, 'disabling an account ends its sessions')
+  await carolCtx.close()
+  await adminCtx.close()
 
   await browser.close()
 } finally {
