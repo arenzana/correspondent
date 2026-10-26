@@ -3,10 +3,11 @@
 // server refuses.
 
 import { api, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { coarse, estimateFromTimezone, sunTheme } from './sun'
 
 export type View = 'unread' | 'today' | 'starred' | 'all'
 export type Source = { kind: 'view'; view: View } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
-export type Theme = 'auto' | 'day' | 'night' | 'evening'
+export type Theme = 'auto' | 'sun' | 'day' | 'night' | 'evening'
 export type Pane = 'nav' | 'list' | 'article'
 
 export interface Prefs {
@@ -18,6 +19,8 @@ export interface Prefs {
   unreadOnly: boolean
   markOnOpen: boolean
   sidebar: boolean
+  /** Coarse position (about 11 km) for the Sun theme; never more precise. */
+  place: { lat: number; lon: number; estimated: boolean } | null
 }
 
 const defaultPrefs: Prefs = {
@@ -29,6 +32,7 @@ const defaultPrefs: Prefs = {
   unreadOnly: true,
   markOnOpen: true,
   sidebar: true,
+  place: null,
 }
 
 interface Toast {
@@ -157,9 +161,48 @@ class AppState {
   }
   private prefsTimer: ReturnType<typeof setTimeout> | undefined
 
+  /** When the Sun theme will next change, for the settings popover. */
+  sunNext = $state<{ theme: 'day' | 'evening'; at: Date } | null>(null)
+  private sunTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
+   * Switches to the Sun theme: Day from sunrise to sunset, Evening after.
+   * Asks for location once; refusing falls back to a time-zone estimate.
+   */
+  async useSunTheme() {
+    let place = this.prefs.place
+    if (!place || place.estimated) {
+      place = await new Promise((resolve) => {
+        const fallback = () => resolve({ ...estimateFromTimezone(), estimated: true })
+        if (!('geolocation' in navigator)) return fallback()
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: coarse(p.coords.latitude), lon: coarse(p.coords.longitude), estimated: false }),
+          fallback,
+          { enableHighAccuracy: false, maximumAge: 86_400_000, timeout: 10_000 },
+        )
+      })
+    }
+    this.setPrefs({ theme: 'sun', place })
+  }
+
+  /** The theme actually shown right now. */
+  private resolvedTheme(): string {
+    clearTimeout(this.sunTimer)
+    this.sunNext = null
+    const { theme, place } = this.prefs
+    if (theme !== 'sun') return theme === 'day' ? 'light' : theme
+    const p = place ?? { ...estimateFromTimezone(), estimated: true }
+    const now = new Date()
+    const r = sunTheme(now, p.lat, p.lon)
+    this.sunNext = { theme: r.theme === 'day' ? 'evening' : 'day', at: r.next }
+    // Re-evaluate at the next sunrise or sunset (plus a second of margin).
+    this.sunTimer = setTimeout(() => this.applyPrefs(), Math.min(r.next.getTime() - now.getTime() + 1000, 2 ** 31 - 1))
+    return r.theme === 'day' ? 'light' : 'evening'
+  }
+
   applyPrefs() {
     const root = document.documentElement
-    root.dataset.theme = this.prefs.theme === 'day' ? 'light' : this.prefs.theme
+    root.dataset.theme = this.resolvedTheme()
     root.dataset.density = this.prefs.density
     root.style.setProperty('--read-size', this.prefs.readSize + 'px')
     root.style.setProperty('--read-measure', this.prefs.measure + 'ch')

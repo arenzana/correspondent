@@ -6,6 +6,7 @@
   import { app } from '../lib/state.svelte'
   import { arrivedAt, dayKey, dayLabel, gutterTime } from '../lib/time'
   import { api, type Entry } from '../lib/api'
+  import { swipe } from '../lib/swipe'
   import Icon from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
 
@@ -156,7 +157,12 @@
                   class:read={e.read}
                   class:selected
                   data-id={e.id}
+                  use:swipe={{ onCommit: (a) => (a === 'read' ? app.setRead([e.id], !e.read) : app.setStarred(e.id, !e.starred)) }}
                 >
+                  <span class="reveal" aria-hidden="true">
+                    <span class="reveal-read"><Icon name={e.read ? 'dot' : 'check'} size={18} />{e.read ? 'Unread' : 'Read'}</span>
+                    <span class="reveal-star"><Icon name="star" size={18} fill={!e.starred} />{e.starred ? 'Unstar' : 'Star'}</span>
+                  </span>
                   <button
                     class="hit"
                     aria-current={selected ? 'true' : undefined}
@@ -344,6 +350,52 @@
     position: relative;
     content-visibility: auto;
     contain-intrinsic-size: auto 104px;
+    overflow: hidden;
+    touch-action: pan-y; /* vertical scrolling stays native; horizontal is ours */
+  }
+  /* Rows are transparent so the spine shows through; a row becomes opaque
+     only while it is being swiped, to cover the action revealed behind it. */
+  .row .hit {
+    position: relative;
+    z-index: 1;
+    transform: translateX(var(--swipe-dx, 0));
+    transition: transform 220ms var(--ease), background var(--fast) var(--ease);
+  }
+  .row:global(.swiping) .hit {
+    transition: none;
+    background: var(--sheet);
+  }
+  /* What a swipe will do, revealed behind the row. */
+  .reveal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 22px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--sheet);
+    background: var(--ring);
+    opacity: 0;
+  }
+  .row:global(.swiping) .reveal {
+    opacity: 1;
+  }
+  .reveal span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .row:global([data-swipe^='read']) .reveal-star,
+  .row:global([data-swipe^='star']) .reveal-read {
+    visibility: hidden;
+  }
+  .row:global([data-swipe='read']) .reveal {
+    background: var(--accent);
+  }
+  .row:global([data-swipe='star']) .reveal {
+    background: var(--seal);
   }
   .hit {
     display: grid;

@@ -1,9 +1,11 @@
 <script lang="ts">
   import { app, type Theme } from '../lib/state.svelte'
+  import { clock } from '../lib/time'
 
   // Swatches show each theme's own sheet and ink, independent of the current theme.
   const themes: { id: Theme; label: string; bg: string; fg: string }[] = [
-    { id: 'auto', label: 'Auto', bg: 'linear-gradient(135deg, #ffffff 50%, #161d2a 50%)', fg: '#8d97ab' },
+    { id: 'auto', label: 'System', bg: 'linear-gradient(135deg, #ffffff 50%, #161d2a 50%)', fg: '#8d97ab' },
+    { id: 'sun', label: 'Sun', bg: 'linear-gradient(135deg, #ffffff 50%, #f4ecdc 50%)', fg: '#6e604b' },
     { id: 'day', label: 'Day', bg: '#ffffff', fg: '#18213a' },
     { id: 'night', label: 'Night desk', bg: '#161d2a', fg: '#e3e8f2' },
     { id: 'evening', label: 'Evening', bg: '#f4ecdc', fg: '#2e2416' },
@@ -30,12 +32,19 @@
     <legend>Theme</legend>
     <div class="themes">
       {#each themes as t (t.id)}
-        <button class="theme" aria-pressed={app.prefs.theme === t.id} onclick={() => app.setPrefs({ theme: t.id })}>
+        <button class="theme" aria-pressed={app.prefs.theme === t.id}
+          onclick={() => (t.id === 'sun' ? app.useSunTheme() : app.setPrefs({ theme: t.id }))}>
           <span class="swatch" style:background={t.bg} style:color={t.fg}>Aa</span>
           {t.label}
         </button>
       {/each}
     </div>
+    {#if app.prefs.theme === 'sun' && app.sunNext}
+      <p class="sun-note">
+        {app.sunNext.theme === 'evening' ? 'Evening' : 'Day'} at {clock(app.sunNext.at)}{#if app.prefs.place?.estimated},
+          estimated from your time zone{/if}.
+      </p>
+    {/if}
   </fieldset>
 
   <fieldset>
@@ -73,7 +82,7 @@
     right: 0;
     top: 40px;
     z-index: 20;
-    width: 300px;
+    width: 340px;
     padding: 16px;
     display: grid;
     gap: 16px;
@@ -111,7 +120,7 @@
   }
   .themes {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
   }
   .theme {
@@ -138,6 +147,11 @@
   .theme[aria-pressed='true'] .swatch {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent-wash-strong);
+  }
+  .sun-note {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: var(--slate);
   }
   .seg {
     display: grid;

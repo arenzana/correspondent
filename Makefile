@@ -1,4 +1,4 @@
-.PHONY: all ui build test check fuzz vuln dev screenshots clean
+.PHONY: all ui build test check fuzz vuln dev screenshots image clean
 
 all: build
 
@@ -9,8 +9,13 @@ build: ui
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/correspondent ./cmd/correspondent
 
 test:
+	test -z "$$(gofmt -l .)" || (gofmt -l . && exit 1)
 	go vet ./...
-	go test -race ./...
+	go test -race -cover ./...
+	cd ui && npm test
+
+image:
+	docker buildx build --load -t correspondent:dev --build-arg VERSION=$$(git describe --tags --always --dirty) .
 
 fuzz:
 	go test ./internal/content -run=^$$ -fuzz=FuzzProcess -fuzztime=60s

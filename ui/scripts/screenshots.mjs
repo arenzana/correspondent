@@ -242,6 +242,19 @@ try {
   })
   await shot('mobile-wire', { viewport: { width: 390, height: 844 }, hash: '#/unread' })
   await shot('mobile-article', { viewport: { width: 390, height: 844 } })
+  await shot('mobile-swipe', {
+    viewport: { width: 390, height: 844 },
+    hash: '#/unread',
+    setup: async () => {
+      // Hold a swipe mid-gesture on the second row, past the commit point.
+      await page.locator('.wire .row').nth(1).evaluate((li) => {
+        const ev = (type, x) => new PointerEvent(type, { clientX: x, clientY: 300, pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true })
+        li.dispatchEvent(ev('pointerdown', 40))
+        li.dispatchEvent(ev('pointermove', 60))
+        li.dispatchEvent(ev('pointermove', 170))
+      })
+    },
+  })
 
   await browser.close()
 } finally {
