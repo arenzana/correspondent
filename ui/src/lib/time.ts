@@ -1,5 +1,5 @@
-// Time helpers. Entry IDs are microsecond crawl timestamps, so the wire is
-// grouped by when an article arrived, the order Reeder also uses.
+// Time helpers. The reader lists articles by publication time; entry IDs are
+// microsecond arrival (crawl) timestamps, which only sync and boundaries use.
 
 const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
 const longFmt = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -28,19 +28,6 @@ export function dayLabel(d: Date, now = new Date()): string {
 
 export function clock(d: Date): string {
   return clockFmt.format(d)
-}
-
-const yearFmt = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' })
-
-/**
- * The wire's gutter shows when an article was published: a 24-hour clock if
- * it was published the day it arrived, otherwise a date, so an old article
- * that just arrived reads as old.
- */
-export function gutterTime(publishedSec: number, arrived: Date, now = new Date()): string {
-  const d = new Date(publishedSec * 1000)
-  if (startOfDay(d) === startOfDay(arrived)) return clock(d)
-  return d.getFullYear() === now.getFullYear() ? shortFmt.format(d) : yearFmt.format(d)
 }
 
 export function longDate(seconds: number): string {

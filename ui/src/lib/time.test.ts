@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrivedAt, dayLabel, gutterTime, readingMinutes, relative } from './time'
+import { arrivedAt, clock, dayLabel, readingMinutes, relative } from './time'
 
 describe('arrivedAt', () => {
   it('decodes microsecond IDs without losing precision', () => {
@@ -20,16 +20,10 @@ describe('dayLabel', () => {
   })
 })
 
-describe('gutterTime', () => {
-  const now = new Date(2026, 9, 26, 15, 0)
-  it('shows a 24-hour clock for same-day publication', () => {
-    const published = new Date(2026, 9, 26, 14, 5).getTime() / 1000
-    expect(gutterTime(published, new Date(2026, 9, 26, 14, 30), now)).toMatch(/^14.05$/)
-  })
-  it('shows a date for older articles, with a year when it differs', () => {
-    const arrived = new Date(2026, 9, 26, 14, 30)
-    expect(gutterTime(new Date(2026, 9, 20).getTime() / 1000, arrived, now)).toMatch(/20/)
-    expect(gutterTime(new Date(2019, 0, 5).getTime() / 1000, arrived, now)).toMatch(/2019/)
+describe('clock', () => {
+  it('uses a 24-hour clock', () => {
+    expect(clock(new Date(2026, 9, 26, 14, 5))).toMatch(/^14.05$/)
+    expect(clock(new Date(2026, 9, 26, 0, 30))).toMatch(/^00.30$/)
   })
 })
 

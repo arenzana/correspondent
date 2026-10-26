@@ -193,10 +193,14 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 // filterFrom maps reader query parameters to a store filter.
 func filterFrom(r *http.Request) store.Filter {
 	q := r.URL.Query()
-	f := store.Filter{UserID: userID(r), Query: q.Get("q"), Oldest: q.Get("order") == "oldest"}
+	// The reader lists by publication time; the cursor is "published.id".
+	f := store.Filter{UserID: userID(r), Query: q.Get("q"), Oldest: q.Get("order") == "oldest", ByPublished: true}
 	f.FeedID, _ = strconv.ParseInt(q.Get("feed"), 10, 64)
 	f.FolderID, _ = strconv.ParseInt(q.Get("folder"), 10, 64)
-	f.After, _ = strconv.ParseInt(q.Get("cursor"), 10, 64)
+	if pub, id, ok := strings.Cut(q.Get("cursor"), "."); ok {
+		f.AfterPub, _ = strconv.ParseInt(pub, 10, 64)
+		f.After, _ = strconv.ParseInt(id, 10, 64)
+	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	switch q.Get("view") {
 	case "unread":
@@ -221,7 +225,8 @@ func (a *API) entries(w http.ResponseWriter, r *http.Request) {
 	}
 	var cursor string
 	if next != 0 {
-		cursor = strconv.FormatInt(next, 10)
+		last := entries[len(entries)-1]
+		cursor = fmt.Sprintf("%d.%d", last.PublishedAt, last.ID)
 	}
 	reply(w, map[string]any{"entries": entries, "cursor": cursor})
 }

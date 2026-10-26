@@ -56,7 +56,8 @@ type NewEntry struct {
 // the way the feed intended; items already seen are updated only when their
 // content hash changed, keeping their ID and read/star state. New items
 // published before readBefore are stored as already read (used on a feed's
-// first poll, so its back catalogue doesn't flood Unread).
+// first poll, so its back catalogue doesn't flood Unread); on that poll,
+// undated items count as back catalogue too, since their age is unknown.
 func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntry, readBefore time.Time) (inserted, updated int, err error) {
 	now := time.Now()
 	items = slices.Clone(items)
@@ -81,7 +82,7 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 				pub = now
 			}
 			var readAt any
-			if pub.Before(readBefore) {
+			if pub.Before(readBefore) || (it.PublishedAt.IsZero() && !readBefore.IsZero()) {
 				readAt = now.Unix()
 			}
 			_, err = tx.ExecContext(ctx, `
@@ -134,6 +135,12 @@ type Filter struct {
 	After    int64   // keyset cursor: id < After (newest first) or id > After (oldest first)
 	Oldest   bool    // oldest first
 	Limit    int
+
+	// ByPublished orders by publication time instead of arrival (crawl ID),
+	// for reading. The Reader API never sets it: Reeder's incremental sync
+	// depends on arrival order. With it, the cursor is (AfterPub, After).
+	ByPublished bool
+	AfterPub    int64
 }
 
 func (f Filter) where() (string, []any) {
@@ -184,14 +191,30 @@ func (f Filter) where() (string, []any) {
 		args = append(args, f.MaxID)
 	}
 	if f.After > 0 {
+		op := "<"
 		if f.Oldest {
-			conds = append(conds, "e.id > ?")
-		} else {
-			conds = append(conds, "e.id < ?")
+			op = ">"
 		}
-		args = append(args, f.After)
+		if f.ByPublished {
+			conds = append(conds, "(e.published_at, e.id) "+op+" (?, ?)")
+			args = append(args, f.AfterPub, f.After)
+		} else {
+			conds = append(conds, "e.id "+op+" ?")
+			args = append(args, f.After)
+		}
 	}
 	return strings.Join(conds, " AND "), args
+}
+
+func (f Filter) orderBy() string {
+	dir := "DESC"
+	if f.Oldest {
+		dir = "ASC"
+	}
+	if f.ByPublished {
+		return "e.published_at " + dir + ", e.id " + dir
+	}
+	return "e.id " + dir
 }
 
 // ftsQuery turns free text into a safe FTS5 prefix query: each word becomes
@@ -221,23 +244,21 @@ func scanEntry(sc interface{ Scan(...any) error }, e *Entry, extra ...any) error
 	return nil
 }
 
-// Entries returns one page of entry summaries ordered by ID (crawl time).
-// The returned cursor is non-zero only when another page exists.
+// Entries returns one page of entry summaries, by arrival (crawl ID) or, with
+// ByPublished, by publication time. The returned cursor is the last entry's
+// ID, non-zero only when another page exists; with ByPublished the caller
+// pairs it with that entry's PublishedAt.
 func (s *Store) Entries(ctx context.Context, f Filter, withContent bool) ([]Entry, int64, error) {
 	if f.Limit <= 0 || f.Limit > 1000 {
 		f.Limit = 50
 	}
 	where, args := f.where()
-	order := "DESC"
-	if f.Oldest {
-		order = "ASC"
-	}
 	cols := entryColumns
 	if withContent {
 		cols += ", e.content"
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT `+cols+` FROM entries e JOIN feeds d ON d.id = e.feed_id
-		WHERE `+where+` ORDER BY e.id `+order+` LIMIT ?`, append(args, f.Limit+1)...)
+		WHERE `+where+` ORDER BY `+f.orderBy()+` LIMIT ?`, append(args, f.Limit+1)...)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -96,8 +96,8 @@ func TestReadBeforeAndDateFallbacks(t *testing.T) {
 	}
 	st.UpsertEntries(ctx, feedID, items, now.AddDate(0, 0, -14))
 	unread, _, _ := st.Entries(ctx, Filter{UserID: uid, State: StateUnread}, false)
-	if len(unread) != 3 {
-		t.Fatalf("unread = %d, want 3 (only the year-old item starts read)", len(unread))
+	if len(unread) != 2 {
+		t.Fatalf("unread = %d, want 2 (the year-old and the undated item start read)", len(unread))
 	}
 	for _, e := range unread {
 		if e.PublishedAt > now.Add(time.Minute).Unix() {
@@ -246,5 +246,44 @@ func TestCounts(t *testing.T) {
 	c, err := st.Counts(ctx, uid)
 	if err != nil || c.Unread != 3 || c.Starred != 2 || c.Newest != ids[0] {
 		t.Fatalf("counts %+v %v", c, err)
+	}
+}
+
+func TestPublishedOrderAndCursor(t *testing.T) {
+	st, ctx := open(t), context.Background()
+	uid, _ := st.CreateUser(ctx, "u", "password-123")
+	a, _ := st.AddFeed(ctx, uid, "https://a.example/f", "a", nil)
+	b, _ := st.AddFeed(ctx, uid, "https://b.example/f", "b", nil)
+	day := func(d int) time.Time { return time.Date(2026, 10, d, 12, 0, 0, 0, time.UTC) }
+	// Feed b arrives later but its posts are older: arrival and publication disagree.
+	st.UpsertEntries(ctx, a, []NewEntry{{GUID: "a25", Title: "a25", Enclosures: "[]", PublishedAt: day(25)}}, time.Time{})
+	st.UpsertEntries(ctx, b, []NewEntry{
+		{GUID: "b13", Title: "b13", Enclosures: "[]", PublishedAt: day(13)},
+		{GUID: "b23", Title: "b23", Enclosures: "[]", PublishedAt: day(23)},
+		{GUID: "b23x", Title: "b23x", Enclosures: "[]", PublishedAt: day(23)}, // same timestamp: tie broken by ID
+	}, time.Time{})
+
+	byArrival, _, _ := st.Entries(ctx, Filter{UserID: uid}, false)
+	if byArrival[0].Title == "a25" {
+		t.Fatal("test setup: arrival order should put feed b first")
+	}
+	var got []string
+	f := Filter{UserID: uid, ByPublished: true, Limit: 2}
+	for {
+		page, next, err := st.Entries(ctx, f, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range page {
+			got = append(got, e.Title)
+		}
+		if next == 0 {
+			break
+		}
+		f.After, f.AfterPub = next, page[len(page)-1].PublishedAt
+	}
+	want := []string{"a25", "b23x", "b23", "b13"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("published order %v, want %v", got, want)
 	}
 }

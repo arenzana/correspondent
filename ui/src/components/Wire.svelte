@@ -4,7 +4,7 @@
   // in the gutter marks a star. Titles also change weight, so state never
   // relies on colour alone.
   import { app } from '../lib/state.svelte'
-  import { arrivedAt, dayKey, dayLabel, gutterTime } from '../lib/time'
+  import { clock, dayKey, dayLabel } from '../lib/time'
   import { api, type Entry } from '../lib/api'
   import { swipe } from '../lib/swipe'
   import Icon from './Icon.svelte'
@@ -17,8 +17,9 @@
   const groups = $derived.by(() => {
     const out: Group[] = []
     const now = new Date()
+    // Grouped by the day each article was published, the order it is listed in.
     for (const e of app.entries) {
-      const d = arrivedAt(e.id)
+      const d = new Date(e.publishedAt * 1000)
       const k = dayKey(d)
       if (!out.length || out[out.length - 1].key !== k) out.push({ key: k, label: dayLabel(d, now), entries: [] })
       out[out.length - 1].entries.push(e)
@@ -169,7 +170,7 @@
                     onclick={() => app.select(e.id)}
                   >
                     <span class="gutter">
-                      <time class="clock" datetime={new Date(e.publishedAt * 1000).toISOString()}>{gutterTime(e.publishedAt, arrivedAt(e.id))}</time>
+                      <time class="clock" datetime={new Date(e.publishedAt * 1000).toISOString()}>{clock(new Date(e.publishedAt * 1000))}</time>
                       {#if e.starred}<span class="seal" aria-label="Starred"></span>{/if}
                     </span>
                     <span class="dot" aria-hidden="true"></span>
