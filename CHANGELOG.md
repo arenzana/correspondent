@@ -7,6 +7,16 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- The selection moves fluidly along the list: one highlight travels from
+  article to article, its leading edge first and the trailing edge
+  following, so it stretches and settles instead of jumping.
+- New articles slide in at the top of the list as they arrive, pushing it
+  down, when you're at the top. Further down, or while you're touching the
+  list, nothing moves: the "new articles" button appears instead. Reduced
+  motion turns both animations off.
+
 ## [0.8.0] - 2026-10-26
 
 ### Added

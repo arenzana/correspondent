@@ -142,10 +142,6 @@ make vuln    # govulncheck + npm audit
 - A reworked Settings: a full page with clear sections (reading,
   appearance, feeds and folders, apps and sync, data and backups, about),
   feed management with health and cadence, and live previews.
-- Fluid motion for the selection bar on the time spine as you move up and
-  down the list, and new articles sliding in at the top and pushing the list
-  down as they arrive (when you're at the top; a list you're reading further
-  down stays still).
 - **Listen to articles**: natural read-aloud through an AI text-to-speech
   API (the reader's own key and provider, set up like AI parsers), with
   playback in the article view and on the lock screen, audio kept for

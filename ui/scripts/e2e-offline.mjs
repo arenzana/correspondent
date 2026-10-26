@@ -32,7 +32,7 @@ items[0].body = `<p>📎 Linking to <a href="https://example.com/newsroom/2026/1
 <p><img src="${FEEDS}/wide.svg" alt="A wide picture" width="1600" height="400"></p>
 <p><a href="https://example.com/a">Read it at example.com →</a>  ·  <a href="https://example.com/b">Permalink</a></p>`
 const wideSVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400"><rect width="1600" height="400" fill="#c84"/></svg>'
-const rss = `<?xml version="1.0"?><rss version="2.0"><channel><title>Wire Service</title><link>${FEEDS}/</link>
+const rss = () => `<?xml version="1.0"?><rss version="2.0"><channel><title>Wire Service</title><link>${FEEDS}/</link>
 ${items.map((it) => `<item><title>${it.title}</title><link>${FEEDS}/${it.n}</link><guid>d-${it.n}</guid>
 <pubDate>${it.date}</pubDate><description><![CDATA[${it.body}]]></description></item>`).join('\n')}
 </channel></rss>`
@@ -45,7 +45,7 @@ const labArticle = (path) => `<html><head><title>${path}</title></head><body><ar
   'The whole lab note, as published on its own page, with every detail the listing leaves out. '.repeat(5)}</p></article></body></html>`
 
 const fixtures = createServer((req, res) => {
-  if (req.url === '/feed.xml') res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(rss)
+  if (req.url === '/feed.xml') res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(rss())
   else if (req.url === '/wide.svg') res.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end(wideSVG)
   else if (req.url === '/lab') res.writeHead(200, { 'Content-Type': 'text/html' }).end(labPage)
   else if (req.url.startsWith('/lab/')) res.writeHead(200, { 'Content-Type': 'text/html' }).end(labArticle(req.url))
@@ -140,6 +140,47 @@ try {
   const starred = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=starred')).json()).entries.map((e) => e.title))
   check(starred.length === 1 && starred[0] === 'Dispatch 0', 'the server has the star made offline')
 
+  console.log('Motion')
+  await page.goto(APP + '/#/unread')
+  await page.reload()
+  await page.locator('.wire .row .hit').nth(1).waitFor()
+  await page.locator('.wire .row .hit').first().click()
+  await page.locator('.wire .cursor').waitFor()
+  const rowBox = (i) => page.evaluate((i) => {
+    const days = document.querySelector('.wire .days').getBoundingClientRect()
+    const r = document.querySelectorAll('.wire .row')[i].getBoundingClientRect()
+    return { top: r.top - days.top, height: r.height }
+  }, i)
+  const cursorBox = () => page.evaluate(() => {
+    const days = document.querySelector('.wire .days').getBoundingClientRect()
+    const r = document.querySelector('.wire .cursor').getBoundingClientRect()
+    return { top: r.top - days.top, height: r.height }
+  })
+  await page.keyboard.press('Escape')
+  await page.locator('.wire .row .hit').first().focus()
+  await page.keyboard.press('j')
+  await page.waitForTimeout(120)
+  const mid = await cursorBox()
+  if (process.env.SHOT_DIR) await page.locator('.wire').screenshot({ path: process.env.SHOT_DIR + '/cursor-mid.png' })
+  const [first, second] = [await rowBox(0), await rowBox(1)]
+  check(mid.height > Math.max(first.height, second.height) + 4, `the selection stretches as it moves (${Math.round(mid.height)}px mid-move)`)
+  await page.waitForTimeout(700)
+  const settled = await cursorBox()
+  if (process.env.SHOT_DIR) await page.locator('.wire').screenshot({ path: process.env.SHOT_DIR + '/cursor-settled.png' })
+  check(Math.abs(settled.top - second.top) < 1 && Math.abs(settled.height - second.height) < 1, 'and settles on the next row')
+
+  // A new article while the list is at the top slides in, without a prompt
+  // (once the reader's last touch on the list is a moment ago).
+  await page.waitForTimeout(1600)
+  items.unshift({ n: 9, title: 'Dispatch 9', date: new Date().toUTCString(), body: '<p>Fresh off the wire.</p>' })
+  await page.evaluate(async () => {
+    const feed = (await (await fetch('/api/v1/tree')).json()).feeds.find((f) => f.title === 'Wire Service')
+    await fetch(`/api/v1/feeds/${feed.id}/refresh`, { method: 'POST', headers: { 'X-Correspondent': '1' } })
+  })
+  await page.locator('.wire .row .title', { hasText: 'Dispatch 9' }).waitFor({ timeout: 15_000 })
+  const firstTitle = await page.locator('.wire .row .title').first().innerText()
+  check(firstTitle === 'Dispatch 9' && !(await page.locator('.pending').isVisible()), 'a new article slides in at the top of the list')
+
   console.log('Phone')
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 })
   const mobile = await phone.newPage()
@@ -221,9 +262,10 @@ try {
   check(reading.pageX === 0 && reading.pageY === 0 && reading.paneX === 0 && reading.barTop === 0, 'dragging the article never moves the page or its toolbar')
   await mobile.getByRole('button', { name: 'Back to articles' }).tap()
   check(await mobile.locator('nav.tabbar').isVisible(), 'and comes back with the list')
-  // A summary-only article offers full articles for the whole feed.
+  // A summary-only article offers full articles for the whole feed. (By
+  // name: the list may still be taking in the newest arrival.)
   await tabbar.getByRole('button', { name: 'Unread' }).tap()
-  await mobile.locator('.wire .row .hit').first().tap()
+  await mobile.locator('.wire .row .hit', { hasText: 'Dispatch 9' }).tap()
   const always = mobile.getByRole('button', { name: /Always load full articles from Wire Service/ })
   await always.waitFor()
   if (process.env.SHOT) await mobile.screenshot({ path: process.env.SHOT })

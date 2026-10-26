@@ -94,6 +94,18 @@
   }
 }
 
+/* The list's selection cursor animates its two edges separately. */
+@property --cur-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --cur-bot {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 :root[data-density='compact'] {
   --row-pad: 9px;
 }

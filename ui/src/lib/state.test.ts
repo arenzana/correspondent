@@ -402,3 +402,34 @@ describe('themes', () => {
     expect(app.prefs.place).toEqual({ lat: 40.4, lon: -3.7, estimated: false })
   })
 })
+
+describe('live arrivals', () => {
+  it('slides new articles into place when the list is at the top', () => {
+    app.entries = [entry('3'), entry('2'), entry('1')]
+    app.boundary = '3'
+    app.mergeArrivals([entry('5'), entry('4'), entry('3', { read: true }), entry('2')], [entry('5'), entry('4')])
+    expect(app.entries.map((e) => e.id)).toEqual(['5', '4', '3', '2', '1'])
+    expect(app.entries[2].read).toBe(true) // the fresh copy wins
+    expect([...app.arriving]).toEqual(['5', '4'])
+    expect(app.boundary).toBe('5')
+    expect(app.pending).toBe(0)
+  })
+
+  it('never moves a list the reader is in: it offers the new ones instead', async () => {
+    app.entries = [entry('3'), entry('2')]
+    app.boundary = '3'
+    app.counts = { ...app.counts, newest: '3' }
+    vi.mocked(api.tree).mockResolvedValue({ folders: [], feeds: app.feeds, counts: { unread: 3, starred: 0, today: 3, newest: '4' } })
+    vi.mocked(api.entries).mockResolvedValue({ entries: [entry('4'), entry('3'), entry('2')], cursor: '' })
+    for (const setup of [() => (app.atTop = false), () => { app.atTop = true; app.listBusyUntil = Date.now() + 10_000 }]) {
+      app.counts = { ...app.counts, newest: '3' }
+      app.pending = 0
+      setup()
+      await (app as unknown as { onNewEntries(): Promise<void> }).onNewEntries()
+      expect(app.entries.map((e) => e.id)).toEqual(['3', '2'])
+      expect(app.pending).toBe(1)
+    }
+    app.atTop = true
+    app.listBusyUntil = 0
+  })
+})

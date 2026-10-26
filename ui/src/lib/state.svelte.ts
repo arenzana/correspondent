@@ -111,6 +111,13 @@ class AppState {
   boundary = $state<ID>('0')
   /** New articles arrived since the list was loaded; shown as a pill, never inserted under the reader. */
   pending = $state(0)
+  /** Whether the list is scrolled to its top (set by the list itself). */
+  atTop = $state(true)
+  /** Until when the reader is touching the list (ms since epoch): no
+   *  arrivals then, so nothing moves under a finger about to tap. */
+  listBusyUntil = 0
+  /** Entries that just arrived live, for the list to animate in once. */
+  arriving = $state<Set<string>>(new Set())
 
   selectedId = $state<ID | null>(null)
   article = $state<{ entry: Entry; enclosures: Enclosure[] } | null>(null)
@@ -343,8 +350,41 @@ class AppState {
     const starred = this.source.kind === 'view' && this.source.view === 'starred'
     if (starred || BigInt(this.counts.newest || '0') <= before) return
     const fresh = await api.entries({ ...this.query_(), limit: 200 }).catch(() => null)
-    if (fresh) this.pending = fresh.entries.filter((e) => BigInt(e.id) > BigInt(this.boundary)).length
+    if (!fresh) return
+    const newer = fresh.entries.filter((e) => BigInt(e.id) > BigInt(this.boundary))
+    if (!newer.length) return
+    if (!this.atTop || this.query || Date.now() < this.listBusyUntil) {
+      // Reading further down: never move the list; offer the new ones.
+      this.pending = newer.length
+      return
+    }
+    this.mergeArrivals(fresh.entries, newer)
   }
+
+  /**
+   * Puts newly arrived entries into the list in their place (the server's
+   * order), keeping everything already loaded, and marks them so the list
+   * animates them in.
+   */
+  mergeArrivals(page: Entry[], newer: Entry[]) {
+    const have = new Set(this.entries.map((e) => e.id))
+    const added = newer.filter((e) => !have.has(e.id))
+    if (!added.length) return
+    const inPage = new Set(page.map((e) => e.id))
+    const latest = new Map(page.map((e) => [e.id, e]))
+    // The fresh page in order, then anything loaded beyond it.
+    this.entries = [
+      ...page.filter((e) => have.has(e.id) || added.some((a) => a.id === e.id)).map((e) => latest.get(e.id)!),
+      ...this.entries.filter((e) => !inPage.has(e.id)),
+    ]
+    this.boundary = newer.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), this.boundary)
+    this.pending = 0
+    this.arriving = new Set(added.map((e) => e.id))
+    offline.saveEntries(added).catch(() => {})
+    clearTimeout(this.arrivingTimer)
+    this.arrivingTimer = setTimeout(() => (this.arriving = new Set()), 1500)
+  }
+  private arrivingTimer: ReturnType<typeof setTimeout> | undefined
 
   // ------------------------------------------------------------------ prefs
 
@@ -472,6 +512,7 @@ class AppState {
     this.loading = true
     this.loadError = ''
     this.pending = 0
+    this.arriving = new Set()
     try {
       const r = await api.entries({ ...this.query_(), limit: 60 })
       if (seq !== this.loadSeq) return

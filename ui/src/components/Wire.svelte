@@ -44,6 +44,70 @@
     return () => io.disconnect()
   })
 
+  // The list tells the app whether it sits at the top, where new articles
+  // may slide in; further down it never moves under the reader.
+  function onScroll() {
+    const top = (scroller?.scrollTop ?? 0) < 24
+    if (top !== app.atTop) app.atTop = top
+  }
+
+  // A touch on the list holds back arrivals briefly (see app.listBusyUntil).
+  $effect(() => {
+    if (!scroller) return
+    const hold = () => (app.listBusyUntil = Date.now() + 1500)
+    scroller.addEventListener('pointerdown', hold, { passive: true })
+    return () => scroller?.removeEventListener('pointerdown', hold)
+  })
+
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // Rows that arrived live grow in from nothing, pushing the list down.
+  function arrive(node: HTMLElement, id: string) {
+    if (reduced || !app.arriving.has(id)) return
+    const h = node.getBoundingClientRect().height
+    node.animate(
+      [
+        { height: '0px', opacity: 0 },
+        { height: `${h}px`, opacity: 0, offset: 0.55 },
+        { height: `${h}px`, opacity: 1 },
+      ],
+      { duration: 620, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' },
+    )
+  }
+
+  // The selection cursor: one wash with its stretch of accent spine, moved
+  // between rows rather than redrawn on each. Its leading edge travels
+  // first and the trailing edge follows, so it stretches and settles.
+  let days: HTMLElement | undefined = $state()
+  let cursor = $state<{ top: number; bottom: number; dir: 'up' | 'down' | 'none' } | null>(null)
+  function placeCursor() {
+    const id = app.selectedId
+    const row = id && days ? days.querySelector<HTMLElement>(`.row[data-id="${id}"]`) : null
+    if (!row || !days) {
+      cursor = null
+      return
+    }
+    const base = days.getBoundingClientRect().top
+    const r = row.getBoundingClientRect()
+    const next = { top: r.top - base, bottom: r.bottom - base }
+    const dir = !cursor ? 'none' : next.top > cursor.top ? 'down' : next.top < cursor.top ? 'up' : cursor.dir
+    cursor = { ...next, dir }
+  }
+  $effect(() => {
+    void app.selectedId
+    void app.entries
+    if (!days) return
+    const raf = requestAnimationFrame(placeCursor)
+    return () => cancelAnimationFrame(raf)
+  })
+  $effect(() => {
+    if (!days) return
+    // Rows change height as images load or text wraps differently.
+    const ro = new ResizeObserver(() => placeCursor())
+    ro.observe(days)
+    return () => ro.disconnect()
+  })
+
   // Keep the selected row in view during keyboard navigation.
   $effect(() => {
     const id = app.selectedId
@@ -176,7 +240,7 @@
     </button>
   {/if}
 
-  <div class="wire-scroll" bind:this={scroller}>
+  <div class="wire-scroll" bind:this={scroller} onscroll={onScroll}>
     {#if app.loadError}
       <div class="state">
         <p>Couldn't load articles. {app.loadError}</p>
@@ -201,7 +265,11 @@
         {/if}
       </div>
     {:else}
-      <ol class="days">
+      <ol class="days" bind:this={days}>
+        {#if cursor}
+          <li class="cursor" aria-hidden="true" data-dir={cursor.dir}
+            style:--cur-top="{cursor.top}px" style:--cur-bot="{cursor.bottom}px"></li>
+        {/if}
         {#each groups as g (g.key)}
           <li class="day">
             <h2 class="day-label"><span>{g.label}</span></h2>
@@ -213,6 +281,7 @@
                   class:read={e.read}
                   class:selected
                   data-id={e.id}
+                  use:arrive={e.id}
                   use:swipe={{ onCommit: (a) => (a === 'read' ? app.setRead([e.id], !e.read) : app.setStarred(e.id, !e.starred)) }}
                 >
                   <span class="reveal" aria-hidden="true">
@@ -482,11 +551,25 @@
   .hit:focus-visible {
     outline-offset: -2px;
   }
-  .selected .hit {
-    background: var(--accent-wash);
+  /* The selection cursor sits under the rows (which are transparent): a
+     wash across the row and its stretch of spine in accent. Its edges are
+     registered properties (app.css) so each can move at its own pace. */
+  .days {
+    position: relative;
   }
-  /* The selected row's stretch of spine turns accent. */
-  .selected::before {
+  .cursor {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--cur-top);
+    height: calc(var(--cur-bot) - var(--cur-top));
+    background: var(--accent-wash);
+    pointer-events: none;
+    transition:
+      --cur-top 300ms var(--ease),
+      --cur-bot 300ms var(--ease);
+  }
+  .cursor::before {
     content: '';
     position: absolute;
     left: calc(var(--spine-x) - 0.75px);
@@ -495,6 +578,27 @@
     width: 3px;
     background: var(--accent);
     border-radius: 2px;
+  }
+  /* Moving down, the bottom edge leads and the top follows; moving up, the
+     reverse. */
+  .cursor[data-dir='down'] {
+    transition:
+      --cur-top 420ms cubic-bezier(0.3, 0, 0.1, 1) 40ms,
+      --cur-bot 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .cursor[data-dir='up'] {
+    transition:
+      --cur-top 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      --cur-bot 420ms cubic-bezier(0.3, 0, 0.1, 1) 40ms;
+  }
+  .cursor[data-dir='none'] {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cursor,
+    .cursor[data-dir] {
+      transition: none;
+    }
   }
 
   .gutter {
