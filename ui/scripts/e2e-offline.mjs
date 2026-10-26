@@ -54,6 +54,7 @@ try {
 
   const browser = await chromium.launch({ channel: 'chrome' })
   const context = await browser.newContext({ viewport: { width: 1280, height: 860 } })
+  await context.grantPermissions(['notifications'], { origin: APP })
   const page = await context.newPage()
   for (let i = 0; ; i++) {
     try {
@@ -120,6 +121,29 @@ try {
   check(true, 'the queued change is sent when the connection returns')
   const starred = await page.evaluate(async () => (await (await fetch('/api/v1/entries?view=starred')).json()).entries.map((e) => e.title))
   check(starred.length === 1 && starred[0] === 'Dispatch 0', 'the server has the star made offline')
+
+  console.log('Notifications')
+  // Deliver a push message to the service worker through DevTools, as a push
+  // service would, and check the notification it shows.
+  const cdp = await context.newCDPSession(page)
+  const registrations = new Promise((ok) => cdp.on('ServiceWorker.workerRegistrationUpdated', (e) => e.registrations.length && ok(e.registrations)))
+  await cdp.send('ServiceWorker.enable')
+  const [reg] = await registrations
+  await cdp.send('ServiceWorker.deliverPushMessage', {
+    origin: APP,
+    registrationId: reg.registrationId,
+    data: JSON.stringify({ title: 'Wire Service', body: 'Dispatch 9', url: 'https://evil.example/', tag: 'feed-1' }),
+  })
+  let shown = []
+  for (let i = 0; i < 20 && !shown.length; i++) {
+    await page.waitForTimeout(250)
+    shown = await page.evaluate(async () =>
+      (await (await navigator.serviceWorker.ready).getNotifications()).map((n) => ({ title: n.title, body: n.body, tag: n.tag, url: n.data?.url })),
+    )
+  }
+  check(shown.length === 1 && shown[0].title === 'Wire Service' && shown[0].body === 'Dispatch 9', 'a push message shows a notification')
+  check(shown[0]?.tag === 'feed-1', 'notifications are tagged per feed, so newer ones replace older')
+  check(shown[0]?.url === '/', 'a notification can only open an in-app address')
 
   await browser.close()
 } finally {

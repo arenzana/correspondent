@@ -709,6 +709,19 @@ class AppState {
     document.querySelector('.wire-scroll')?.scrollTo({ top: 0 })
   }
 
+  /** Opt the feed in or out of notifications. */
+  async setFeedNotify(id: number, notify: boolean) {
+    const feed = this.feeds.find((f) => f.id === id)
+    if (feed) feed.notify = notify
+    try {
+      await api.updateFeed(id, { notify })
+      this.toast(notify ? `Notifications on for ${feed?.title ?? 'this feed'}.` : 'Notifications off for this feed.')
+    } catch (e) {
+      if (feed) feed.notify = !notify
+      this.toast(`Couldn't change notifications. ${(e as Error).message}`)
+    }
+  }
+
   // ---------------------------------------------------------------- toasts
 
   toast(message: string, action?: Toast['action']) {

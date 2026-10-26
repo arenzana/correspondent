@@ -41,6 +41,7 @@ import (
 	"github.com/arenzana/correspondent/internal/greader"
 	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/migrate"
+	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 	"github.com/arenzana/correspondent/internal/server"
 	"github.com/arenzana/correspondent/internal/store"
@@ -210,8 +211,10 @@ func run(log *slog.Logger, args []string) error {
 func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
-	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip}
+	notifier := &push.Notifier{Store: st, Log: log}
+	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier}
 	ing.Notify = a.Notify
+	ing.OnNewEntries = notifier.NewArticles
 	st.OnStateChange = a.NotifyState
 	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip}
 	srv := &http.Server{

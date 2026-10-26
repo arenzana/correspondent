@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 )
 
@@ -271,5 +273,50 @@ func TestStateEventsReachOpenReaders(t *testing.T) {
 	case n := <-got:
 		t.Fatalf("bob received %q", n)
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestPushSubscriptionAPI(t *testing.T) {
+	e := newEnv(t)
+	a := &API{Store: e.store, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute),
+		Push: &push.Notifier{Store: e.store, Log: slog.New(slog.DiscardHandler)}}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	e.srv = srv
+	c, _ := e.user(t, "pat")
+
+	st := decodeJSON[struct {
+		PublicKey  string
+		Subscribed bool
+	}](t, expect(t, e.do(t, c, "GET", "/api/v1/push", "", false), 200))
+	if len(st.PublicKey) < 80 || st.Subscribed {
+		t.Fatalf("status: %+v", st)
+	}
+	key := base64.RawURLEncoding.EncodeToString(append([]byte{4}, make([]byte, 64)...))
+	auth := base64.RawURLEncoding.EncodeToString(make([]byte, 16))
+	body := func(ep string) string {
+		return fmt.Sprintf(`{"endpoint":%q,"keys":{"p256dh":%q,"auth":%q}}`, ep, key, auth)
+	}
+	// Endpoints outside the known push services are refused (SSRF).
+	expect(t, e.do(t, c, "POST", "/api/v1/push/subscriptions", body("https://169.254.169.254/x"), true), 400)
+	expect(t, e.do(t, c, "POST", "/api/v1/push/subscriptions",
+		fmt.Sprintf(`{"endpoint":"https://fcm.googleapis.com/fcm/send/x","keys":{"p256dh":"short","auth":%q}}`, auth), true), 400)
+	ep := "https://fcm.googleapis.com/fcm/send/device-1"
+	expect(t, e.do(t, c, "POST", "/api/v1/push/subscriptions", body(ep), true), 204)
+	st = decodeJSON[struct {
+		PublicKey  string
+		Subscribed bool
+	}](t, expect(t, e.do(t, c, "GET", "/api/v1/push?endpoint="+url.QueryEscape(ep), "", false), 200))
+	if !st.Subscribed {
+		t.Fatal("device not registered")
+	}
+	expect(t, e.do(t, c, "DELETE", "/api/v1/push/subscriptions", fmt.Sprintf(`{"endpoint":%q}`, ep), true), 204)
+
+	// Feeds opt in and out.
+	tree := decodeJSON[struct{ Feeds []struct{ ID int64 } }](t, expect(t, e.do(t, c, "GET", "/api/v1/tree", "", false), 200))
+	expect(t, e.do(t, c, "PATCH", fmt.Sprintf("/api/v1/feeds/%d", tree.Feeds[0].ID), `{"notify":true}`, true), 204)
+	after := decodeJSON[struct{ Feeds []struct{ Notify bool } }](t, expect(t, e.do(t, c, "GET", "/api/v1/tree", "", false), 200))
+	if !after.Feeds[0].Notify {
+		t.Fatal("feed not opted in")
 	}
 }

@@ -29,6 +29,7 @@ type Feed struct {
 	ErrorCount  int    `json:"errorCount"`
 	LastError   string `json:"lastError"`
 	Paused      bool   `json:"paused"`
+	Notify      bool   `json:"notify"`
 	Unread      int    `json:"unread"`
 	Total       int    `json:"total"`
 	// Cadence is the number of entries per day over the last 14 days, oldest
@@ -86,12 +87,12 @@ func (s *Store) DeleteFolder(ctx context.Context, userID, folderID int64) error 
 }
 
 const feedColumns = `f.id, f.user_id, f.folder_id, f.url, f.site_url, f.title, f.description, f.icon_url,
-	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec, f.paused`
+	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec, f.paused, f.notify`
 
 func scanFeed(sc interface{ Scan(...any) error }, f *Feed, extra ...any) error {
 	var folder sql.NullInt64
 	dest := []any{&f.ID, &f.UserID, &folder, &f.URL, &f.SiteURL, &f.Title, &f.Description, &f.IconURL,
-		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec, &f.Paused}
+		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec, &f.Paused, &f.Notify}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}

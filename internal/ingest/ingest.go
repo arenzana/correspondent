@@ -28,6 +28,9 @@ type Service struct {
 	Tick        time.Duration
 	// Notify is called after new entries arrive for a user (for live UI updates).
 	Notify func(userID int64)
+	// OnNewEntries is called (in its own goroutine) after a poll inserted
+	// entries, with the crawl ID they are all above; used for notifications.
+	OnNewEntries func(ctx context.Context, f store.Feed, since int64)
 	// RetentionDays deletes read, unstarred articles older than this that
 	// have left their feed. Zero keeps everything (the default).
 	RetentionDays int
@@ -120,6 +123,7 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 			break
 		}
 		// Write in short transactions, never across the network fetch.
+		since := time.Now().UnixMicro() - 1 // every ID allocated below is above this
 		var readBefore time.Time
 		if f.LastFetchAt == 0 {
 			readBefore = time.Now().AddDate(0, 0, -14)
@@ -128,6 +132,9 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 		if err != nil {
 			res.Err = "could not save entries: " + err.Error()
 			break
+		}
+		if inserted > 0 && s.OnNewEntries != nil {
+			go s.OnNewEntries(context.WithoutCancel(ctx), f, since)
 		}
 		res.ETag, res.LastModified = resp.ETag, resp.LastModified
 		res.Title, res.SiteURL, res.Description, res.IconURL = p.Title, p.SiteURL, p.Description, p.IconURL

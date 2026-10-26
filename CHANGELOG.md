@@ -7,6 +7,27 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-26
+
+### Added
+
+- Push notifications, off by default: turn them on per device in Settings,
+  then choose feeds with the bell in a feed's header (or ⌘K). Several new
+  articles become one notification per feed, replacing the previous one;
+  tapping opens the article. Works in Chrome, Edge, Firefox and Safari, and
+  on iPhone and iPad for the app added to the Home Screen (iOS 16.4+).
+- Settings: send a test notification; see which feeds notify you.
+
+### Changed
+
+- The full app icon now appears beside the wordmark.
+
+### Security
+
+- The server only sends notifications to the browsers' push services over
+  HTTPS, so a crafted subscription cannot aim it at other addresses. Gone
+  or repeatedly failing subscriptions are removed.
+
 ## [0.3.0] - 2026-10-26
 
 ### Added
@@ -79,7 +100,8 @@ without disturbing Reeder.
 - CSRF protection, sign-in throttling for web and app logins, Secure
   session cookies, strict security headers, URL redaction in logs.
 
-[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/arenzana/correspondent/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/arenzana/correspondent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arenzana/correspondent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arenzana/correspondent/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/arenzana/correspondent/compare/v0.1.0...v0.1.1

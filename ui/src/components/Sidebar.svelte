@@ -55,7 +55,7 @@
 
 <nav class="sidebar" aria-label="Feeds">
   <header class="brand">
-    <Mark height={28} />
+    <Mark size={28} />
     <span class="wordmark">Correspondent</span>
   </header>
 

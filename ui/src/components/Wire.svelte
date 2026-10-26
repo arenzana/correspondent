@@ -116,6 +116,17 @@
       </p>
     </div>
     <div class="tools">
+      {#if currentFeed}
+        <button
+          class="icon-btn"
+          aria-pressed={currentFeed.notify}
+          aria-label={currentFeed.notify ? 'Turn off notifications for this feed' : 'Notify me about new articles in this feed'}
+          title={currentFeed.notify ? 'Notifications on for this feed' : 'Notify me about new articles'}
+          onclick={() => app.setFeedNotify(currentFeed.id, !currentFeed.notify)}
+        >
+          <Icon name={currentFeed.notify ? 'bell' : 'bellOff'} />
+        </button>
+      {/if}
       {#if showUnreadToggle}
         <div class="seg" role="group" aria-label="Show">
           <button aria-pressed={app.prefs.unreadOnly} onclick={() => { app.setPrefs({ unreadOnly: true }); app.load() }}>Unread</button>

@@ -5,6 +5,13 @@ import { app } from './state.svelte'
 
 export function registerServiceWorker() {
   if (import.meta.env.DEV || !('serviceWorker' in navigator)) return
+  // A tapped notification asks the open reader to show its article.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data?.type === 'open' && typeof e.data.url === 'string' && e.data.url.startsWith('/#/')) {
+      location.hash = e.data.url.slice(1)
+      void app.onPopState()
+    }
+  })
   navigator.serviceWorker
     .register('/sw.js')
     .then((reg) => {

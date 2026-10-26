@@ -17,6 +17,7 @@ import (
 
 	"github.com/arenzana/correspondent/internal/ingest"
 	"github.com/arenzana/correspondent/internal/opml"
+	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 	"github.com/arenzana/correspondent/internal/store"
 	"github.com/arenzana/correspondent/internal/version"
@@ -37,6 +38,7 @@ type API struct {
 	Secure   bool // set the Secure flag on cookies (behind HTTPS)
 	Limiter  *ratelimit.Limiter
 	ClientIP ratelimit.ClientIP
+	Push     *push.Notifier
 
 	hub hub
 }
@@ -64,6 +66,10 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/opml", a.auth(a.importOPML))
 	mux.HandleFunc("GET /api/v1/opml", a.auth(a.exportOPML))
 	mux.HandleFunc("GET /api/v1/events", a.auth(a.events))
+	mux.HandleFunc("GET /api/v1/push", a.auth(a.pushStatus))
+	mux.HandleFunc("POST /api/v1/push/subscriptions", a.auth(a.pushSubscribe))
+	mux.HandleFunc("DELETE /api/v1/push/subscriptions", a.auth(a.pushUnsubscribe))
+	mux.HandleFunc("POST /api/v1/push/test", a.auth(a.pushTest))
 	return mux
 }
 
@@ -385,6 +391,7 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 		FolderName string  `json:"folderName"`
 		NoFolder   bool    `json:"noFolder"`
 		Paused     *bool   `json:"paused"`
+		Notify     *bool   `json:"notify"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -397,6 +404,12 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.FolderID = &fid
+	}
+	if in.Notify != nil {
+		if err := a.Store.SetFeedNotify(r.Context(), uid, id, *in.Notify); err != nil {
+			a.result(w, err)
+			return
+		}
 	}
 	if in.Paused != nil {
 		if err := a.Store.SetFeedSchedule(r.Context(), uid, id, 0, *in.Paused); err != nil {

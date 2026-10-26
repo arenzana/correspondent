@@ -10,6 +10,7 @@
 //   - anything else from this origin: network, refreshing the cache
 
 import { flush } from './lib/offline/outbox'
+import { safeTarget } from './lib/push'
 
 declare const self: ServiceWorkerGlobalScope
 declare const __BUILD_ID__: string
@@ -74,6 +75,41 @@ if (typeof self !== 'undefined' && 'registration' in self) {
     const strategy = route(new URL(req.url), req.method, req.mode, self.location.origin)
     if (strategy === 'network-only') return
     event.respondWith(handle(req, strategy))
+  })
+
+  self.addEventListener('push', (event) => {
+    let p = { title: 'Correspondent', body: '', url: '/', tag: 'correspondent', icon: '/icons/wire/icon-192.png' }
+    try {
+      p = { ...p, ...(event.data?.json() ?? {}) }
+    } catch {
+      /* not JSON: show the defaults rather than nothing */
+    }
+    event.waitUntil(
+      self.registration.showNotification(p.title, {
+        body: p.body,
+        tag: p.tag, // a newer notification for the same feed replaces the last
+        icon: p.icon,
+        badge: '/icons/wire/favicon-32.png',
+        data: { url: safeTarget(p.url) },
+      }),
+    )
+  })
+
+  self.addEventListener('notificationclick', (event) => {
+    event.notification.close()
+    const url = safeTarget(event.notification.data?.url)
+    event.waitUntil(
+      (async () => {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        const open = windows.find((w) => new URL(w.url).origin === self.location.origin)
+        if (open) {
+          await open.focus()
+          open.postMessage({ type: 'open', url })
+        } else {
+          await self.clients.openWindow(url)
+        }
+      })(),
+    )
   })
 
   // Chrome and Android: send queued changes even if the app was closed

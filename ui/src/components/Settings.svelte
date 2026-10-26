@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, APP_ICONS } from '../lib/state.svelte'
   import { api } from '../lib/api'
+  import { deviceSubscribed, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
   import Modal from './Modal.svelte'
 
   let apiPassword = $state('')
@@ -9,6 +10,44 @@
   let fileInput: HTMLInputElement | undefined = $state()
 
   const readerURL = `${location.origin}/api/greader.php`
+
+  const support = pushSupport()
+  let pushOn = $state(false)
+  let pushBusy = $state(false)
+  let pushMessage = $state('')
+  const notifying = $derived(app.feeds.filter((f) => f.notify))
+  $effect(() => {
+    deviceSubscribed().then((on) => (pushOn = on)).catch(() => {})
+  })
+
+  async function togglePush() {
+    pushBusy = true
+    pushMessage = ''
+    try {
+      if (pushOn) {
+        await unsubscribeDevice()
+        pushOn = false
+      } else {
+        await subscribeDevice()
+        pushOn = true
+        if (!notifying.length) pushMessage = 'Now choose feeds: open a feed and use the bell in its header.'
+      }
+    } catch (e) {
+      pushMessage = (e as Error).message
+    } finally {
+      pushBusy = false
+    }
+  }
+
+  async function testPush() {
+    pushMessage = ''
+    try {
+      const { sent } = await api.pushTest()
+      pushMessage = sent ? 'Sent. It should arrive in a few seconds.' : 'No device is registered for notifications.'
+    } catch (e) {
+      pushMessage = (e as Error).message
+    }
+  }
   // Released versions link to their notes; builds between releases to the changelog.
   const releaseURL = $derived(
     /^\d+\.\d+\.\d+$/.test(app.version)
@@ -52,6 +91,32 @@
         <input type="checkbox" checked={app.prefs.markOnOpen} onchange={(e) => app.setPrefs({ markOnOpen: e.currentTarget.checked })} />
         <span>Mark articles read when I open them</span>
       </label>
+    </section>
+
+    <section>
+      <h3>Notifications</h3>
+      {#if support === 'unsupported'}
+        <p>This browser doesn't support notifications.</p>
+      {:else}
+        <label class="check">
+          <input type="checkbox" checked={pushOn} disabled={pushBusy} onchange={togglePush} />
+          <span>Notifications on this device</span>
+        </label>
+        <p class="hint">
+          {#if support === 'needs-install'}
+            On iPhone and iPad, add Correspondent to your Home Screen first (Share, then Add to Home Screen), and turn this on there.
+          {:else}
+            Only feeds you choose notify you: open a feed and use the bell in its header.
+          {/if}
+        </p>
+        {#if notifying.length}
+          <p class="hint">Notifying: {notifying.map((f) => f.title).join(', ')}.</p>
+        {/if}
+        {#if pushOn}
+          <button class="btn" onclick={testPush}>Send a test notification</button>
+        {/if}
+        {#if pushMessage}<p class="msg" role="status">{pushMessage}</p>{/if}
+      {/if}
     </section>
 
     <section>

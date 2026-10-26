@@ -22,6 +22,7 @@ export interface Feed {
   errorCount: number
   lastError: string
   paused: boolean
+  notify: boolean
   unread: number
   total: number
   cadence: number[]
@@ -140,7 +141,12 @@ export const api = {
   discover: (url: string) => request<{ candidates: Candidate[] }>('POST', '/discover', { url }),
   subscribe: (url: string, title: string, folderId: number | null, folderName?: string) =>
     request<{ id: number }>('POST', '/feeds', { url, title, folderId, folderName }),
-  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean }) =>
+  pushStatus: (endpoint?: string) =>
+    request<{ publicKey: string; subscribed: boolean }>('GET', '/push' + (endpoint ? '?endpoint=' + encodeURIComponent(endpoint) : '')),
+  pushSubscribe: (sub: PushSubscriptionJSON) => request<void>('POST', '/push/subscriptions', sub),
+  pushUnsubscribe: (endpoint: string) => request<void>('DELETE', '/push/subscriptions', { endpoint }),
+  pushTest: () => request<{ sent: number }>('POST', '/push/test'),
+  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean; notify?: boolean }) =>
     request<void>('PATCH', '/feeds/' + id, patch),
   deleteFeed: (id: number) => request<void>('DELETE', '/feeds/' + id),
   refreshFeed: (id: number) => request<void>('POST', `/feeds/${id}/refresh`),

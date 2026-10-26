@@ -17,6 +17,8 @@ clients are concerned.
 - **Swipe on phones.** Swipe right to mark read, left to star.
 - **Works offline.** Install it as an app; unread and starred articles are
   kept on the device, and changes made offline sync when you reconnect.
+- **Notifications you choose.** Off by default; turn them on per device and
+  pick feeds with the bell.
 - **Live across devices.** Read something in Reeder and it updates in the
   web reader within a second.
 
@@ -118,8 +120,9 @@ make vuln    # govulncheck + npm audit
 
 ## Roadmap
 
-- **Push notifications** for the installed app (the offline PWA shipped in
-  0.3.0).
+- **A subscription manager**: delete, rename, move between folders, pause
+  and resume feeds, see each feed's health and posting cadence, and fix a
+  feed's address.
 - An image proxy that resizes thumbnails and stops article images from
   reaching third parties directly.
 - Full-article extraction for feeds that publish only titles or summaries.
