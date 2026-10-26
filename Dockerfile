@@ -11,24 +11,27 @@ COPY ui/ ./
 RUN npm run check && npm run build
 
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS go
-ARG TARGETOS TARGETARCH VERSION=dev
+ARG TARGETOS TARGETARCH VERSION=dev COMMIT=
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY . .
 COPY --from=ui /src/web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" -o /out/correspondent ./cmd/correspondent \
+    go build -trimpath -buildvcs=false -o /out/correspondent \
+      -ldflags="-s -w -X github.com/arenzana/correspondent/internal/version.Version=${VERSION} -X github.com/arenzana/correspondent/internal/version.Commit=${COMMIT}" \
+      ./cmd/correspondent \
  && mkdir -p /out/data
 
 # Distroless static: no shell, no package manager, CA roots and tzdata only.
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
-ARG VERSION=dev
+ARG VERSION=dev COMMIT=
 LABEL org.opencontainers.image.title="Correspondent" \
       org.opencontainers.image.description="Self-hosted feed reader with a Reeder-compatible API" \
       org.opencontainers.image.source="https://github.com/arenzana/correspondent" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
 COPY --from=go /out/correspondent /correspondent
 # The data directory must exist, owned by the nonroot user, so a fresh named
 # volume inherits the right ownership.

@@ -116,7 +116,8 @@ function qs(q: object): string {
 export const api = {
   login: (username: string, password: string) => request<{ username: string }>('POST', '/session', { username, password }),
   logout: () => request<void>('DELETE', '/session'),
-  me: () => request<{ username: string; hasApiPassword: boolean; prefs: Record<string, unknown> }>('GET', '/me'),
+  me: () =>
+    request<{ username: string; hasApiPassword: boolean; prefs: Record<string, unknown>; version: string; commit: string }>('GET', '/me'),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),

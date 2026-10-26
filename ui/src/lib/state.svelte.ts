@@ -66,6 +66,8 @@ class AppState {
   user = $state<string | null>(null)
   booting = $state(true)
   hasApiPassword = $state(false)
+  version = $state('')
+  commit = $state('')
   prefs = $state<Prefs>(loadLocalPrefs())
 
   folders = $state<Folder[]>([])
@@ -124,6 +126,8 @@ class AppState {
       const me = await api.me()
       this.user = me.username
       this.hasApiPassword = me.hasApiPassword
+      this.version = me.version
+      this.commit = me.commit
       this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>) }
       this.applyPrefs()
       this.readHash()

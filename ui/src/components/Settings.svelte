@@ -9,6 +9,12 @@
   let fileInput: HTMLInputElement | undefined = $state()
 
   const readerURL = `${location.origin}/api/greader.php`
+  // Released versions link to their notes; builds between releases to the changelog.
+  const releaseURL = $derived(
+    /^\d+\.\d+\.\d+$/.test(app.version)
+      ? `https://github.com/arenzana/correspondent/releases/tag/v${app.version}`
+      : 'https://github.com/arenzana/correspondent/blob/main/CHANGELOG.md',
+  )
 
   async function saveApiPassword(e: SubmitEvent) {
     e.preventDefault()
@@ -88,6 +94,10 @@
 
     <section class="last">
       <button class="btn" onclick={() => app.signOut()}>Sign out</button>
+      <p class="about">
+        Correspondent {app.version}{#if app.commit}&nbsp;<span title={app.commit}>({app.commit.slice(0, 7)})</span>{/if}.
+        <a href={releaseURL} target="_blank" rel="noopener noreferrer">What's new</a>
+      </p>
     </section>
   </div>
 </Modal>
@@ -167,6 +177,10 @@
   }
   .hint {
     margin: 10px 0 0;
+    font-size: 12.5px;
+  }
+  .about {
+    margin: 16px 0 0;
     font-size: 12.5px;
   }
   .check {

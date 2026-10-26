@@ -44,11 +44,9 @@ import (
 	"github.com/arenzana/correspondent/internal/ratelimit"
 	"github.com/arenzana/correspondent/internal/server"
 	"github.com/arenzana/correspondent/internal/store"
+	"github.com/arenzana/correspondent/internal/version"
 	"github.com/arenzana/correspondent/web"
 )
-
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -106,7 +104,7 @@ func run(log *slog.Logger, args []string) error {
 		return healthcheck(ctx, *addr)
 	}
 	if cmd == "version" {
-		fmt.Println(version)
+		fmt.Println("correspondent", version.String())
 		return nil
 	}
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
@@ -233,7 +231,7 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	log.Info("listening", "addr", addr, "version", version)
+	log.Info("listening", "addr", addr, "version", version.Version, "commit", version.Short())
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

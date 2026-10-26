@@ -126,6 +126,8 @@ make vuln    # govulncheck + npm audit
 - **A CLI reader and manager** for people and AI agents alike: the same
   binary talking to `/api/v1` with personal API tokens, `--json` output with
   stable schemas, no prompts, meaningful exit codes, and an MCP server.
+- **Multiple users**: accounts managed by an admin, per-user feeds and
+  state (the data model is already scoped per user).
 
 ## Layout
 
@@ -139,6 +141,14 @@ make vuln    # govulncheck + npm audit
 | `internal/greader` | Google Reader facade for Reeder |
 | `internal/migrate` | FreshRSS import preserving legacy IDs |
 | `ui/` | Svelte 5 reader |
+
+## Versions
+
+Correspondent follows [Semantic Versioning](https://semver.org/); changes
+are listed in [CHANGELOG.md](CHANGELOG.md). The running version shows in
+Settings and from `correspondent version`. To release: add a section to the
+changelog, `make release VERSION=x.y.z`, then push the tag; CI publishes the
+signed images (`x.y.z`, `x.y`, `latest`) and the GitHub release.
 
 ## License
 

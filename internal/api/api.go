@@ -20,6 +20,7 @@ import (
 	"github.com/arenzana/correspondent/internal/opml"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 	"github.com/arenzana/correspondent/internal/store"
+	"github.com/arenzana/correspondent/internal/version"
 )
 
 const (
@@ -138,7 +139,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
-	reply(w, map[string]any{"username": u.Username, "hasApiPassword": u.HasAPI, "prefs": json.RawMessage(u.Prefs)})
+	reply(w, map[string]any{"username": u.Username, "hasApiPassword": u.HasAPI, "prefs": json.RawMessage(u.Prefs),
+		// Only signed-in users learn the version, so it isn't advertised publicly.
+		"version": version.Version, "commit": version.Commit})
 }
 
 func (a *API) putPrefs(w http.ResponseWriter, r *http.Request) {
