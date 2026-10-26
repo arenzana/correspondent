@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, APP_ICONS, UI_SCALES } from '../lib/state.svelte'
-  import { api, type AIProvider } from '../lib/api'
+  import { api, type AIProvider, type SpeechProvider } from '../lib/api'
   import { deviceSubscribed, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
   import Icon from './Icon.svelte'
   import ThemePicker from './ThemePicker.svelte'
@@ -106,6 +106,56 @@
       aiMessage = 'Removed. Your key is no longer stored.'
     } catch (err) {
       aiMessage = (err as Error).message
+    }
+  }
+
+  // Read aloud: the reader's own text-to-speech provider and key.
+  const voices: Record<SpeechProvider, { model: string; voice: string; voiceHint: string }> = {
+    openai: { model: 'gpt-4o-mini-tts', voice: 'alloy', voiceHint: 'alloy, ash, coral, echo, nova, onyx, sage, shimmer…' },
+    elevenlabs: { model: 'eleven_multilingual_v2', voice: 'JBFqnCBsd6RMkjVDRZzb', voiceHint: 'A voice ID from your ElevenLabs voice library' },
+    deepgram: { model: 'aura-2-thalia-en', voice: '', voiceHint: '' },
+  }
+  let speechProvider = $state<SpeechProvider>(app.speech?.provider ?? 'openai')
+  let speechModel = $state(app.speech?.model ?? '')
+  let speechVoice = $state(app.speech?.voice ?? '')
+  let speechBase = $state(app.speech?.baseUrl ?? '')
+  let speechKey = $state('')
+  let speechBusy = $state(false)
+  let speechMessage = $state('')
+
+  async function saveSpeech(e: SubmitEvent) {
+    e.preventDefault()
+    speechBusy = true
+    speechMessage = ''
+    try {
+      const { speech } = await api.setSpeech({
+        provider: speechProvider,
+        model: speechModel.trim(),
+        voice: speechProvider === 'deepgram' ? '' : speechVoice.trim(),
+        baseUrl: speechProvider === 'openai' ? speechBase.trim() : '',
+        key: speechKey.trim(),
+      })
+      app.speech = speech
+      speechModel = speech.model
+      speechVoice = speech.voice ?? ''
+      speechKey = ''
+      speechMessage = 'Saved and checked with the provider.'
+    } catch (err) {
+      speechMessage = (err as Error).message
+    } finally {
+      speechBusy = false
+    }
+  }
+
+  async function removeSpeech() {
+    speechMessage = ''
+    try {
+      await api.deleteSpeech()
+      app.speech = null
+      speechKey = speechModel = speechVoice = speechBase = ''
+      speechMessage = 'Removed. Your key is no longer stored. Audio already made stays playable.'
+    } catch (err) {
+      speechMessage = (err as Error).message
     }
   }
 
@@ -499,6 +549,58 @@
             <small>Posts titled "Sponsor:", "[Sponsor]" and the like, or tagged as sponsored, arrive already read, here and in Reeder, and don't notify you. They stay in All.</small></span>
           <input type="checkbox" role="switch" checked={app.prefs.skipSponsored} onchange={(e) => app.setPrefs({ skipSponsored: e.currentTarget.checked })} />
         </label>
+
+        {#if app.aiAvailable}
+          <div class="card">
+            <h3>Read aloud</h3>
+            <p class="hint">
+              Listen to any article in a natural voice, with your own text-to-speech key. Press <kbd>l</kbd> or the
+              headphones in an article. Audio is shared: once anyone here has had an article read aloud, everyone who
+              follows it can listen without using their key. It also plays in Reeder, as the article’s audio.
+            </p>
+            <form class="ai" onsubmit={saveSpeech}>
+              <label>
+                <span>Provider</span>
+                <select class="field" bind:value={speechProvider}>
+                  <option value="openai">OpenAI or compatible</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                  <option value="deepgram">Deepgram</option>
+                </select>
+              </label>
+              <label>
+                <span>{speechProvider === 'deepgram' ? 'Voice model' : 'Model'}</span>
+                <input class="field" bind:value={speechModel} autocomplete="off" spellcheck="false" placeholder={voices[speechProvider].model} />
+              </label>
+              {#if speechProvider !== 'deepgram'}
+                <label class="wide">
+                  <span>Voice</span>
+                  <input class="field" bind:value={speechVoice} autocomplete="off" spellcheck="false"
+                    placeholder={voices[speechProvider].voice} title={voices[speechProvider].voiceHint} />
+                </label>
+              {/if}
+              {#if speechProvider === 'openai'}
+                <label class="wide">
+                  <span>Address <small>(optional, for a compatible service)</small></span>
+                  <input class="field" type="url" bind:value={speechBase} autocomplete="off" spellcheck="false" placeholder="https://api.openai.com/v1" />
+                </label>
+              {/if}
+              <label class="wide">
+                <span>API key</span>
+                <input class="field" type="password" bind:value={speechKey} autocomplete="off" spellcheck="false"
+                  placeholder={app.speech?.keyHint ? `Saved key ending ${app.speech.keyHint}` : 'Paste your API key'} required={!app.speech} />
+              </label>
+              <div class="actions-row wide">
+                <button class="btn primary" disabled={speechBusy}>{speechBusy ? 'Checking…' : 'Save'}</button>
+                {#if app.speech}<button type="button" class="btn" onclick={removeSpeech}>Remove</button>{/if}
+              </div>
+            </form>
+            <p class="hint">
+              The key is checked by speaking one word, stored encrypted, and never shown again. English voices; up to
+              60 articles a day. Leave model and voice empty for the defaults.
+            </p>
+            {#if speechMessage}<p class="msg" role="status">{speechMessage}</p>{/if}
+          </div>
+        {/if}
       </section>
 
       <section id="settings-feeds">

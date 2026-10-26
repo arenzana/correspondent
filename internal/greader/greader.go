@@ -30,6 +30,9 @@ type Server struct {
 	ClientIP ratelimit.ClientIP
 	// Subscriber lets apps add subscriptions; nil makes them read-only.
 	Subscriber Subscriber
+	// AudioLink is the private address of an entry's read-aloud audio,
+	// offered to apps as an enclosure; nil or "" offers none.
+	AudioLink func(userID, entryID int64) string
 }
 
 type session struct {
@@ -531,6 +534,11 @@ func (s *Server) items(ctx context.Context, sess session, entries []store.Entry)
 				m["length"] = en.Length
 			}
 			it.Enclosure = append(it.Enclosure, m)
+		}
+		if e.HasAudio && s.AudioLink != nil {
+			if u := s.AudioLink(sess.userID, e.ID); u != "" {
+				it.Enclosure = append(it.Enclosure, map[string]any{"href": u, "type": "audio/mpeg"})
+			}
 		}
 		out = append(out, it)
 	}

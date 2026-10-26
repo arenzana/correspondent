@@ -35,6 +35,8 @@ type Entry struct {
 	Starred     bool   `json:"starred"`
 	FullText    bool   `json:"fullText"`  // content is the article fetched from its page
 	FullError   string `json:"fullError"` // why fetching the full article failed
+	Audio       string `json:"-"`         // file of the audio read aloud, if made
+	HasAudio    bool   `json:"audio"`
 	StarredAt   int64  `json:"-"`
 	ReadAt      int64  `json:"-"`
 }
@@ -285,17 +287,47 @@ func ftsQuery(q string) string {
 
 const entryColumns = `e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.excerpt, e.image_url, e.enclosures,
 	e.published_at, e.updated_at, COALESCE(e.read_at, 0), COALESCE(e.starred_at, 0),
-	e.feed_content IS NOT NULL, e.full_error`
+	e.feed_content IS NOT NULL, e.full_error, COALESCE(e.audio, '')`
 
 func scanEntry(sc interface{ Scan(...any) error }, e *Entry, extra ...any) error {
 	dest := []any{&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Excerpt, &e.ImageURL,
-		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError}
+		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError, &e.Audio}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
 	e.Read = e.ReadAt != 0
 	e.Starred = e.StarredAt != 0
+	e.HasAudio = e.Audio != ""
 	return nil
+}
+
+// SetAudio records the audio file made for a user's entry ("" clears it).
+func (s *Store) SetAudio(ctx context.Context, userID, entryID int64, file string) error {
+	var v any
+	if file != "" {
+		v = file
+	}
+	return checkAffected(s.db.ExecContext(ctx, `UPDATE entries SET audio = ?
+		WHERE id = ? AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`, v, entryID, userID))
+}
+
+// AudioFiles returns every audio file still referenced by an entry, so
+// files of deleted entries can be removed.
+func (s *Store) AudioFiles(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT audio FROM entries WHERE audio IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			return nil, err
+		}
+		out[f] = true
+	}
+	return out, rows.Err()
 }
 
 // Entries returns one page of entry summaries, by arrival (crawl ID) or, with

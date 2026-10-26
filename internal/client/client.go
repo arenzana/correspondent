@@ -183,6 +183,7 @@ type Entry struct {
 	Read        bool   `json:"read"`
 	Starred     bool   `json:"starred"`
 	FullText    bool   `json:"fullText"`
+	Audio       bool   `json:"audio"` // read-aloud audio exists
 }
 
 type Candidate struct {
@@ -356,6 +357,18 @@ func (c *Client) DeleteFolder(ctx context.Context, id int64) error {
 func (c *Client) ExportOPML(ctx context.Context) ([]byte, error) {
 	var b []byte
 	return b, c.do(ctx, "GET", "/opml", nil, &b)
+}
+
+// Audio returns the article read aloud, as MP3: existing audio, or new
+// audio made with the reader's own text-to-speech key (which can take a
+// minute for a long article).
+func (c *Client) Audio(ctx context.Context, id string) ([]byte, error) {
+	var r struct{ URL string }
+	if err := c.do(ctx, "POST", "/entries/"+url.PathEscape(id)+"/audio", nil, &r); err != nil {
+		return nil, err
+	}
+	var mp3 []byte
+	return mp3, c.do(ctx, "GET", "/entries/"+url.PathEscape(id)+"/audio", nil, &mp3)
 }
 
 // Login exchanges a username and password for a token.

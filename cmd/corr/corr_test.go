@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"github.com/arenzana/correspondent/internal/api"
 	"github.com/arenzana/correspondent/internal/client"
 	"github.com/arenzana/correspondent/internal/ratelimit"
+	"github.com/arenzana/correspondent/internal/secretbox"
+	"github.com/arenzana/correspondent/internal/speech"
 	"github.com/arenzana/correspondent/internal/store"
 )
 
@@ -230,5 +233,51 @@ func TestWatch(t *testing.T) {
 	}
 	if strings.Contains(got, "Before watching") {
 		t.Error("watch replayed an article from before it started")
+	}
+}
+
+// TestListen saves an article's existing audio with -o.
+func TestListen(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	data := t.TempDir()
+	box, _ := secretbox.Load(filepath.Join(t.TempDir(), "keyring"))
+	a := &api.API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute), DataDir: data, Keyring: box}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	uid, _ := st.CreateUser(ctx, "alice", "password-alice")
+	fid, _ := st.AddFeed(ctx, uid, "https://notes.example/feed", "Notes", nil)
+	st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "1", Title: "Ships", Content: "<p>Ships.</p>", Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+	ids, _, _ := st.EntryIDs(ctx, store.Filter{UserID: uid})
+	id := strconv.FormatInt(ids[0], 10)
+	token, _, _ := st.CreateToken(ctx, uid, "test", store.ScopeWrite)
+
+	run := func(args ...string) error {
+		app := &app{ctx: ctx, asJSON: true}
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		app.setup(srv.URL, token)
+		old := os.Stdout
+		os.Stdout, _ = os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		defer func() { os.Stdout = old }()
+		return app.run(args)
+	}
+	// No audio and no read-aloud setup: a clear failure, not a hang.
+	if err := run("listen", id, "-o", filepath.Join(t.TempDir(), "x.mp3")); err == nil || !strings.Contains(err.Error(), "Settings") {
+		t.Errorf("without setup: %v", err)
+	}
+	// Audio someone already made of this text is fetched as is.
+	os.MkdirAll(filepath.Join(data, "audio"), 0o700)
+	file := speech.ScriptHash(speech.Script("Ships", "", "<p>Ships.</p>")) + "-other.mp3"
+	os.WriteFile(filepath.Join(data, "audio", file), []byte("mp3-bytes"), 0o600)
+	out := filepath.Join(t.TempDir(), "ships.mp3")
+	if err := run("listen", id, "-o", out); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(out); string(b) != "mp3-bytes" {
+		t.Errorf("saved %q", b)
 	}
 }

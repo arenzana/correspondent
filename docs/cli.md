@@ -79,6 +79,7 @@ instead of moving.
 | `corr feed FEED-ID rename T \| move FOLDER \| unfile \| pause \| resume \| refresh \| full-text on\|off \| notify on\|off \| url ADDRESS` | change a feed |
 | `corr opml export [FILE]`, `corr opml import FILE\|-` | OPML |
 | `corr watch [--feed ID] [--folder ID] [--notify]` | new articles as they arrive, until Ctrl-C; with `--json`, one JSON object per line; `--notify` also shows desktop notifications |
+| `corr listen ID [-o FILE]` | the article read aloud: played with the system's player (afplay, mpv, ffplay or mpg123), or saved with `-o` (`-` for stdout). Uses existing audio, or makes it with your text-to-speech key (Settings → Reading) |
 | `corr version` | |
 
 Flags work before or after the command: `--json`, `--server URL`,

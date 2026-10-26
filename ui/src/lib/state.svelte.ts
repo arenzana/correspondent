@@ -3,7 +3,7 @@
 // server refuses. Without a network, the reader works from its offline copy
 // (lib/offline) and queues changes until the connection returns.
 
-import { api, ApiError, type AIConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
@@ -97,6 +97,7 @@ class AppState {
   /** Whether this server can use AI, and the reader's setup if any. */
   aiAvailable = $state(false)
   ai = $state<AIConfig | null>(null)
+  speech = $state<SpeechConfig | null>(null)
   version = $state('')
   commit = $state('')
   /** Whether the server is reachable; the reader works offline when not. */
@@ -189,6 +190,7 @@ class AppState {
       this.hasApiPassword = me.hasApiPassword
       this.aiAvailable = me.aiAvailable
       this.ai = me.ai
+      this.speech = me.speech
       this.role = me.role ?? 'user'
       this.passkeysAvailable = !!me.passkeysAvailable
       this.version = me.version
@@ -975,6 +977,28 @@ class AppState {
       this.toast(`Deleted the folder ${name}. Its feeds are kept.`)
     } catch (e) {
       this.toast(`Couldn't delete the folder. ${(e as Error).message}`)
+    }
+  }
+
+  /** The article being read aloud; it keeps playing while you browse. */
+  listening = $state<{ id: ID; url: string; title: string; feed: string } | null>(null)
+  preparingAudio = $state<ID | null>(null)
+
+  /** Reads the open article aloud: its existing audio, or new audio made with the reader's key. */
+  async readAloud() {
+    const e = this.article?.entry
+    if (!e || this.preparingAudio) return
+    if (this.listening?.id === e.id) return
+    this.preparingAudio = e.id
+    try {
+      const { url } = await api.makeAudio(e.id)
+      this.listening = { id: e.id, url, title: e.title, feed: this.feedById.get(e.feedId)?.title ?? '' }
+      this.patch([e.id], { audio: true })
+      if (this.article?.entry.id === e.id) this.article = { ...this.article, entry: { ...this.article.entry, audio: true } }
+    } catch (err) {
+      this.toast(`Couldn't read this aloud. ${(err as Error).message}`)
+    } finally {
+      this.preparingAudio = null
     }
   }
 

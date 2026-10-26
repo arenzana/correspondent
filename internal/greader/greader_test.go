@@ -328,3 +328,29 @@ func TestUnicodeAlternative(t *testing.T) {
 		}
 	}
 }
+
+// TestAudioEnclosure offers an article's read-aloud audio to apps as an
+// enclosure, by the private link the API makes.
+func TestAudioEnclosure(t *testing.T) {
+	c, st, ids := setup(t)
+	uid, _ := st.UserIDByName(context.Background(), "reader")
+	st.SetAudio(context.Background(), uid, ids[0], "abc-def.mp3")
+	c.server.AudioLink = func(u, e int64) string { return fmt.Sprintf("https://rss.example/api/v1/audio/%d-%d.mp3", u, e) }
+	_, body := c.do("POST", "/accounts/ClientLogin", url.Values{"Email": {"reader"}, "Passwd": {"api-password-123"}})
+	for _, line := range strings.Split(body, "\n") {
+		if v, ok := strings.CutPrefix(line, "Auth="); ok {
+			c.auth = v
+		}
+	}
+	var contents struct {
+		Items []struct {
+			Enclosure []struct{ Href, Type string }
+		}
+	}
+	c.json("POST", "/reader/api/0/stream/items/contents", url.Values{"i": {strconv.FormatInt(ids[0], 10), strconv.FormatInt(ids[1], 10)}}, &contents)
+	want := fmt.Sprintf("https://rss.example/api/v1/audio/%d-%d.mp3", uid, ids[0])
+	if len(contents.Items) != 2 || len(contents.Items[0].Enclosure) != 1 || contents.Items[0].Enclosure[0].Href != want ||
+		contents.Items[0].Enclosure[0].Type != "audio/mpeg" || len(contents.Items[1].Enclosure) != 0 {
+		t.Errorf("enclosures: %+v", contents.Items)
+	}
+}

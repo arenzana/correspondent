@@ -114,6 +114,11 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/discover", a.auth(a.discover))
 	mux.HandleFunc("POST /api/v1/discover/ai", a.auth(a.discoverAI))
 	mux.HandleFunc("PUT /api/v1/ai", a.session(a.putAI))
+	mux.HandleFunc("PUT /api/v1/speech", a.session(a.putSpeech))
+	mux.HandleFunc("DELETE /api/v1/speech", a.session(a.deleteSpeech))
+	mux.HandleFunc("POST /api/v1/entries/{id}/audio", a.auth(a.makeAudio))
+	mux.HandleFunc("GET /api/v1/entries/{id}/audio", a.auth(a.audio))
+	mux.HandleFunc("GET /api/v1/audio/{token}", a.audioLink)
 	mux.HandleFunc("DELETE /api/v1/ai", a.session(a.deleteAI))
 	mux.HandleFunc("POST /api/v1/feeds", a.auth(a.subscribe))
 	mux.HandleFunc("PATCH /api/v1/feeds/{id}", a.auth(a.updateFeed))
@@ -263,8 +268,17 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	if hasAI {
 		ai = cfg
 	}
+	scfg, _, hasSpeech, err := a.speechConfig(r.Context(), u.ID)
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+	var sp any
+	if hasSpeech {
+		sp = scfg
+	}
 	reply(w, map[string]any{"username": u.Username, "hasApiPassword": u.HasAPI, "prefs": json.RawMessage(u.Prefs),
-		"aiAvailable": a.Keyring != nil, "ai": ai, "role": u.Role, "passkeysAvailable": a.WebAuthn != nil,
+		"aiAvailable": a.Keyring != nil, "ai": ai, "speech": sp, "role": u.Role, "passkeysAvailable": a.WebAuthn != nil,
 		// Only signed-in users learn the version, so it isn't advertised publicly.
 		"version": version.Version, "commit": version.Commit})
 }
@@ -394,6 +408,7 @@ func (a *API) entry(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	a.sharedAudio(r.Context(), userID(r), e)
 	a.proxyEntry(e)
 	var encl []store.Enclosure
 	json.Unmarshal([]byte(e.Enclosures), &encl)

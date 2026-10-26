@@ -285,7 +285,7 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles
 	st.OnStateChange = a.NotifyState
-	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip, Subscriber: ing}
+	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip, Subscriber: ing, AudioLink: a.AudioLink}
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           server.New(st, a, g, imageHandler(images), web.Dist(), secure),
@@ -296,6 +296,7 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 	if images != nil {
 		go pruneImages(ctx, log, images)
 	}
+	go sweepAudio(ctx, log, a)
 	if poll {
 		go ing.Run(ctx)
 	} else {
@@ -331,6 +332,24 @@ func pruneImages(ctx context.Context, log *slog.Logger, p *imgproxy.Proxy) {
 			log.Warn("image cache", "error", err.Error())
 		} else if n > 0 {
 			log.Info("image cache pruned", "removed", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// sweepAudio removes read-aloud audio of deleted articles, daily.
+func sweepAudio(ctx context.Context, log *slog.Logger, a *api.API) {
+	t := time.NewTicker(24 * time.Hour)
+	defer t.Stop()
+	for {
+		if n, err := a.SweepAudio(ctx); err != nil {
+			log.Warn("audio sweep", "error", err.Error())
+		} else if n > 0 {
+			log.Info("audio swept", "removed", n)
 		}
 		select {
 		case <-ctx.Done():

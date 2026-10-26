@@ -46,6 +46,7 @@ Usage:
                     refresh | full-text on|off | notify on|off | url ADDRESS
   corr opml export [FILE] | opml import FILE
   corr watch [--feed ID] [--folder ID] [--notify]   new articles as they arrive
+  corr listen ID [-o FILE]                          hear an article read aloud
   corr version
 
 Global flags (before or after the command):
@@ -183,6 +184,8 @@ func (a *app) run(args []string) error {
 		return a.opml(rest)
 	case "watch":
 		return a.watch(rest)
+	case "listen":
+		return a.listen(rest)
 	case "version":
 		return emit(a.asJSON, map[string]string{"version": version.Version, "commit": version.Commit}, func(w io.Writer) {
 			line(w, "corr "+version.String())

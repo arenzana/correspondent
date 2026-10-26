@@ -59,6 +59,8 @@ export interface Entry {
   fullText?: boolean
   /** Why fetching the full article failed, if it did. */
   fullError?: string
+  /** Audio of the article read aloud exists. */
+  audio?: boolean
 }
 
 export interface Enclosure {
@@ -179,6 +181,17 @@ export interface AIConfig {
   keyHint?: string
 }
 
+export type SpeechProvider = 'openai' | 'elevenlabs' | 'deepgram'
+
+/** A reader's text-to-speech setup; the key itself never comes back. */
+export interface SpeechConfig {
+  provider: SpeechProvider
+  baseUrl?: string
+  model: string
+  voice?: string
+  keyHint?: string
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -244,6 +257,7 @@ export const api = {
       commit: string
       aiAvailable: boolean
       ai: AIConfig | null
+      speech: SpeechConfig | null
       role: Role
       passkeysAvailable: boolean
     }>('GET', '/me'),
@@ -282,6 +296,11 @@ export const api = {
   },
   setAI: (config: Omit<AIConfig, 'keyHint'> & { key: string }) => request<{ ai: AIConfig }>('PUT', '/ai', config),
   deleteAI: () => request<void>('DELETE', '/ai'),
+  setSpeech: (config: Omit<SpeechConfig, 'keyHint'> & { key: string }) =>
+    request<{ speech: SpeechConfig }>('PUT', '/speech', config),
+  deleteSpeech: () => request<void>('DELETE', '/speech'),
+  /** Makes (or finds) the article's audio; resolves when it's ready to play. */
+  makeAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio`),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),

@@ -14,6 +14,7 @@
   import TabBar from './components/TabBar.svelte'
   import Invite from './components/Invite.svelte'
   import Admin from './components/Admin.svelte'
+  import Listen from './components/Listen.svelte'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -23,6 +24,7 @@
   // While dragging, widths update locally; they are saved once on release.
   let live = $state<{ nav?: number; list?: number }>({})
   let article: ReturnType<typeof Article> | undefined = $state()
+  let listen: ReturnType<typeof Listen> | undefined = $state()
   let pendingG = false
   let gTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -68,6 +70,7 @@
       ' ': () => (app.article ? article?.pageDown(e.shiftKey) : app.move(1)),
       s: () => app.toggleStar(),
       m: () => app.toggleRead(),
+      l: () => (app.listening && app.listening.id === app.article?.entry.id ? listen?.toggle() : app.readAloud()),
       v: () => app.article?.entry.url && window.open(app.article.entry.url, '_blank', 'noopener,noreferrer'),
       A: () => app.markAllRead(),
       r: () => { app.refreshTree(); app.load() },
@@ -153,6 +156,7 @@
     {/if}
     {#if app.pane !== 'article'}<div class="tabs"><TabBar /></div>{/if}
   </div>
+  <div class="listen-dock" class:above-tabs={app.pane !== 'article'}><Listen bind:this={listen} /></div>
 
   {#if app.paletteOpen}<Palette />{/if}
   {#if app.shortcutsOpen}<Shortcuts />{/if}
@@ -229,6 +233,9 @@
   }
   .tabs {
     display: none;
+  }
+  .listen-dock {
+    display: contents;
   }
   .skip {
     position: absolute;
@@ -313,6 +320,9 @@
     /* The tab bar sits under the feeds and list panes; panes end above it. */
     .tabs {
       display: block;
+    }
+    .listen-dock.above-tabs :global(.listen) {
+      bottom: calc(64px + env(safe-area-inset-bottom));
     }
     [data-pane='nav'] .nav,
     [data-pane='list'] .list {

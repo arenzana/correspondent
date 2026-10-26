@@ -13,6 +13,7 @@
         [['Space'], 'Scroll, then next article'],
         [['⇧', 'Space'], 'Scroll up'],
         [['v'], 'Open original'],
+        [['l'], 'Listen, or play and pause'],
         [['f'], 'Focused reading'],
       ],
     },

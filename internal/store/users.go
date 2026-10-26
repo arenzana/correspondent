@@ -62,6 +62,21 @@ func (s *Store) AI(ctx context.Context, userID int64) (sealed []byte, config str
 	return sealed, config, err
 }
 
+// SetSpeech stores a user's sealed text-to-speech key and config (JSON);
+// nil and "" clear them.
+func (s *Store) SetSpeech(ctx context.Context, userID int64, sealed []byte, config string) error {
+	return checkAffected(s.db.ExecContext(ctx, `UPDATE users SET speech_key = ?, speech_config = ? WHERE id = ?`, sealed, config, userID))
+}
+
+// Speech returns a user's sealed text-to-speech key (nil if none) and config.
+func (s *Store) Speech(ctx context.Context, userID int64) (sealed []byte, config string, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT speech_key, speech_config FROM users WHERE id = ?`, userID).Scan(&sealed, &config)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return sealed, config, err
+}
+
 // SetAPIPassword sets the separate password used by Reeder and other Google
 // Reader clients. The web password never authenticates the API.
 func (s *Store) SetAPIPassword(ctx context.Context, userID int64, password string) error {

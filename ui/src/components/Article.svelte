@@ -93,6 +93,19 @@
           <Icon name="external" />
         </a>
       {/if}
+      {#if app.speech || a.entry.audio}
+        <button
+          class="icon-btn"
+          class:busy={app.preparingAudio === a.entry.id}
+          aria-pressed={app.listening?.id === a.entry.id}
+          aria-label={app.preparingAudio === a.entry.id ? 'Preparing audio' : 'Listen'}
+          title={app.preparingAudio === a.entry.id ? 'Preparing audio. Long articles take a minute' : a.entry.audio ? 'Listen (l)' : 'Read aloud (l)'}
+          disabled={!!app.preparingAudio || a.entry.content === undefined}
+          onclick={() => app.readAloud()}
+        >
+          <Icon name="headphones" />
+        </button>
+      {/if}
       <div class="aa">
         <button
           class="icon-btn"
@@ -199,6 +212,19 @@
 </article>
 
 <style>
+  .icon-btn.busy {
+    animation: breathe 1.2s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .icon-btn.busy {
+      animation: none;
+    }
+  }
   .pane {
     position: relative;
     display: flex;

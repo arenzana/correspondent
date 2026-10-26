@@ -7,6 +7,21 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-26
+
+### Added
+
+- Listen to articles. Set up your own text-to-speech key in Settings →
+  Reading (OpenAI or a compatible service, ElevenLabs, or Deepgram; English
+  voices), then press `l` or the headphones in an article. A player stays
+  at the bottom while you browse, with speed, skip and lock-screen
+  controls. The article's prose is read: title, author and text, without
+  code, tables, captions or images.
+- Read-aloud audio is shared: made once with one reader's key, then
+  playable by everyone who follows that article, without a key. Apps like
+  Reeder get it as the article's audio through a private link.
+- `corr listen ID` plays an article read aloud, or saves it with `-o`.
+
 ## [0.12.0] - 2026-10-26
 
 ### Added

@@ -146,7 +146,8 @@ or ⌘K): each invitation is a one-time link, valid for a week, where the
 person chooses their own username and password; a password reset is a
 one-time link too, so passwords never pass through the admin. Each reader
 has their own feeds, folders, read state, settings, Reeder password and AI
-key; parsers for sites without feeds and the image cache are shared.
+key; parsers for sites without feeds, read-aloud audio and the image cache
+are shared.
 
 The admin can make others admins, disable an account (it is signed out
 everywhere at once, Reeder included, and its feeds stop updating; its data
@@ -187,12 +188,23 @@ make fuzz    # fuzz the sanitizer and feed parser
 make vuln    # govulncheck + npm audit
 ```
 
+## Listen to articles
+
+Any article can be read aloud in a natural voice (English), with your own
+text-to-speech key: OpenAI or a compatible service, ElevenLabs, or
+Deepgram (Settings → Reading). Press `l` or the headphones in an article;
+it keeps playing while you browse, with lock-screen controls on phones.
+
+Audio is made once and shared: when anyone on the server has had an
+article read aloud, everyone who follows it can listen, without a key.
+Reeder plays it too, as the article's audio, through a private link (set
+`CORRESPONDENT_PUBLIC_URL`). `corr listen ID` plays it in the terminal.
+Up to 60 new articles a day per reader.
+
 ## Roadmap
 
-- **Listen to articles**: natural read-aloud through an AI text-to-speech
-  API (the reader's own key and provider, set up like AI parsers), with
-  playback in the article view and on the lock screen, audio kept for
-  offline listening, and a queue that plays the unread list.
+- **Listening, continued**: audio kept for offline listening, and a queue
+  that plays the unread list.
 
 ## Layout
 
