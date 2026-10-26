@@ -35,12 +35,13 @@ type Store struct {
 // migrations. The database must live on local storage: WAL does not work
 // over network filesystems.
 func Open(ctx context.Context, path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_txlock=immediate"
+	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=temp_store(MEMORY)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
-	// One writer; a handful of readers is plenty for a home install.
+	// temp_store=MEMORY: the container root is read-only, so SQLite must not
+	// spill sorts to temp files. One writer; a handful of readers is plenty.
 	db.SetMaxOpenConns(4)
 	s := &Store{db: db}
 	if err := s.migrate(ctx); err != nil {
@@ -142,7 +143,7 @@ func (s *Store) Backup(ctx context.Context, dest string) error {
 	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, dest); err != nil {
 		return err
 	}
-	copyDB, err := sql.Open("sqlite", "file:"+dest+"?mode=ro")
+	copyDB, err := sql.Open("sqlite", "file:"+dest+"?mode=ro&_pragma=temp_store(MEMORY)")
 	if err != nil {
 		return err
 	}

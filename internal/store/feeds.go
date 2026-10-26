@@ -28,6 +28,7 @@ type Feed struct {
 	LastStatus  int    `json:"lastStatus"`
 	ErrorCount  int    `json:"errorCount"`
 	LastError   string `json:"lastError"`
+	Paused      bool   `json:"paused"`
 	Unread      int    `json:"unread"`
 	Total       int    `json:"total"`
 	// Cadence is the number of entries per day over the last 14 days, oldest
@@ -85,12 +86,12 @@ func (s *Store) DeleteFolder(ctx context.Context, userID, folderID int64) error 
 }
 
 const feedColumns = `f.id, f.user_id, f.folder_id, f.url, f.site_url, f.title, f.description, f.icon_url,
-	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec`
+	f.last_fetch_at, f.last_status, f.error_count, f.last_error, f.etag, f.last_modified, f.interval_sec, f.paused`
 
 func scanFeed(sc interface{ Scan(...any) error }, f *Feed, extra ...any) error {
 	var folder sql.NullInt64
 	dest := []any{&f.ID, &f.UserID, &folder, &f.URL, &f.SiteURL, &f.Title, &f.Description, &f.IconURL,
-		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec}
+		&f.LastFetchAt, &f.LastStatus, &f.ErrorCount, &f.LastError, &f.ETag, &f.LastModified, &f.IntervalSec, &f.Paused}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func (s *Store) DeleteFeed(ctx context.Context, userID, feedID int64) error {
 // DueFeeds returns feeds whose next fetch time has passed, across all users.
 func (s *Store) DueFeeds(ctx context.Context, now time.Time, limit int) ([]Feed, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+feedColumns+` FROM feeds f WHERE f.next_fetch_at <= ? ORDER BY f.next_fetch_at LIMIT ?`,
+		`SELECT `+feedColumns+` FROM feeds f WHERE f.paused = 0 AND f.next_fetch_at <= ? ORDER BY f.next_fetch_at LIMIT ?`,
 		now.Unix(), limit)
 	if err != nil {
 		return nil, err
@@ -288,4 +289,12 @@ func (s *Store) ImportFeed(ctx context.Context, userID, id int64, url, title, si
 		return 0, fmt.Errorf("feed ID %d is already used by another subscription", id)
 	}
 	return got, err
+}
+
+// SetFeedSchedule sets a feed's polling interval (0 keeps the current one)
+// and whether it is paused.
+func (s *Store) SetFeedSchedule(ctx context.Context, userID, feedID int64, intervalSec int64, paused bool) error {
+	return checkAffected(s.db.ExecContext(ctx, `
+		UPDATE feeds SET paused = ?, interval_sec = CASE WHEN ? > 0 THEN ? ELSE interval_sec END
+		 WHERE id = ? AND user_id = ?`, paused, intervalSec, intervalSec, feedID, userID))
 }

@@ -35,6 +35,7 @@ func New(st *store.Store, a *api.API, g *greader.Server, ui fs.FS, secure bool) 
 		}
 		w.Write([]byte("ok"))
 	})
+	mux.HandleFunc("GET /manifest.webmanifest", a.Manifest)
 	mux.Handle("/", spa(ui))
 	return headers(mux, secure)
 }

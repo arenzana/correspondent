@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 	"math/rand/v2"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ const (
 // Correspondent (new). Any blocking difference means Reeder would duplicate,
 // lose or misfile something, so the cutover must not go ahead. Run it with
 // polling paused on both sides, right after the final import.
-func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer) (ok bool, err error) {
+func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer, full bool) (ok bool, err error) {
 	ok = true
 	fail := func(format string, a ...any) {
 		ok = false
@@ -46,7 +47,11 @@ func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer) (ok bool
 			cats = append(cats, c.ID)
 		}
 		slices.Sort(cats)
-		return s.URL + " | " + strings.Join(cats, ",")
+		return s.Title + " | " + redactURL(s.URL) + " | " + strings.Join(cats, ",")
+	}
+	sameSub := func(a, b Subscription) bool {
+		// Compare full URLs, but never print them: feed URLs can carry tokens.
+		return a.URL == b.URL && subKey(a) == subKey(b)
 	}
 	byID := func(list []Subscription) map[string]Subscription {
 		m := map[string]Subscription{}
@@ -61,7 +66,7 @@ func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer) (ok bool
 		switch {
 		case !found:
 			fail("%s (%s) is missing", id, s.Title)
-		case subKey(s) != subKey(t):
+		case !sameSub(s, t):
 			fail("%s differs: %q vs %q", id, subKey(s), subKey(t))
 		}
 	}
@@ -167,18 +172,25 @@ func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer) (ok bool
 	}
 
 	fmt.Fprintln(out, "Item fields")
-	sample = append(sample, ro[:min(len(ro), 200)]...)
-	slices.Sort(sample)
-	sample = slices.Compact(sample)
-	rand.Shuffle(len(sample), func(i, j int) { sample[i], sample[j] = sample[j], sample[i] })
-	sample = sample[:min(len(sample), 300)]
+	if full {
+		// Every item FreshRSS has, not a sample.
+		if sample, err = old.IDs(ctx, streamAll, "", 0); err != nil { // every item
+			return false, err
+		}
+	} else {
+		sample = append(sample, ro[:min(len(ro), 200)]...)
+		slices.Sort(sample)
+		sample = slices.Compact(sample)
+		rand.Shuffle(len(sample), func(i, j int) { sample[i], sample[j] = sample[j], sample[i] })
+		sample = sample[:min(len(sample), 300)]
+	}
 	io_, err := old.Items(ctx, sample)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("FreshRSS: %w", err)
 	}
 	in, err := new.Items(ctx, sample)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("Correspondent: %w", err)
 	}
 	newByID := map[string]Item{}
 	for _, it := range in {
@@ -200,7 +212,11 @@ func Verify(ctx context.Context, old, new *ReaderClient, out io.Writer) (ok bool
 		}
 	}
 	if bad == 0 {
-		pass("%d sampled items match (IDs, timestamps, title, link, feed, state, folder)", len(io_))
+		what := "sampled"
+		if full {
+			what = "of all"
+		}
+		pass("%d %s items match (IDs, timestamps, title, link, feed, state, folder)", len(io_), what)
 	} else if bad > 10 {
 		fail("…and %d more items differ", bad-10)
 	}
@@ -222,7 +238,7 @@ func compareItems(a, b Item) []string {
 		p = append(p, fmt.Sprintf("feed %s vs %s", a.Origin.StreamID, b.Origin.StreamID))
 	}
 	if href(a) != href(b) {
-		p = append(p, fmt.Sprintf("link %q vs %q", href(a), href(b)))
+		p = append(p, fmt.Sprintf("link %s vs %s", redactURL(href(a)), redactURL(href(b))))
 	}
 	// Compare the categories Reeder acts on; FreshRSS adds its own states.
 	relevant := func(cats []string) []string {
@@ -344,4 +360,18 @@ func ApplyRollback(ctx context.Context, freshrss *ReaderClient, p *RollbackPlan)
 		}
 	}
 	return nil
+}
+
+// redactURL shows where a URL points without its query or fragment, which
+// may hold access tokens (paid feeds often put one in every link).
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "(unparseable URL)"
+	}
+	out := u.Scheme + "://" + u.Host + u.Path
+	if u.RawQuery != "" || u.Fragment != "" {
+		out += fmt.Sprintf("?… (%d-character query)", len(u.RawQuery)+len(u.Fragment))
+	}
+	return out
 }

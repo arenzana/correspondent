@@ -375,6 +375,7 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 		FolderID   *int64  `json:"folderId"`
 		FolderName string  `json:"folderName"`
 		NoFolder   bool    `json:"noFolder"`
+		Paused     *bool   `json:"paused"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -387,6 +388,12 @@ func (a *API) updateFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.FolderID = &fid
+	}
+	if in.Paused != nil {
+		if err := a.Store.SetFeedSchedule(r.Context(), uid, id, 0, *in.Paused); err != nil {
+			a.result(w, err)
+			return
+		}
 	}
 	a.result(w, a.Store.UpdateFeed(r.Context(), uid, id, in.Title, in.FolderID, in.NoFolder))
 }

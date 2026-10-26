@@ -307,3 +307,22 @@ func TestLegacyFreshRSSToken(t *testing.T) {
 		t.Fatal("legacy token valid after disabling")
 	}
 }
+
+func TestUnicodeAlternative(t *testing.T) {
+	cases := []struct {
+		in       string
+		extended bool
+		want     string
+	}{
+		{"Trash & Finds <b>", false, "Trash ＆ Finds ＜b＞"},
+		{"  spaced  title  ", false, "spaced  title"}, // trimmed, inner spaces kept
+		{"What? A/B, C; D\\E", false, "What? A/B, C; D\\E"},
+		{"What? A/B, C; D\\E", true, "What？ A／B， C； D＼E"},
+		{`It's "quoted" ^`, true, `It's "quoted" ^`}, // FreshRSS's += quirk leaves these
+	}
+	for _, c := range cases {
+		if got := UnicodeAlternative(c.in, c.extended); got != c.want {
+			t.Errorf("UnicodeAlternative(%q, %v) = %q, want %q", c.in, c.extended, got, c.want)
+		}
+	}
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="16" height="16" viewBox="0 0 16 16">
+  <title>morse-small-dark.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path id="tile" d="M5.76 0 L10.24 0 C12.256 0 13.264 0 14.034 0.392 C14.712 0.738 15.262 1.288 15.608 1.966 C16 2.736 16 3.744 16 5.76 L16 10.24 C16 12.256 16 13.264 15.608 14.034 C15.262 14.712 14.712 15.262 14.034 15.608 C13.264 16 12.256 16 10.24 16 L5.76 16 C3.744 16 2.736 16 1.966 15.608 C1.288 15.262 0.738 14.712 0.392 14.034 C0 13.264 0 12.256 0 10.24 L0 5.76 C0 3.744 0 2.736 0.392 1.966 C0.738 1.288 1.288 0.738 1.966 0.392 C2.736 0 3.744 0 5.76 0 Z" fill="#161d2a"/>
+    <path id="dash" d="M4.5 5.5 L6.5 5.5" fill="none" stroke="#eef1f5" stroke-width="3" stroke-linecap="round" stroke-miterlimit="10"/>
+    <path id="dot" d="M10 5.5 C10 4.672 10.672 4 11.5 4 C12.328 4 13 4.672 13 5.5 C13 6.328 12.328 7 11.5 7 C10.672 7 10 6.328 10 5.5 Z" fill="#8ea2ff"/>
+    <path id="dash-2" data-name="dash" d="M4.5 10.5 L6.5 10.5" fill="none" stroke="#eef1f5" stroke-width="3" stroke-linecap="round" stroke-miterlimit="10"/>
+    <path id="dot-2" data-name="dot" d="M10 10.5 C10 9.672 10.672 9 11.5 9 C12.328 9 13 9.672 13 10.5 C13 11.328 12.328 12 11.5 12 C10.672 12 10 11.328 10 10.5 Z" fill="#8ea2ff"/>
+  </g>
+</svg>

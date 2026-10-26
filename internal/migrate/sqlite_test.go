@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,20 +33,20 @@ CREATE TABLE category (id INTEGER PRIMARY KEY, name VARCHAR(191) NOT NULL);
 CREATE TABLE feed (id INTEGER PRIMARY KEY, url TEXT NOT NULL, kind SMALLINT DEFAULT 0, category INTEGER DEFAULT 0,
   name TEXT NOT NULL, website TEXT, httpAuth TEXT, ttl INT NOT NULL DEFAULT 0);
 CREATE TABLE entry (id BIGINT NOT NULL PRIMARY KEY, guid TEXT NOT NULL, title TEXT NOT NULL, author TEXT, content TEXT,
-  link TEXT NOT NULL, date BIGINT, lastUserModified BIGINT, is_read BOOLEAN NOT NULL DEFAULT 0,
+  link TEXT NOT NULL, date BIGINT, lastSeen BIGINT, lastUserModified BIGINT, is_read BOOLEAN NOT NULL DEFAULT 0,
   is_favorite BOOLEAN NOT NULL DEFAULT 0, id_feed INTEGER, attributes TEXT);
 INSERT INTO category VALUES (1, 'Uncategorized'), (5, 'Notes &amp; Logs');
 INSERT INTO feed VALUES
-  (2, 'https://a.example/feed', 0, 5, 'A &amp; B', 'https://a.example/', NULL, 0),
+  (2, 'https://a.example/feed', 0, 5, 'A &amp; B', 'https://a.example/', NULL, -7200),
   (9, 'https://b.example/feed', 0, 1, 'B', 'javascript:alert(1)', 'user:pass', 0),
   (11, 'https://c.example/page', 2, 1, 'Scraped', '', NULL, 0),
   (12, 'file:///etc/passwd', 0, 1, 'Bad', '', NULL, 0);
 INSERT INTO entry VALUES
   (1700000000000001, 'a-1', 'Read &amp; starred', 'Ann', '<p onclick="x()">Hi<script>alert(1)</script></p>',
-   'https://a.example/1', 1699990000, 1700000500, 1, 1, 2,
+   'https://a.example/1', 1699990000, 1700000400, 1700000500, 1, 1, 2,
    '{"enclosures":[{"url":"https://a.example/1.mp3","type":"audio/mpeg","length":99},{"url":"javascript:x","type":"audio/mpeg"}]}'),
-  (1700000000000002, 'a-2', 'Unread', '', '<p>Body</p>', 'javascript:alert(2)', 1699990100, 0, 0, 0, 2, NULL),
-  (1700000000000003, 'b-1', 'Other feed', '', '', 'https://b.example/1', 1699990200, 0, 0, 1, 9, '');`)
+  (1700000000000002, 'a-2', 'Unread', '', '<p>Body</p>', 'javascript:alert(2)', 1699990100, 0, 0, 0, 0, 2, NULL),
+  (1700000000000003, 'https://b.example/1?a=1&amp;b=2', 'Other  feed', '', '', 'https://b.example/1?a=1&amp;b=2', 1699990200, 0, 0, 0, 1, 9, '');`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +108,12 @@ func TestFromSQLite(t *testing.T) {
 	if err != nil || f.Title != "A & B" {
 		t.Fatalf("feed 2: %+v %v", f, err)
 	}
+	if !f.Paused || f.IntervalSec != 7200 || rep.Paused != 1 {
+		t.Fatalf("FreshRSS ttl -7200 must import as paused with a 2h interval: paused=%v interval=%d", f.Paused, f.IntervalSec)
+	}
+	if due, _ := st.DueFeeds(ctx, time.Now(), 100); slices.ContainsFunc(due, func(d store.Feed) bool { return d.ID == 2 }) {
+		t.Fatal("paused feed scheduled for polling")
+	}
 	if f9, _ := st.Feed(ctx, uid, 9); f9.SiteURL != "" {
 		t.Fatalf("javascript: site URL kept: %q", f9.SiteURL)
 	}
@@ -148,10 +155,26 @@ func TestFromSQLite(t *testing.T) {
 
 	// After cutover, a polled item with an unknown GUID but the same link as
 	// an imported entry is recognised instead of duplicated.
-	ins, _, err := st.UpsertEntries(ctx, 9, []store.NewEntry{{GUID: "https://b.example/1", URL: "https://b.example/1",
+	// FreshRSS stored the GUID and link escaped; a fresh poll yields them
+	// decoded and must match, not duplicate.
+	ins, _, err := st.UpsertEntries(ctx, 9, []store.NewEntry{{GUID: "https://b.example/1?a=1&b=2", URL: "https://b.example/1?a=1&b=2",
 		Title: "Other feed", Enclosures: "[]", PublishedAt: time.Unix(1699990200, 0)}}, time.Time{})
 	if err != nil || ins != 0 {
-		t.Fatalf("link fallback inserted %d (%v)", ins, err)
+		t.Fatalf("escaped GUID re-polled as a new article: inserted %d (%v)", ins, err)
+	}
+	if e3, _ := st.Entry(ctx, uid, 1700000000000003); e3.Title != "Other  feed" || e3.URL != "https://b.example/1?a=1&b=2" {
+		t.Fatalf("entry 3: title %q url %q", e3.Title, e3.URL)
+	}
+	// The first poll after import keeps FreshRSS's version (what Reeder has
+	// cached) even if the feed now differs; later edits update as usual.
+	edited := []store.NewEntry{{GUID: "a-1", URL: "https://a.example/1", Title: "Edited upstream", Enclosures: "[]", ContentHash: "h1"}}
+	st.UpsertEntries(ctx, 2, edited, time.Time{})
+	if e1, _ := st.Entry(ctx, uid, 1700000000000001); e1.Title != "Read & starred" {
+		t.Fatalf("first poll after import rewrote the title to %q", e1.Title)
+	}
+	edited[0].ContentHash, edited[0].Title = "h2", "Edited again"
+	if _, upd, _ := st.UpsertEntries(ctx, 2, edited, time.Time{}); upd != 1 {
+		t.Fatal("a later edit was not applied")
 	}
 	// New items get IDs above everything imported.
 	st.UpsertEntries(ctx, 9, []store.NewEntry{{GUID: "fresh", Enclosures: "[]"}}, time.Time{})
@@ -195,5 +218,28 @@ func TestPlanRollback(t *testing.T) {
 	}
 	if len(p.Read) != 0 || len(p.Unread) != 1 || len(p.Unstar) != 1 || len(p.Star) != 0 || p.Skipped != 1 {
 		t.Fatalf("plan %+v", p)
+	}
+}
+
+func TestUntitled(t *testing.T) {
+	long := "<p>This year I spent a bit of time playing with Python, after\nhaving mostly ignored it for a decade.</p>"
+	if got := untitled(long, "g"); got != "This year I spent a bit of time playing with Python, after\nhaving mostly ig…" {
+		t.Fatalf("untitled = %q", got)
+	}
+	if got := untitled("<p>Short</p>", "g"); got != "Short" {
+		t.Fatalf("short = %q", got)
+	}
+	if got := untitled("<img src=x>", "the-guid"); got != "the-guid" {
+		t.Fatalf("empty = %q", got)
+	}
+}
+
+func TestPHPDecodeAndRedact(t *testing.T) {
+	if got := phpDecode(`Tom &amp; Jerry &lt;3 &quot;x&quot; &#039;y&#039; &eacute; &amp;amp;`); got != `Tom & Jerry <3 "x" 'y' &eacute; &amp;` {
+		t.Fatalf("phpDecode = %q", got)
+	}
+	got := redactURL("https://paid.example/a?access_token=SECRET&p=1#frag")
+	if strings.Contains(got, "SECRET") || !strings.HasPrefix(got, "https://paid.example/a?…") {
+		t.Fatalf("redactURL = %q", got)
 	}
 }

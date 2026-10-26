@@ -21,6 +21,7 @@ export interface Feed {
   lastStatus: number
   errorCount: number
   lastError: string
+  paused: boolean
   unread: number
   total: number
   cadence: number[]
@@ -133,7 +134,7 @@ export const api = {
   discover: (url: string) => request<{ candidates: Candidate[] }>('POST', '/discover', { url }),
   subscribe: (url: string, title: string, folderId: number | null, folderName?: string) =>
     request<{ id: number }>('POST', '/feeds', { url, title, folderId, folderName }),
-  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean }) =>
+  updateFeed: (id: number, patch: { title?: string; folderId?: number; folderName?: string; noFolder?: boolean; paused?: boolean }) =>
     request<void>('PATCH', '/feeds/' + id, patch),
   deleteFeed: (id: number) => request<void>('DELETE', '/feeds/' + id),
   refreshFeed: (id: number) => request<void>('POST', `/feeds/${id}/refresh`),

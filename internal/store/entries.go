@@ -86,6 +86,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 				}
 			}
 		}
+		if err == nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE entries SET last_seen_at = ? WHERE id = ?`, now.Unix(), id); err != nil {
+				return 0, 0, err
+			}
+		}
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			pub := it.PublishedAt
@@ -99,16 +104,23 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			}
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url,
-				                     enclosures, content_hash, published_at, updated_at, read_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				s.nextID(now), feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt,
-				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt)
+				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix())
 			if err != nil {
 				return 0, 0, fmt.Errorf("insert %q: %w", it.GUID, err)
 			}
 			inserted++
 		case err != nil:
 			return 0, 0, err
+		case hash == "":
+			// Imported and not polled since: record our fingerprint as the
+			// baseline but keep the content the previous reader served, which
+			// is what clients have cached. Later edits update normally.
+			if _, err = tx.ExecContext(ctx, `UPDATE entries SET content_hash = ? WHERE id = ?`, it.ContentHash, id); err != nil {
+				return 0, 0, err
+			}
 		case hash != it.ContentHash:
 			_, err = tx.ExecContext(ctx, `
 				UPDATE entries SET url = ?, title = ?, author = ?, content = ?, excerpt = ?, image_url = ?,
@@ -450,18 +462,19 @@ func (s *Store) Counts(ctx context.Context, userID int64) (Counts, error) {
 	return c, err
 }
 
-// Retention deletes read, unstarred entries older than the cutoff in bounded
-// batches, always keeping the newest keep entries of each feed so that GUID
-// deduplication keeps working for items still present in the feed.
-func (s *Store) Retention(ctx context.Context, olderThan time.Time, keep int) (int64, error) {
+// Retention deletes read, unstarred entries that arrived before the cutoff
+// and have not appeared in their feed since it, in bounded batches. Entries
+// still listed by their feed are never deleted: they would come straight back
+// as new articles with new IDs, which a Reader client sees as duplicates.
+func (s *Store) Retention(ctx context.Context, olderThan time.Time) (int64, error) {
 	var total int64
 	for {
 		res, err := s.db.ExecContext(ctx, `
 			DELETE FROM entries WHERE id IN (
-				SELECT id FROM entries e
-				 WHERE e.read_at IS NOT NULL AND e.starred_at IS NULL AND e.id < ?
-				   AND (SELECT COUNT(*) FROM entries n WHERE n.feed_id = e.feed_id AND n.id > e.id) >= ?
-				 LIMIT 500)`, olderThan.UnixMicro(), keep)
+				SELECT id FROM entries
+				 WHERE read_at IS NOT NULL AND starred_at IS NULL
+				   AND id < ? AND last_seen_at < ?
+				 LIMIT 500)`, olderThan.UnixMicro(), olderThan.Unix())
 		if err != nil {
 			return total, err
 		}
@@ -527,10 +540,11 @@ func (s *Store) EntriesByID(ctx context.Context, userID int64, ids []int64) ([]E
 // original numeric ID, which doubles as its crawl time.
 type ImportedEntry struct {
 	NewEntry
-	ID      int64
-	Read    bool
-	Starred bool
-	StateAt int64 // seconds; when the user last changed read/star (0 = now)
+	ID       int64
+	Read     bool
+	Starred  bool
+	StateAt  int64 // seconds; when the user last changed read/star (0 = now)
+	LastSeen int64 // seconds; when the source last saw it in its feed
 }
 
 // ImportEntries inserts entries keeping their IDs, and makes sure new IDs are
@@ -563,10 +577,10 @@ func (s *Store) ImportEntries(ctx context.Context, feedID int64, items []Importe
 		}
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url, enclosures,
-			                     content_hash, published_at, updated_at, read_at, starred_at, state_at, imported)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT DO NOTHING`,
+			                     content_hash, published_at, updated_at, read_at, starred_at, state_at, imported, last_seen_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT DO NOTHING`,
 			it.ID, feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt, it.ImageURL,
-			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, stateAt)
+			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, stateAt, it.LastSeen)
 		if err != nil {
 			return n, err
 		}

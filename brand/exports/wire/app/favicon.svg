@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="16" height="16" viewBox="0 0 16 16">
+  <title>wire-favicon.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path id="tile" d="M5.76 0 L10.24 0 C12.256 0 13.264 0 14.034 0.392 C14.712 0.738 15.262 1.288 15.608 1.966 C16 2.736 16 3.744 16 5.76 L16 10.24 C16 12.256 16 13.264 15.608 14.034 C15.262 14.712 14.712 15.262 14.034 15.608 C13.264 16 12.256 16 10.24 16 L5.76 16 C3.744 16 2.736 16 1.966 15.608 C1.288 15.262 0.738 14.712 0.392 14.034 C0 13.264 0 12.256 0 10.24 L0 5.76 C0 3.744 0 2.736 0.392 1.966 C0.738 1.288 1.288 0.738 1.966 0.392 C2.736 0 3.744 0 5.76 0 Z" fill="#2742c7"/>
+    <path id="spine" d="M4.5 1 L4.5 15" fill="none" stroke="#8897e0" stroke-miterlimit="10"/>
+    <path id="unread" d="M2 4.5 C2 3.119 3.119 2 4.5 2 C5.881 2 7 3.119 7 4.5 C7 5.881 5.881 7 4.5 7 C3.119 7 2 5.881 2 4.5 Z" fill="#ffffff"/>
+    <path id="read" d="M2.5 11.5 C2.5 10.395 3.395 9.5 4.5 9.5 C5.605 9.5 6.5 10.395 6.5 11.5 C6.5 12.605 5.605 13.5 4.5 13.5 C3.395 13.5 2.5 12.605 2.5 11.5 Z" fill="#2742c7" stroke="#ffffff" stroke-miterlimit="10"/>
+    <path id="title-unread" d="M10 5 L13 5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10"/>
+    <path id="title-read" d="M10 12 L11 12" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-miterlimit="10"/>
+  </g>
+</svg>

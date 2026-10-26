@@ -35,6 +35,10 @@ services:
       CORRESPONDENT_INSECURE_COOKIES: "1"
       CORRESPONDENT_NO_POLL: ${NO_POLL:-1}
     command: ["serve", "-allow-private-feeds"]
+    # Hardened exactly as in production: read-only root, nothing writable but /data.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     volumes:
       - data:/data
       - ./work:/work:ro

@@ -144,14 +144,16 @@
   <li>
     <button
       class="row feed"
-      class:stale={feed.errorCount > 0}
+      class:stale={feed.errorCount > 0 || feed.paused}
       aria-current={active(s) ? 'page' : undefined}
       onclick={() => app.go(s)}
-      title={feed.errorCount > 0 ? `Last update failed: ${feed.lastError}` : feed.title}
+      title={feed.paused ? `${feed.title}: updates paused` : feed.errorCount > 0 ? `Last update failed: ${feed.lastError}` : feed.title}
     >
       <FeedIcon url={feed.iconUrl} title={feed.title || feed.url} />
       <span class="name">{feed.title || feed.url}</span>
-      {#if feed.errorCount > 0}
+      {#if feed.paused}
+        <span class="warn" aria-label="Updates paused"><Icon name="pause" size={12} /></span>
+      {:else if feed.errorCount > 0}
         <span class="warn" aria-label="Last update failed"><Icon name="alert" size={13} /></span>
       {/if}
       {#if feed.unread}<span class="count">{feed.unread}</span>{/if}

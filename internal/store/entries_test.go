@@ -219,22 +219,36 @@ func TestImportKeepsIDsAndAllocatesAbove(t *testing.T) {
 	}
 }
 
-func TestRetention(t *testing.T) {
+func TestRetentionKeepsWhatFeedsStillList(t *testing.T) {
 	st, ctx := open(t), context.Background()
-	uid, _, ids := fixture(t, st, "a", 6)
+	uid, feedID, ids := fixture(t, st, "a", 4) // all seen just now
 	st.SetState(ctx, uid, "read", ids)
-	st.SetState(ctx, uid, "star", ids[5:]) // oldest is starred
-	n, err := st.Retention(ctx, time.Now().Add(time.Hour), 2)
-	if err != nil {
-		t.Fatal(err)
+	st.SetState(ctx, uid, "star", ids[3:]) // the oldest is starred
+
+	// A cutoff after every entry arrived; all of them were seen in the feed
+	// after it, so none may go.
+	future := time.Now().Add(time.Hour)
+	st.db.Exec(`UPDATE entries SET last_seen_at = ?`, future.Add(time.Hour).Unix())
+	if n, _ := st.Retention(ctx, future); n != 0 {
+		t.Fatalf("deleted %d entries still listed by their feed", n)
 	}
-	// Keeps the newest 2 per feed and anything starred: 6 - 2 - 1 = 3.
-	if n != 3 {
-		t.Fatalf("deleted %d, want 3", n)
+	// Two entries leave the feed: a later poll lists only the others.
+	st.db.Exec(`UPDATE entries SET last_seen_at = 1 WHERE id IN (?, ?, ?)`, ids[1], ids[2], ids[3])
+	n, err := st.Retention(ctx, future)
+	if err != nil || n != 2 {
+		t.Fatalf("deleted %d (%v), want 2: unstarred, read, and gone from the feed", n, err)
 	}
 	left, _, _ := st.EntryIDs(ctx, Filter{UserID: uid})
-	if !slices.Equal(left, []int64{ids[0], ids[1], ids[5]}) {
+	if !slices.Equal(left, []int64{ids[0], ids[3]}) {
 		t.Fatalf("kept %v", left)
+	}
+	// A poll marks listed entries as seen.
+	st.db.Exec(`UPDATE entries SET last_seen_at = 1 WHERE id = ?`, ids[0])
+	st.UpsertEntries(ctx, feedID, []NewEntry{{GUID: "0", Title: "post 0", Content: "<p>x</p>", Enclosures: "[]", ContentHash: "0"}}, time.Time{})
+	var seen int64
+	st.db.QueryRow(`SELECT last_seen_at FROM entries WHERE guid = '0'`).Scan(&seen)
+	if seen < time.Now().Add(-time.Minute).Unix() {
+		t.Fatalf("poll did not refresh last_seen_at: %d", seen)
 	}
 }
 

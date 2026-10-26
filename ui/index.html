@@ -6,8 +6,13 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#EEF1F5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#10151F" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link id="favicon" rel="icon" href="/icons/wire/favicon.svg" type="image/svg+xml" />
+    <link id="favicon-png" rel="icon" href="/icons/wire/favicon-32.png" sizes="32x32" type="image/png" />
+    <link id="touch-icon" rel="apple-touch-icon" href="/icons/wire/apple-touch-icon.png" />
+    <!-- Served per user, so an installed app uses the icon chosen in Settings. -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Correspondent" />
     <title>Correspondent</title>
   </head>
   <body>

@@ -28,6 +28,9 @@ type Service struct {
 	Tick        time.Duration
 	// Notify is called after new entries arrive for a user (for live UI updates).
 	Notify func(userID int64)
+	// RetentionDays deletes read, unstarred articles older than this that
+	// have left their feed. Zero keeps everything (the default).
+	RetentionDays int
 
 	inflight sync.Map // feed ID → struct{}: prevents overlapping polls of one feed
 }
@@ -42,15 +45,19 @@ func (s *Service) Run(ctx context.Context) {
 	}
 	ticker := time.NewTicker(s.Tick)
 	defer ticker.Stop()
-	lastRetention := time.Time{}
+	// Never prune at startup: the first pass waits a day, so a fresh deploy
+	// or a migration can be checked before anything is deleted.
+	lastRetention := time.Now()
 	for {
 		s.pollDue(ctx)
 		if time.Since(lastRetention) > 24*time.Hour {
-			n, err := s.Store.Retention(ctx, time.Now().AddDate(0, -6, 0), 200)
-			if err != nil {
-				s.Log.Error("retention", "err", err)
-			} else if n > 0 {
-				s.Log.Info("retention", "deleted", n)
+			if s.RetentionDays > 0 {
+				n, err := s.Store.Retention(ctx, time.Now().AddDate(0, 0, -s.RetentionDays))
+				if err != nil {
+					s.Log.Error("retention", "err", err)
+				} else if n > 0 {
+					s.Log.Info("retention", "deleted", n)
+				}
 			}
 			if _, err := s.Store.PurgeSessions(ctx); err != nil {
 				s.Log.Error("purge sessions", "err", err)

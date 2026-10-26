@@ -69,6 +69,8 @@ docker compose exec correspondent /correspondent version
 | `CORRESPONDENT_PASSWORD_FILE` | | Web password file for that account |
 | `CORRESPONDENT_API_PASSWORD_FILE` | | App (Reeder) password file |
 | `CORRESPONDENT_TRUSTED_PROXIES` | | CIDRs whose `X-Forwarded-For` is trusted |
+| `CORRESPONDENT_RETENTION_DAYS` | `0` (keep all) | Delete read, unstarred articles older than this that have left their feed |
+| `CORRESPONDENT_NO_POLL` | | `1` to serve without fetching feeds (used during migration) |
 | `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
 
 ## Build from source
