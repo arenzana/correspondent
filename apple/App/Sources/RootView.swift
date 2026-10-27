@@ -72,6 +72,7 @@ struct WideLayout: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).frame(minWidth: 520, minHeight: 480) }
         .onKeyPress { press in keys(press) }
+        .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onChange(of: app.selectedID) { _, id in if id != nil { settings = false } }
     }
 

@@ -64,6 +64,17 @@ struct CorrespondentApp: App {
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
         .windowToolbarStyle(.unifiedCompact)
+        .commands { MacCommands(app: app, player: player) }
+        #endif
+
+        #if os(macOS)
+        // ⌘, opens Settings in its own window, as Mac apps do.
+        Settings {
+            SettingsWindow()
+                .environment(app)
+                .environment(player)
+                .frame(width: 640, height: 720)
+        }
         #endif
     }
 }

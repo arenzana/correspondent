@@ -89,6 +89,7 @@ struct SidebarView: View {
             .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
         }
         .background(theme.fog)
+        .onReceive(NotificationCenter.default.publisher(for: .addFeed)) { _ in adding = true }
         .sheet(isPresented: $adding) {
             AddFeedView().environment(\.theme, theme)
                 #if os(macOS)
