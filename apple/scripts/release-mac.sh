@@ -4,9 +4,10 @@
 #
 #   apple/scripts/release-mac.sh 0.18.0
 #
-# Needs the App Store Connect API key (1Password: infra / App Store Connect -
-# Admin) with access to Developer ID signing, or a Developer ID Application
-# certificate in the keychain. The key is copied to a private temporary
+# Needs the Developer ID Application certificate in the keychain, its
+# profile ("Correspondent Developer ID", Developer ID type, made in the
+# developer site) installed, and the App Store Connect API key (1Password:
+# infra / App Store Connect - Admin) for notarizing. The key is copied to a private temporary
 # folder for the build and deleted afterwards.
 set -euo pipefail
 
@@ -31,7 +32,11 @@ cat > "$work/export.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>method</key><string>developer-id</string>
-  <key>signingStyle</key><string>automatic</string>
+  <key>signingStyle</key><string>manual</string>
+  <key>signingCertificate</key><string>Developer ID Application</string>
+  <key>provisioningProfiles</key><dict>
+    <key>org.arenzana.correspondent</key><string>Correspondent Developer ID</string>
+  </dict>
   <key>teamID</key><string>76L847LW9X</string>
 </dict></plist>
 PLIST
