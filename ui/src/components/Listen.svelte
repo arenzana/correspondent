@@ -28,8 +28,9 @@
     set('seekbackward', () => skip(-15))
     set('seekforward', () => skip(30))
     set('seekto', (d) => d.seekTime !== undefined && player && (player.currentTime = d.seekTime))
+    set('nexttrack', app.upNext.length ? () => app.playNext() : null)
     return () => {
-      for (const a of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto'] as const) set(a, null)
+      for (const a of ['play', 'pause', 'seekbackward', 'seekforward', 'seekto', 'nexttrack'] as const) set(a, null)
       navigator.mediaSession.metadata = null
     }
   })
@@ -70,7 +71,10 @@
       preload="auto"
       onplay={() => (paused = false)}
       onpause={() => (paused = true)}
-      onended={() => (paused = true)}
+      onended={() => {
+        paused = true
+        app.listenEnded()
+      }}
       ontimeupdate={() => (current = player?.currentTime ?? 0)}
       ondurationchange={() => (duration = player?.duration ?? 0)}
       onratechange={() => player && player.playbackRate !== speed && (player.playbackRate = speed)}
@@ -80,7 +84,7 @@
     <button class="icon-btn" aria-label="Ahead 30 seconds" title="Ahead 30 seconds" onclick={() => skip(30)}><Icon name="ahead15" /></button>
     <button class="what" onclick={() => app.select(now.id)} title="Go to the article">
       <span class="title">{now.title}</span>
-      <span class="meta">{now.feed}</span>
+      <span class="meta">{now.feed}{#if app.speech && app.upNext.length}&ensp;·&ensp;{app.upNext.length} more{/if}{#if now.local}&ensp;·&ensp;saved{/if}</span>
     </button>
     <input
       class="seek"
@@ -94,8 +98,11 @@
       style:--p={duration ? current / duration : 0}
     />
     <span class="time" aria-hidden="true">{clock(current)} / {clock(duration)}</span>
+    {#if app.upNext.length}
+      <button class="icon-btn next" aria-label="Next article" title="Next: {app.upNext[0].title}" onclick={() => app.playNext()}><Icon name="next" /></button>
+    {/if}
     <button class="speed" aria-label="Speed {speed}×" title="Speed" onclick={nextSpeed}>{speed}×</button>
-    <button class="icon-btn" aria-label="Stop listening" title="Stop listening" onclick={() => (app.listening = null)}><Icon name="x" /></button>
+    <button class="icon-btn" aria-label="Stop listening" title="Stop listening" onclick={() => app.stopListening()}><Icon name="x" /></button>
   </section>
 {/if}
 
@@ -108,10 +115,10 @@
     transform: translateX(-50%);
     width: min(720px, calc(100vw - 24px));
     display: grid;
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto auto;
     grid-template-areas:
-      'back play ahead what speed close'
-      'seek seek seek seek seek time';
+      'back play ahead what next speed close'
+      'seek seek seek seek seek seek time';
     align-items: center;
     column-gap: 2px;
     row-gap: 2px;
@@ -176,6 +183,9 @@
   .meta {
     color: var(--slate);
     font-size: calc(12px * var(--ui-scale));
+  }
+  .next {
+    grid-area: next;
   }
   .speed {
     grid-area: speed;

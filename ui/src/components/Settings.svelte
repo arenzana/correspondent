@@ -5,6 +5,7 @@
   import Icon from './Icon.svelte'
   import ThemePicker from './ThemePicker.svelte'
   import { relative } from '../lib/time'
+  import { AUDIO_LIMIT, clearAudio } from '../lib/offline/audio'
   import { addPasskey, passkeysSupported } from '../lib/passkey'
   import type { APIToken, Passkey, Session } from '../lib/api'
   import TextControls from './TextControls.svelte'
@@ -145,6 +146,12 @@
     } finally {
       speechBusy = false
     }
+  }
+
+  async function toggleOfflineAudio(on: boolean) {
+    app.setPrefs({ offlineAudio: on })
+    if (on) await app.syncOffline()
+    else await clearAudio().catch(() => {})
   }
 
   async function removeSpeech() {
@@ -555,7 +562,8 @@
             <h3>Read aloud</h3>
             <p class="hint">
               Listen to any article in a natural voice, with your own text-to-speech key. Press <kbd>l</kbd> or the
-              headphones in an article. Audio is shared: once anyone here has had an article read aloud, everyone who
+              headphones in an article, or <kbd>Shift</kbd>+<kbd>L</kbd> to listen to the unread articles in a list, one after
+              another; each counts as read when it ends. Audio is shared: once anyone here has had an article read aloud, everyone who
               follows it can listen without using their key. It also plays in Reeder, as the article’s audio.
             </p>
             <form class="ai" onsubmit={saveSpeech}>
@@ -712,6 +720,12 @@
             Unread and starred articles are kept here for reading offline{#if app.syncedAt}; last saved {relative(Math.floor(app.syncedAt / 1000))}{/if}.
             {#if app.outboxCount}{app.outboxCount} {app.outboxCount === 1 ? 'change is' : 'changes are'} waiting to be sent.{/if}
           </p>
+          <label class="toggle">
+            <span><strong>Keep audio for listening offline</strong>
+              <small>Audio for what you’re listening to, what’s queued, and the newest {AUDIO_LIMIT} unread or starred
+                articles that have it. Nothing is downloaded when the device is saving data.</small></span>
+            <input type="checkbox" role="switch" checked={app.prefs.offlineAudio} onchange={(e) => toggleOfflineAudio(e.currentTarget.checked)} />
+          </label>
           <button class="btn" disabled={syncing || !app.online} onclick={syncNow}>{syncing ? 'Saving…' : 'Save for offline now'}</button>
         </div>
       </section>

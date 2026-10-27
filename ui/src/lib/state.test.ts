@@ -19,6 +19,7 @@ vi.mock('./api', async (importOriginal) => ({
     savePrefs: vi.fn(),
     entries: vi.fn(),
     entry: vi.fn(),
+    makeAudio: vi.fn(),
   },
 }))
 
@@ -431,5 +432,54 @@ describe('live arrivals', () => {
     }
     app.atTop = true
     app.listBusyUntil = 0
+  })
+})
+
+describe('listening to a list', () => {
+  const audioURL = (id: string) => ({ url: `/api/v1/entries/${id}/audio` })
+
+  beforeEach(() => {
+    app.stopListening()
+    app.speech = null
+    app.entries = [entry('1'), entry('2'), entry('3', { read: true }), entry('4')]
+    vi.mocked(api.makeAudio).mockReset()
+    vi.mocked(api.setState).mockResolvedValue({ changed: 1 })
+  })
+
+  it('plays the unread articles in order, skipping any without audio', async () => {
+    // Without a key, an article no one has listened to has no audio (409).
+    vi.mocked(api.makeAudio).mockImplementation(async (id) => {
+      if (id === '1') throw new ApiError(409, 'Set up reading aloud in Settings first.')
+      return audioURL(id)
+    })
+    await app.listenToList()
+    expect(app.listening?.id).toBe('2')
+    expect(app.upNext.map((e) => e.id)).toEqual(['4']) // 3 is read
+    expect(app.toasts).toEqual([])
+
+    await app.listenEnded()
+    expect(api.setState).toHaveBeenCalledWith('read', ['2'])
+    expect(app.listening?.id).toBe('4')
+    expect(app.upNext).toEqual([])
+    // The next article's audio was asked for once, while the last one played.
+    expect(vi.mocked(api.makeAudio).mock.calls.filter(([id]) => id === '4')).toHaveLength(1)
+  })
+
+  it('says so when nothing in the list can be played', async () => {
+    vi.mocked(api.makeAudio).mockRejectedValue(new ApiError(409, 'Set up reading aloud in Settings first.'))
+    await app.listenToList()
+    expect(app.listening).toBeNull()
+    expect(app.toasts.at(-1)?.message).toMatch(/Set up reading aloud/)
+  })
+
+  it('starts from the open article', async () => {
+    vi.mocked(api.makeAudio).mockImplementation(async (id) => audioURL(id))
+    app.selectedId = '2'
+    await app.listenToList()
+    expect(app.listening?.id).toBe('2')
+    expect(app.upNext.map((e) => e.id)).toEqual(['4'])
+    app.stopListening()
+    expect(app.listening).toBeNull()
+    expect(app.upNext).toEqual([])
   })
 })

@@ -7,6 +7,7 @@ import { api, ApiError, type AIConfig, type SpeechConfig, type Role, type Counts
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
+import * as audio from './offline/audio'
 import { APP_ICONS, type AppIcon } from './icons'
 
 /**
@@ -42,6 +43,8 @@ export interface Prefs {
   markOnOpen: boolean
   /** Read by the server too: sponsored posts arrive already read. */
   skipSponsored: boolean
+  /** Keep read-aloud audio on this device, to listen offline. */
+  offlineAudio: boolean
   sidebar: boolean
   /** Coarse position (about 11 km) for the Sun theme; never more precise. */
   place: { lat: number; lon: number; estimated: boolean } | null
@@ -62,11 +65,21 @@ const defaultPrefs: Prefs = {
   unreadOnly: true,
   markOnOpen: true,
   skipSponsored: false,
+  offlineAudio: true,
   sidebar: true,
   place: null,
   navWidth: null,
   listWidth: null,
   appIcon: 'wire',
+}
+
+/** What the player is playing; local means a saved copy on this device. */
+export interface Listening {
+  id: ID
+  url: string
+  local: boolean
+  title: string
+  feed: string
 }
 
 interface Toast {
@@ -230,6 +243,7 @@ class AppState {
     await api.logout().catch(() => {})
     // Leave nothing readable behind on a shared device.
     await offline.clear().catch(() => {})
+    await audio.clearAudio().catch(() => {})
     if ('caches' in window) for (const k of await caches.keys()) if (k.startsWith('correspondent-')) await caches.delete(k)
     location.hash = ''
     location.reload()
@@ -303,11 +317,13 @@ class AppState {
     if (this.syncing || !this.online || !this.user) return
     this.syncing = true
     try {
+      const withAudio: ID[] = []
       for (const [view, pages] of [['unread', 6], ['starred', 3]] as const) {
         let cursor = ''
         for (let i = 0; i < pages; i++) {
           const r = await api.entries({ view, content: true, limit: 100, cursor: cursor || undefined })
           await offline.saveEntries(r.entries.map((e) => ({ ...e, content: e.content ?? '' })))
+          withAudio.push(...r.entries.filter((e) => e.audio).map((e) => e.id))
           if (!r.cursor) break
           cursor = r.cursor
         }
@@ -315,6 +331,7 @@ class AppState {
       // A plain snapshot: IndexedDB cannot store Svelte's reactive proxies.
       await offline.saveTree($state.snapshot({ folders: this.folders, feeds: this.feeds, counts: this.counts }))
       await offline.prune()
+      await this.syncAudio(withAudio)
       this.syncedAt = Date.now()
       await offline.setMeta('syncedAt', this.syncedAt)
     } catch (e) {
@@ -322,6 +339,22 @@ class AppState {
     } finally {
       this.syncing = false
     }
+  }
+
+  /**
+   * Keeps audio for listening offline: what's playing and queued, then the
+   * newest unread and starred articles that have audio, up to AUDIO_LIMIT.
+   * Nothing is downloaded when the device asks to save data.
+   */
+  private async syncAudio(withAudio: ID[]) {
+    if (!this.prefs.offlineAudio) return audio.clearAudio()
+    const keep = new Set(
+      [this.listening?.id, ...this.upNext.map((e) => e.id), ...withAudio].filter((id): id is ID => !!id).slice(0, audio.AUDIO_LIMIT),
+    )
+    await audio.keepOnly(keep)
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData
+    if (saveData) return
+    for (const id of keep) await audio.save(id).catch(() => {})
   }
 
   private feedsInFolder = (folder: number) => new Set(this.feeds.filter((f) => f.folderId === folder).map((f) => f.id))
@@ -981,25 +1014,104 @@ class AppState {
   }
 
   /** The article being read aloud; it keeps playing while you browse. */
-  listening = $state<{ id: ID; url: string; title: string; feed: string } | null>(null)
+  listening = $state<Listening | null>(null)
+  /** Articles to play after it, in order. */
+  upNext = $state<Entry[]>([])
   preparingAudio = $state<ID | null>(null)
+  /** Audio being made ahead of time, so the next article starts at once. */
+  private ready = new Map<ID, Promise<string>>()
 
   /** Reads the open article aloud: its existing audio, or new audio made with the reader's key. */
   async readAloud() {
     const e = this.article?.entry
     if (!e || this.preparingAudio) return
     if (this.listening?.id === e.id) return
-    this.preparingAudio = e.id
+    this.upNext = []
     try {
-      const { url } = await api.makeAudio(e.id)
-      this.listening = { id: e.id, url, title: e.title, feed: this.feedById.get(e.feedId)?.title ?? '' }
-      this.patch([e.id], { audio: true })
-      if (this.article?.entry.id === e.id) this.article = { ...this.article, entry: { ...this.article.entry, audio: true } }
+      await this.play(e)
     } catch (err) {
       this.toast(`Couldn't read this aloud. ${(err as Error).message}`)
+    }
+  }
+
+  /** Plays the list's unread articles in order, from the open one if it's in the list. */
+  async listenToList() {
+    const from = Math.max(0, this.selectedIndex)
+    const queue = this.entries.slice(from).filter((e) => !e.read || e.id === this.selectedId)
+    if (!queue.length) {
+      this.toast('Nothing unread here to listen to.')
+      return
+    }
+    this.upNext = queue
+    await this.playNext()
+    if (!this.listening || !queue.some((e) => e.id === this.listening?.id)) {
+      this.toast(
+        !this.online ? 'None of these are saved for listening offline.'
+        : this.speech ? 'None of these could be read aloud.'
+        : 'None of these have audio yet. Set up reading aloud in Settings to make it.',
+      )
+    }
+  }
+
+  /** Moves to the next article in the queue that can be played, skipping any that can't. */
+  async playNext() {
+    while (this.upNext.length) {
+      const [next, ...rest] = this.upNext
+      this.upNext = rest
+      try {
+        await this.play(next)
+        return
+      } catch (err) {
+        // Without a key, an article no one has listened to has no audio: skip it.
+        if (!(err instanceof ApiError && err.status === 409) && !isNetworkError(err)) {
+          this.toast(`Skipped “${next.title}”. ${(err as Error).message}`)
+        }
+      }
+    }
+  }
+
+  /** The player reached the end: the article counts as read, and the queue moves on. */
+  async listenEnded() {
+    const done = this.listening
+    if (!done) return
+    void this.setRead([done.id], true)
+    if (this.upNext.length) await this.playNext()
+  }
+
+  stopListening() {
+    if (this.listening?.local) URL.revokeObjectURL(this.listening.url)
+    this.listening = null
+    this.upNext = []
+    this.ready.clear()
+  }
+
+  private async play(e: Entry) {
+    this.preparingAudio = e.id
+    try {
+      let url = await audio.savedURL(e.id).catch(() => null)
+      const local = url !== null
+      url ??= await this.audioFor(e.id)
+      if (this.listening?.local) URL.revokeObjectURL(this.listening.url)
+      this.listening = { id: e.id, url, local, title: e.title, feed: this.feedById.get(e.feedId)?.title ?? '' }
+      this.patch([e.id], { audio: true })
+      offline.patchEntries([e.id], { audio: true }).catch(() => {})
+      if (this.article?.entry.id === e.id) this.article = { ...this.article, entry: { ...this.article.entry, audio: true } }
+      if (!local && this.prefs.offlineAudio) void audio.save(e.id).catch(() => {})
+      // Make the next one while this one plays.
+      if (this.upNext[0]) void this.audioFor(this.upNext[0].id).catch(() => {})
     } finally {
       this.preparingAudio = null
     }
+  }
+
+  private audioFor(id: ID): Promise<string> {
+    let p = this.ready.get(id)
+    if (!p) {
+      p = api.makeAudio(id).then((r) => r.url)
+      this.ready.set(id, p)
+      p.catch(() => this.ready.delete(id))
+    }
+    return p
   }
 
   fetchingFull = $state(false)

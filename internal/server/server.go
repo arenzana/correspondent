@@ -24,7 +24,7 @@ func cspFor(proxied bool) string {
 		img = "img-src 'self' data: blob:"
 	}
 	return "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-		img + "; media-src *; font-src 'self'; connect-src 'self'; " +
+		img + "; media-src * blob:; font-src 'self'; connect-src 'self'; " +
 		"frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
 }
 

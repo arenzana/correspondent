@@ -14,6 +14,7 @@
         [['⇧', 'Space'], 'Scroll up'],
         [['v'], 'Open original'],
         [['l'], 'Listen, or play and pause'],
+        [['⇧', 'L'], 'Listen to the unread list'],
         [['f'], 'Focused reading'],
       ],
     },

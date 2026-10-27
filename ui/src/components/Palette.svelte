@@ -31,6 +31,7 @@
         hint: f.unread ? `${f.unread} unread` : undefined, run: go({ kind: 'feed', id: f.id }),
       })),
       { id: 'a-mark', label: `Mark all as read in ${scopeName}`, icon: 'checkAll', group: 'Actions', hint: '⇧A', run: () => app.markAllRead() },
+      { id: 'a-listen', label: `Listen to unread in ${scopeName}`, icon: 'headphones', group: 'Actions', hint: '⇧L', run: () => app.listenToList() },
       { id: 'a-manage', label: 'Manage subscriptions', icon: 'rss', group: 'Actions', hint: 'g m', run: () => app.manage() },
       { id: 'a-add', label: 'Add feed…', icon: 'plus', group: 'Actions', hint: 'a', run: () => (app.addFeedOpen = true) },
       { id: 'a-sidebar', label: app.prefs.sidebar ? 'Hide feeds' : 'Show feeds', icon: 'sidebar', group: 'Actions', hint: '[', run: () => app.setPrefs({ sidebar: !app.prefs.sidebar }) },

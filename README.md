@@ -201,10 +201,10 @@ Reeder plays it too, as the article's audio, through a private link (set
 `CORRESPONDENT_PUBLIC_URL`). `corr listen ID` plays it in the terminal.
 Up to 60 new articles a day per reader.
 
-## Roadmap
-
-- **Listening, continued**: audio kept for offline listening, and a queue
-  that plays the unread list.
+Press `Shift+L` (or the headphones above a list) to listen to its unread
+articles one after another; each counts as read when it ends. Audio for
+what you're listening to and the newest unread and starred articles is kept
+on the device, so it plays offline (Settings → This device).
 
 ## Layout
 

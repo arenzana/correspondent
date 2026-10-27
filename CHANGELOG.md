@@ -7,6 +7,22 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-27
+
+### Added
+
+- Listen to a list: `Shift+L`, the headphones above the list, or the
+  command palette plays the list's unread articles one after another,
+  starting from the open one. The next article's audio is made while the
+  current one plays, so it starts at once; each article counts as read when
+  it ends. Articles that can't be read aloud are skipped. Phones' lock
+  screens get a "next" control.
+- Listen offline. Audio for what you're listening to, what's queued, and the
+  newest 25 unread or starred articles that have it is kept on the device,
+  and a saved copy plays with no network and starts at once. Turn it off in
+  Settings → This device; nothing is downloaded when the device is saving
+  data. Signing out forgets it.
+
 ## [0.13.0] - 2026-10-26
 
 ### Added
