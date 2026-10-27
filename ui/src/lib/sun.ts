@@ -14,11 +14,6 @@ export function sunTimes(date: Date, lat: number, lon: number): SunTimes {
   return solarEvent(date, lat, lon, 90.833) // refraction plus the sun's radius
 }
 
-/** Nautical twilight: the sun 12° below the horizon; the sky is dark after it. */
-export function nauticalTwilight(date: Date, lat: number, lon: number): SunTimes {
-  return solarEvent(date, lat, lon, 102)
-}
-
 /** When the sun crosses the given zenith angle on date's UTC day (NOAA equations). */
 function solarEvent(date: Date, lat: number, lon: number, zenith: number): SunTimes {
   const midnightUTC = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
@@ -52,11 +47,14 @@ function solarEvent(date: Date, lat: number, lon: number, zenith: number): SunTi
 
 export type SunTheme = 'day' | 'evening' | 'night'
 
+/** Evening starts this long before sunset; Night desk this long after it. */
+export const EVENING_BEFORE = 60 * 60_000
+export const NIGHT_AFTER = 45 * 60_000
+
 /**
- * Which theme applies at `now`, and when it next changes:
- * Day from sunrise to sunset, Evening from sunset until nautical dusk (the
- * sun 12° down), Night desk from then until sunrise. Where the sun never
- * gets that low (summer at high latitudes), Evening lasts until sunrise.
+ * Which theme applies at `now`, and when it next changes: Day from sunrise
+ * until an hour before sunset, Evening from then until 45 minutes after
+ * sunset, Night desk from then until sunrise.
  */
 export function sunTheme(now: Date, lat: number, lon: number): { theme: SunTheme; next: Date } {
   const day = 86_400_000
@@ -68,19 +66,14 @@ export function sunTheme(now: Date, lat: number, lon: number): { theme: SunTheme
     return { theme: sun.polar === 'day' ? 'day' : 'night', next }
   }
   const { sunrise, sunset } = sun as { sunrise: Date; sunset: Date }
-  const nextSunrise = () => sunTimes(new Date(now.getTime() + day), lat, lon).sunrise ?? new Date(now.getTime() + 3_600_000)
-
-  if (now >= sunrise && now < sunset) return { theme: 'day', next: sunset }
-
-  // Between sunset and midnight, or after midnight before sunrise: find the
-  // dusk that follows the most recent sunset (it may fall after midnight).
-  const lastSunset = now >= sunset ? sunset : sunTimes(new Date(now.getTime() - day), lat, lon).sunset
-  const dusk = lastSunset ? nauticalTwilight(lastSunset, lat, lon) : null
-  const duskEnd = dusk && !dusk.polar ? dusk.sunset : null // null: the sky never gets dark
-  const until = now >= sunset ? nextSunrise() : sunrise
-  if (!duskEnd || duskEnd < (lastSunset ?? now)) return { theme: 'evening', next: until }
-  if (now < duskEnd) return { theme: 'evening', next: duskEnd }
-  return { theme: 'night', next: until }
+  // On very short days evening can't start before the sun is up.
+  const evening = new Date(Math.max(sunrise.getTime(), sunset.getTime() - EVENING_BEFORE))
+  const night = new Date(sunset.getTime() + NIGHT_AFTER)
+  if (now < sunrise) return { theme: 'night', next: sunrise }
+  if (now < evening) return { theme: 'day', next: evening }
+  if (now < night) return { theme: 'evening', next: night }
+  const nextSunrise = sunTimes(new Date(now.getTime() + day), lat, lon).sunrise ?? new Date(now.getTime() + 3_600_000)
+  return { theme: 'night', next: nextSunrise }
 }
 
 /** Round to one decimal (about 11 km) before a location is ever stored. */

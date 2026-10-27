@@ -536,7 +536,8 @@ class AppState {
   private sunTimer: ReturnType<typeof setTimeout> | undefined
 
   /**
-   * Switches to the Sun theme: Day from sunrise to sunset, Evening after.
+   * Switches to the Sun theme: Day from sunrise, Evening from an hour
+   * before sunset, Night desk from 45 minutes after it.
    * Asks for location once; refusing falls back to a time-zone estimate.
    */
   async useSunTheme() {
@@ -566,7 +567,7 @@ class AppState {
     const r = sunTheme(now, p.lat, p.lon)
     // What comes next: Day → Evening → Night desk → Day.
     this.sunNext = { theme: r.theme === 'day' ? 'evening' : r.theme === 'evening' ? 'night' : 'day', at: r.next }
-    // Re-evaluate at the next sunrise or sunset (plus a second of margin).
+    // Re-evaluate at the next change of theme (plus a second of margin).
     this.sunTimer = setTimeout(() => this.applyPrefs(), Math.min(r.next.getTime() - now.getTime() + 1000, 2 ** 31 - 1))
     return r.theme === 'day' ? 'light' : r.theme
   }

@@ -12,8 +12,9 @@ clients are concerned.
   working after cutover.
 - **One binary, one container.** Go service with an embedded Svelte 5 UI and
   SQLite, shipped as a 27 MB signed, distroless image.
-- **Follows the sun.** The Sun theme switches to Evening at sunset where you
-  are, computed on your device from a location rounded to about 11 km.
+- **Follows the sun.** The Sun theme turns to Evening an hour before sunset
+  where you are and to Night desk 45 minutes after it, computed on your
+  device from a location rounded to about 11 km.
 - **Swipe on phones.** Swipe right to mark read, left to star.
 - **Works offline.** Install it as an app; unread and starred articles are
   kept on the device, and changes made offline sync when you reconnect.

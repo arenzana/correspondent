@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coarse, estimateFromTimezone, nauticalTwilight, sunTheme, sunTimes } from './sun'
+import { coarse, estimateFromTimezone, sunTheme, sunTimes } from './sun'
 
 const minutesApart = (a: Date | null, b: Date) => Math.abs((a?.getTime() ?? NaN) - b.getTime()) / 60_000
 
@@ -25,32 +25,28 @@ describe('sunTimes', () => {
 
 describe('sunTheme', () => {
   const madrid = [40.4168, -3.7038] as const
+  // Madrid, 21 June 2026: sunrise about 04:44 UTC, sunset about 19:48 UTC.
 
-  it('is Day between sunrise and sunset, switching at sunset', () => {
+  it('is Day until an hour before sunset', () => {
     const r = sunTheme(new Date('2026-06-21T12:00:00Z'), ...madrid)
     expect(r.theme).toBe('day')
-    expect(minutesApart(r.next, new Date('2026-06-21T19:48:00Z'))).toBeLessThan(4)
+    expect(minutesApart(r.next, new Date('2026-06-21T18:48:00Z'))).toBeLessThan(4)
   })
 
-  it('is Evening from sunset until nautical dusk', () => {
-    // NOAA: Madrid, 21 June 2026, nautical dusk about 20:58 UTC.
-    const r = sunTheme(new Date('2026-06-21T20:00:00Z'), ...madrid)
+  it('is Evening from an hour before sunset until 45 minutes after it', () => {
+    const r = sunTheme(new Date('2026-06-21T19:00:00Z'), ...madrid)
     expect(r.theme).toBe('evening')
-    expect(minutesApart(r.next, new Date('2026-06-21T20:58:00Z'))).toBeLessThan(6)
+    expect(minutesApart(r.next, new Date('2026-06-21T20:33:00Z'))).toBeLessThan(4)
+    expect(sunTheme(new Date('2026-06-21T20:20:00Z'), ...madrid).theme).toBe('evening')
   })
 
-  it('is Night desk after nautical dusk until sunrise', () => {
+  it('is Night desk from 45 minutes after sunset until sunrise', () => {
     const r = sunTheme(new Date('2026-06-21T22:00:00Z'), ...madrid)
     expect(r.theme).toBe('night')
     expect(minutesApart(r.next, new Date('2026-06-22T04:44:00Z'))).toBeLessThan(5)
-    expect(sunTheme(new Date('2026-06-22T03:00:00Z'), ...madrid).theme).toBe('night')
-  })
-
-  it('stays Evening all night where the sky never gets dark', () => {
-    // Oslo in June: the sun stays above -12°, so no nautical dusk.
-    expect(nauticalTwilight(new Date('2026-06-21T12:00:00Z'), 59.91, 10.75).polar).toBe('day')
-    const r = sunTheme(new Date('2026-06-21T23:30:00Z'), 59.91, 10.75)
-    expect(r.theme).toBe('evening')
+    const early = sunTheme(new Date('2026-06-22T03:00:00Z'), ...madrid)
+    expect(early.theme).toBe('night')
+    expect(minutesApart(early.next, new Date('2026-06-22T04:44:00Z'))).toBeLessThan(5)
   })
 
   it('handles polar day and polar night', () => {

@@ -384,9 +384,13 @@ describe('themes', () => {
     app.setPrefs({ theme: 'sun', place: { lat: 40.4, lon: -3.7, estimated: false } })
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(app.sunNext?.theme).toBe('evening')
-    vi.setSystemTime(new Date('2026-06-21T21:00:00Z'))
+    // Evening from an hour before sunset (about 19:48 UTC), Night desk 45 minutes after it.
+    vi.setSystemTime(new Date('2026-06-21T19:00:00Z'))
     app.applyPrefs()
     expect(document.documentElement.dataset.theme).toBe('evening')
+    vi.setSystemTime(new Date('2026-06-21T21:00:00Z'))
+    app.applyPrefs()
+    expect(document.documentElement.dataset.theme).toBe('night')
     vi.useRealTimers()
   })
 

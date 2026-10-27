@@ -19,11 +19,6 @@ public enum Sun {
         solarEvent(date, lat: lat, lon: lon, zenith: 90.833) // refraction plus the sun's radius
     }
 
-    /// Nautical twilight: the sun 12° below the horizon; the sky is dark after it.
-    public static func nauticalTwilight(_ date: Date, lat: Double, lon: Double) -> Times {
-        solarEvent(date, lat: lat, lon: lon, zenith: 102)
-    }
-
     private static let rad = Double.pi / 180
     private static let day: TimeInterval = 86_400
 
@@ -52,10 +47,13 @@ public enum Sun {
         return Times(sunrise: at(720 - 4 * (lon + ha) - eqTime), sunset: at(720 - 4 * (lon - ha) - eqTime))
     }
 
+    /// Evening starts this long before sunset; Night desk this long after it.
+    public static let eveningBefore: TimeInterval = 60 * 60
+    public static let nightAfter: TimeInterval = 45 * 60
+
     /// Which theme applies at `now`, and when it next changes: Day from
-    /// sunrise to sunset, Evening from sunset until nautical dusk (the sun 12°
-    /// down), Night desk from then until sunrise. Where the sun never gets
-    /// that low (summer at high latitudes), Evening lasts until sunrise.
+    /// sunrise until an hour before sunset, Evening from then until 45
+    /// minutes after sunset, Night desk from then until sunrise.
     public static func theme(_ now: Date, lat: Double, lon: Double) -> (phase: Phase, next: Date) {
         let sun = times(now, lat: lat, lon: lon)
         if let polar = sun.polar {
@@ -64,19 +62,14 @@ public enum Sun {
             return (polar == .day ? .day : .night, next)
         }
         let sunrise = sun.sunrise!, sunset = sun.sunset!
-        func nextSunrise() -> Date { times(now.addingTimeInterval(day), lat: lat, lon: lon).sunrise ?? now.addingTimeInterval(3600) }
-
-        if now >= sunrise && now < sunset { return (.day, sunset) }
-
-        // Between sunset and midnight, or after midnight before sunrise: find
-        // the dusk that follows the most recent sunset (it may fall after midnight).
-        let lastSunset = now >= sunset ? sunset : times(now.addingTimeInterval(-day), lat: lat, lon: lon).sunset
-        let dusk = lastSunset.map { nauticalTwilight($0, lat: lat, lon: lon) }
-        let duskEnd = dusk?.polar == nil ? dusk?.sunset : nil // nil: the sky never gets dark
-        let until = now >= sunset ? nextSunrise() : sunrise
-        guard let duskEnd, duskEnd >= (lastSunset ?? now) else { return (.evening, until) }
-        if now < duskEnd { return (.evening, duskEnd) }
-        return (.night, until)
+        // On very short days evening can't start before the sun is up.
+        let evening = max(sunrise, sunset.addingTimeInterval(-eveningBefore))
+        let night = sunset.addingTimeInterval(nightAfter)
+        if now < sunrise { return (.night, sunrise) }
+        if now < evening { return (.day, evening) }
+        if now < night { return (.evening, night) }
+        let nextSunrise = times(now.addingTimeInterval(day), lat: lat, lon: lon).sunrise ?? now.addingTimeInterval(3600)
+        return (.night, nextSunrise)
     }
 
     /// Rough position from the time zone, for when there is no saved place.

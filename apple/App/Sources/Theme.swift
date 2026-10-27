@@ -49,8 +49,9 @@ struct Theme: Equatable {
         }
     }
 
-    /// The Sun theme as the web has it: Day from sunrise, Evening from sunset,
-    /// Night desk from nautical dusk; and when it next changes.
+    /// The Sun theme as the web has it: Day from sunrise, Evening from an
+    /// hour before sunset, Night desk from 45 minutes after it; and when it
+    /// next changes.
     static func sun(place: Prefs.Place?, now: Date = Date()) -> (theme: Theme, phase: Sun.Phase, next: Date) {
         let p = place ?? { let e = Sun.estimate(now: now); return Prefs.Place(lat: e.lat, lon: e.lon, estimated: true) }()
         let r = Sun.theme(now, lat: p.lat, lon: p.lon)

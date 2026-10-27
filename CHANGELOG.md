@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-27
+
+### Changed
+
+- The Sun theme turns to Evening an hour before sunset and to Night desk 45
+  minutes after it (it used to wait for sunset, then nautical dusk), on the
+  web and in the Apple apps alike.
+
 ## [0.20.1] - 2026-10-27
 
 ### Changed

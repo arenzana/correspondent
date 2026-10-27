@@ -20,7 +20,7 @@ final class AppModel {
     var prefs = AppModel.withDeviceSizes(Prefs()) {
         didSet { Self.applyInterface(prefs) }
     }
-    /// Moves when the Sun theme's phase changes (sunrise, sunset, dusk), so
+    /// Moves when the Sun theme's phase changes (sunrise, before and after sunset), so
     /// views that read it redraw in the new theme.
     private(set) var sunPhase: Sun.Phase?
     /// Whether the reader set up text-to-speech (on the web): articles can be read aloud.

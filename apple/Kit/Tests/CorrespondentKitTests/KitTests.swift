@@ -238,18 +238,19 @@ extension ClientTests {
     }
 
     @Test func movesThroughDayEveningAndNight() {
+        // Madrid, 21 June 2026: sunrise about 04:44 UTC, sunset about 19:48 UTC.
         let noon = Sun.theme(date("2026-06-21T12:00:00Z"), lat: madrid.lat, lon: madrid.lon)
-        #expect(noon.phase == .day && minutesApart(noon.next, "2026-06-21T19:48:00Z") < 4)
-        let dusk = Sun.theme(date("2026-06-21T20:00:00Z"), lat: madrid.lat, lon: madrid.lon)
-        #expect(dusk.phase == .evening && minutesApart(dusk.next, "2026-06-21T20:58:00Z") < 6)
+        #expect(noon.phase == .day && minutesApart(noon.next, "2026-06-21T18:48:00Z") < 4)
+        let before = Sun.theme(date("2026-06-21T19:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(before.phase == .evening && minutesApart(before.next, "2026-06-21T20:33:00Z") < 4)
+        #expect(Sun.theme(date("2026-06-21T20:20:00Z"), lat: madrid.lat, lon: madrid.lon).phase == .evening)
         let night = Sun.theme(date("2026-06-21T22:00:00Z"), lat: madrid.lat, lon: madrid.lon)
         #expect(night.phase == .night && minutesApart(night.next, "2026-06-22T04:44:00Z") < 5)
-        #expect(Sun.theme(date("2026-06-22T03:00:00Z"), lat: madrid.lat, lon: madrid.lon).phase == .night)
+        let early = Sun.theme(date("2026-06-22T03:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(early.phase == .night && minutesApart(early.next, "2026-06-22T04:44:00Z") < 5)
     }
 
-    @Test func handlesSkiesThatNeverDarkenAndPolarSeasons() {
-        #expect(Sun.nauticalTwilight(date("2026-06-21T12:00:00Z"), lat: 59.91, lon: 10.75).polar == .day)
-        #expect(Sun.theme(date("2026-06-21T23:30:00Z"), lat: 59.91, lon: 10.75).phase == .evening)
+    @Test func handlesPolarSeasonsAndRounding() {
         #expect(Sun.theme(date("2026-06-21T23:00:00Z"), lat: 69.65, lon: 18.96).phase == .day)
         let polar = Sun.theme(date("2026-12-21T12:00:00Z"), lat: 69.65, lon: 18.96)
         #expect(polar.phase == .night && polar.next > date("2026-12-21T12:00:00Z"))
