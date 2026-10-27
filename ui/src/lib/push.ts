@@ -43,9 +43,16 @@ export async function subscribeDevice(): Promise<void> {
   if (permission !== 'granted') throw new Error('Notifications are blocked for this site. Allow them in your browser settings.')
   const { publicKey } = await api.pushStatus()
   const reg = await navigator.serviceWorker.ready
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }))
+  let sub: PushSubscription
+  try {
+    sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }))
+  } catch (e) {
+    // Brave ships with web push turned off and says only "push service error".
+    if (await isBrave()) throw new Error(BRAVE_PUSH)
+    throw e
+  }
   await api.pushSubscribe(sub.toJSON())
 }
 
@@ -55,6 +62,20 @@ export async function unsubscribeDevice(): Promise<void> {
   if (!sub) return
   await api.pushUnsubscribe(sub.endpoint).catch(() => {})
   await sub.unsubscribe()
+}
+
+export const BRAVE_PUSH =
+  'Brave turns notifications from websites off by default. In Brave, open Settings → Privacy and security, turn on ' +
+  '“Use Google services for push messaging”, restart Brave, then turn notifications on here again.'
+
+/** Whether this is Brave, which hides itself as Chrome but offers navigator.brave. */
+export async function isBrave(): Promise<boolean> {
+  const b = (navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }).brave
+  try {
+    return (await b?.isBrave?.()) === true
+  } catch {
+    return false
+  }
 }
 
 /** Only in-app paths may be opened from a notification. */

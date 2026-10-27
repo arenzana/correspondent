@@ -155,6 +155,8 @@ class AppState {
   article = $state<{ entry: Entry; enclosures: Enclosure[] } | null>(null)
   articleError = $state('')
   pane = $state<Pane>('list')
+  /** Phones: the header and tab bar step aside while scrolling down (lib/bars). */
+  barsHidden = $state(false)
   focusMode = $state(false)
 
   /** Which page fills the main area: the reader, or subscription management. */
@@ -851,6 +853,13 @@ class AppState {
         return
       }
     }
+  }
+
+  /** Back from Settings, Subscriptions or Admin to the articles. */
+  leavePage() {
+    this.page = 'reader'
+    this.pane = 'list'
+    this.writeHash()
   }
 
   /** Closes the open article, back to the list (Esc). */

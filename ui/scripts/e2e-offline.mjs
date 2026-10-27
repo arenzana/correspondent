@@ -197,14 +197,31 @@ try {
   await mobile.locator('.wire-scroll').hover()
   for (let i = 0; i < 6; i++) await mobile.mouse.wheel(0, 2000)
   await mobile.waitForTimeout(300)
-  const layout = await mobile.evaluate(() => ({
+  const bars = () => mobile.evaluate(() => ({
     pageScroll: document.scrollingElement.scrollTop + window.scrollY,
+    headTucked: document.querySelector('.wire .head').classList.contains('tucked'),
     headTop: document.querySelector('.wire .head').getBoundingClientRect().top,
     barBottom: document.querySelector('nav.tabbar').getBoundingClientRect().bottom,
     height: window.innerHeight,
   }))
-  check(layout.pageScroll === 0 && layout.headTop >= 0, 'scrolling the list never moves the page or its header')
-  check(Math.abs(layout.barBottom - layout.height) <= 1, 'the tab bar stays at the bottom edge')
+  const layout = await bars()
+  check(layout.pageScroll === 0, 'scrolling the list never moves the page')
+  // A shorter screen makes the same list long enough to scroll past them.
+  await mobile.mouse.wheel(0, -4000)
+  await mobile.setViewportSize({ width: 390, height: 480 })
+  await mobile.waitForTimeout(300)
+  await mobile.locator('.wire-scroll').hover()
+  for (let i = 0; i < 6; i++) await mobile.mouse.wheel(0, 2000)
+  await mobile.waitForTimeout(400)
+  const tucked = await bars()
+  check(tucked.headTucked && tucked.barBottom > tucked.height + 20, 'scrolling down a long list tucks the header and the tab bar away')
+  check(!layout.headTucked && layout.headTop >= 0, 'a list too short to scroll past the bars keeps them')
+  await mobile.mouse.wheel(0, -200)
+  await mobile.waitForTimeout(400)
+  const back = await bars()
+  check(!back.headTucked && back.headTop >= 0 && Math.abs(back.barBottom - back.height) <= 1, 'scrolling up brings them back, the tab bar at the bottom edge')
+  await mobile.setViewportSize({ width: 390, height: 844 })
+  await mobile.waitForTimeout(300)
   await tabbar.getByRole('button', { name: 'Feeds' }).tap()
   check(await mobile.locator('nav.sidebar').waitFor({ timeout: 5000 }).then(() => true, () => false), 'Feeds opens the feed list')
   await mobile.locator('nav.sidebar').getByRole('button', { name: /Starred/ }).first().tap()
@@ -256,7 +273,7 @@ try {
       pageX: document.scrollingElement.scrollLeft + window.scrollX,
       pageY: document.scrollingElement.scrollTop + window.scrollY,
       paneX: scroll.scrollLeft,
-      barTop: document.querySelector('article.pane .bar').getBoundingClientRect().top,
+      barTucked: document.querySelector('article.pane .bar').classList.contains('tucked'),
     }
   })
   const picture = mobile.locator('article.pane .prose img')
@@ -264,7 +281,11 @@ try {
   const pic = await picture.evaluate((img) => ({ src: img.getAttribute('src'), loaded: img.naturalWidth > 0 }))
   check(pic.src.startsWith('/img/') && pic.loaded, 'article pictures load through the image proxy')
   check(reading.wide.length === 0, `the article fits the screen${reading.wide.length ? ': ' + reading.wide.slice(0, 5).join(', ') : ''}`)
-  check(reading.pageX === 0 && reading.pageY === 0 && reading.paneX === 0 && reading.barTop === 0, 'dragging the article never moves the page or its toolbar')
+  check(reading.pageX === 0 && reading.pageY === 0 && reading.paneX === 0, 'dragging the article never moves the page')
+  check(reading.barTucked, 'reading on tucks the toolbar away')
+  await mobile.mouse.wheel(0, -200)
+  await mobile.waitForTimeout(400)
+  check(await mobile.locator('article.pane .bar').evaluate((b) => !b.classList.contains('tucked') && b.getBoundingClientRect().top === 0), 'scrolling up brings the toolbar back')
   await mobile.getByRole('button', { name: 'Back to articles' }).tap()
   check(await mobile.locator('nav.tabbar').isVisible(), 'and comes back with the list')
   // A summary-only article offers full articles for the whole feed. (By

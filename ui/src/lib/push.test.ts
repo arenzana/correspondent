@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { keyBytes, safeTarget } from './push'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BRAVE_PUSH, isBrave, keyBytes, safeTarget } from './push'
 
 describe('push helpers', () => {
   it('decodes a base64url VAPID key to bytes', () => {
@@ -20,5 +20,20 @@ describe('push helpers', () => {
     expect(safeTarget('//evil.example/x')).toBe('/')
     expect(safeTarget('javascript:alert(1)')).toBe('/')
     expect(safeTarget(undefined)).toBe('/')
+  })
+})
+
+describe('Brave', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('is recognised by navigator.brave, and nothing else is', async () => {
+    vi.stubGlobal('navigator', { brave: { isBrave: async () => true } })
+    expect(await isBrave()).toBe(true)
+    vi.stubGlobal('navigator', { userAgent: 'Chrome' })
+    expect(await isBrave()).toBe(false)
+  })
+
+  it('gets told which setting turns push on', () => {
+    expect(BRAVE_PUSH).toMatch(/Use Google services for push messaging/)
   })
 })

@@ -650,3 +650,14 @@ describe('saved searches', () => {
     expect(app.source).toEqual({ kind: 'search', id: 7 })
   })
 })
+
+describe('leaving Settings', () => {
+  it('goes back to the articles', () => {
+    app.page = 'settings'
+    app.pane = 'list'
+    app.source = { kind: 'view', view: 'unread' }
+    app.leavePage()
+    expect(app.page).toBe('reader')
+    expect(location.hash).toBe('#/unread')
+  })
+})

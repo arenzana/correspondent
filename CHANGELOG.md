@@ -7,6 +7,22 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-10-27
+
+### Changed
+
+- On phones, scrolling down a list tucks its header and the tab bar away,
+  and scrolling down an article tucks its toolbar; scrolling up, even a
+  little, brings them back. Lists too short to need the room keep them.
+
+### Fixed
+
+- The back arrow in Settings (and Admin) did nothing in the installed app
+  or a wide window: it now goes back to your articles everywhere.
+- Notifications in Brave: Brave turns web push off by default and only
+  reports a vague error. Settings now says which Brave setting to turn on
+  ("Use Google services for push messaging").
+
 ## [0.17.0] - 2026-10-27
 
 ### Added

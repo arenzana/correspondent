@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app, APP_ICONS, UI_SCALES } from '../lib/state.svelte'
   import { api, type AIProvider, type SpeechProvider } from '../lib/api'
-  import { deviceSubscribed, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
+  import { deviceSubscribed, isBrave, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
   import Icon from './Icon.svelte'
   import ThemePicker from './ThemePicker.svelte'
   import { relative } from '../lib/time'
@@ -18,6 +18,8 @@
   const readerURL = `${location.origin}/api/greader.php`
 
   const support = pushSupport()
+  let brave = $state(false)
+  isBrave().then((b) => (brave = b))
   let pushOn = $state(false)
   let pushBusy = $state(false)
   let pushMessage = $state('')
@@ -371,7 +373,7 @@
 
 <section class="settings" aria-labelledby="settings-title">
   <header class="head">
-    <button class="icon-btn only-narrow" aria-label="Show feeds" onclick={() => app.back()}>
+    <button class="icon-btn" aria-label="Back to articles" title="Back to articles" onclick={() => app.leavePage()}>
       <Icon name="back" />
     </button>
     <div class="titles">
@@ -756,6 +758,8 @@
                     On iPhone and iPad, add Correspondent to your Home Screen first (Share, then Add to Home Screen), and turn this on there.
                   {:else}
                     Only feeds you choose notify you: open a feed and use the bell in its header.
+                    {#if brave}In Brave, first turn on “Use Google services for push messaging” in Brave’s Settings →
+                      Privacy and security, and restart Brave.{/if}
                   {/if}
                 </small></span>
               <input type="checkbox" role="switch" checked={pushOn} disabled={pushBusy} onchange={togglePush} />

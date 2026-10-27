@@ -28,6 +28,14 @@
   let live = $state<{ nav?: number; list?: number }>({})
   let article: ReturnType<typeof Article> | undefined = $state()
   let listen: ReturnType<typeof Listen> | undefined = $state()
+
+  // Moving to another pane, page or article brings the phone's bars back.
+  $effect(() => {
+    void app.pane
+    void app.page
+    void app.selectedId
+    app.barsHidden = false
+  })
   let pendingG = false
   let gTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -126,6 +134,7 @@
     class:nav-open={app.navOpen}
     class:resizing
     class:managing={app.page !== 'reader'}
+    class:bars-hidden={app.barsHidden}
     data-pane={app.pane}
     style:--nav-w="{live.nav ?? navWidth}px"
     style:--list-w="{live.list ?? listWidth}px"
@@ -164,7 +173,7 @@
     {/if}
     {#if app.pane !== 'article'}<div class="tabs"><TabBar /></div>{/if}
   </div>
-  <div class="listen-dock" class:above-tabs={app.pane !== 'article'}><Listen bind:this={listen} /></div>
+  <div class="listen-dock" class:above-tabs={app.pane !== 'article' && !app.barsHidden}><Listen bind:this={listen} /></div>
 
   {#if app.paletteOpen}<Palette />{/if}
   {#if app.shortcutsOpen}<Shortcuts />{/if}
@@ -353,6 +362,17 @@
     [data-pane='nav'] .nav,
     [data-pane='list'] .list {
       bottom: calc(56px + env(safe-area-inset-bottom));
+      transition: bottom 220ms var(--ease);
+    }
+    /* Scrolling down a list: the tab bar steps aside and the list takes its room. */
+    .tabs :global(.tabbar) {
+      transition: transform 220ms var(--ease);
+    }
+    .bars-hidden .tabs :global(.tabbar) {
+      transform: translateY(100%);
+    }
+    .bars-hidden[data-pane='list'] .list {
+      bottom: 0;
     }
     .nav-open .nav {
       display: block;

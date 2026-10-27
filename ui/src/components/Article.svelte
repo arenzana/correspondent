@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte'
+  import { BarTracker, NARROW } from '../lib/bars'
   import { longDate, readingMinutes } from '../lib/time'
   import { looksPartial as isPartial } from '../lib/partial'
   import Icon from './Icon.svelte'
@@ -26,10 +27,13 @@
     progress = 0
   })
 
+  const bars = new BarTracker()
+  let barH = $state(0)
   function onScroll() {
     if (!scroller) return
     const max = scroller.scrollHeight - scroller.clientHeight
     progress = max > 0 ? scroller.scrollTop / max : 1
+    if (matchMedia(NARROW).matches) app.barsHidden = bars.update(scroller.scrollTop, max, performance.now())
   }
 
   /** Space: page down, or advance to the next article at the end. Exposed to the keyboard handler. */
@@ -46,7 +50,7 @@
 
 <article class="pane" aria-label="Article">
   {#if a}
-    <div class="bar">
+    <div class="bar" class:tucked={app.barsHidden} bind:offsetHeight={barH} style:--bar-h="{barH}px">
       <button class="icon-btn only-narrow" aria-label="Back to articles" onclick={() => app.back()}>
         <Icon name="back" />
       </button>
@@ -286,6 +290,28 @@
     min-height: calc(52px + env(safe-area-inset-top));
     padding: env(safe-area-inset-top) 10px 0;
     border-bottom: 1px solid var(--rule);
+  }
+  /* Phones: the toolbar tucks away while reading on, like the list header. */
+  @media (max-width: 699px) {
+    .bar {
+      transition: margin-top 220ms var(--ease);
+    }
+    .bar > :global(*) {
+      transition: opacity 160ms var(--ease);
+    }
+    .bar.tucked {
+      margin-top: calc(env(safe-area-inset-top) - var(--bar-h));
+    }
+    .bar.tucked > :global(*) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bar,
+    .bar > :global(*) {
+      transition: none;
+    }
   }
   .position {
     margin-left: 6px;

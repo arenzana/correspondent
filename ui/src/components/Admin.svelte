@@ -140,7 +140,7 @@
 
 <section class="admin" aria-labelledby="admin-title">
   <header class="head">
-    <button class="icon-btn only-narrow" aria-label="Show feeds" onclick={() => app.back()}>
+    <button class="icon-btn" aria-label="Back to articles" title="Back to articles" onclick={() => app.leavePage()}>
       <Icon name="back" />
     </button>
     <div class="titles">

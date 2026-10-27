@@ -3,6 +3,7 @@
   // spine itself: a filled dot is unread, a hollow ring is read, and a seal
   // in the gutter marks a star. Titles also change weight, so state never
   // relies on colour alone.
+  import { BarTracker, NARROW } from '../lib/bars'
   import { app } from '../lib/state.svelte'
   import { clock, dayKey, dayLabel } from '../lib/time'
   import { api, type Entry } from '../lib/api'
@@ -64,10 +65,15 @@
 
   // The list tells the app whether it sits at the top, where new articles
   // may slide in; further down it never moves under the reader.
+  const bars = new BarTracker()
   function onScroll() {
     const top = (scroller?.scrollTop ?? 0) < 24
     if (top !== app.atTop) app.atTop = top
+    if (scroller && matchMedia(NARROW).matches) {
+      app.barsHidden = bars.update(scroller.scrollTop, scroller.scrollHeight - scroller.clientHeight, performance.now())
+    }
   }
+  let headH = $state(0)
 
   // A touch on the list holds back arrivals briefly (see app.listBusyUntil).
   $effect(() => {
@@ -196,7 +202,7 @@
 </script>
 
 <section class="wire" aria-label="Articles">
-  <header class="head">
+  <header class="head" class:tucked={app.barsHidden} bind:offsetHeight={headH} style:--head-h="{headH}px">
     <button class="icon-btn only-narrow" aria-label="Show feeds" onclick={() => app.back()}>
       <Icon name="back" />
     </button>
@@ -418,6 +424,29 @@
   .titles {
     flex: 1;
     min-width: 0;
+  }
+  /* Phones: scrolling down tucks the header away, leaving the strip under
+     the status bar; scrolling up brings it back. */
+  @media (max-width: 699px) {
+    .head {
+      transition: margin-top 220ms var(--ease);
+    }
+    .head > :global(*) {
+      transition: opacity 160ms var(--ease);
+    }
+    .head.tucked {
+      margin-top: calc(env(safe-area-inset-top) - var(--head-h));
+    }
+    .head.tucked > :global(*) {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .head,
+    .head > :global(*) {
+      transition: none;
+    }
   }
   h1 {
     margin: 0;
