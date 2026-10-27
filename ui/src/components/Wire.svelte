@@ -117,7 +117,7 @@
   // wave running the way it moves, pinned at both ends, swelling and then
   // settling straight as the row lands. Drawn in a 12-unit-wide box whose
   // height stretches with the cursor (the stroke keeps its width).
-  const WAVE_MS = 520
+  const WAVE_MS = 900
   let spine = $state(spinePath(0, 0))
   let waveRaf = 0
   function spinePath(amp: number, phase: number): string {
@@ -138,7 +138,7 @@
       const t = Math.min(1, (now - start) / WAVE_MS)
       // Swells fast, then settles: sin(πt) eased toward the end.
       const amp = 2.6 * Math.sin(Math.PI * t) * (1 - t * t * 0.5)
-      spine = spinePath(t < 1 ? amp : 0, way * t * 3 * Math.PI)
+      spine = spinePath(t < 1 ? amp : 0, way * t * 2.5 * Math.PI)
       if (t < 1) waveRaf = requestAnimationFrame(step)
     }
     waveRaf = requestAnimationFrame(step)

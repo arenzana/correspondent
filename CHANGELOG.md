@@ -18,6 +18,11 @@ change behaviour; the Google Reader API stays compatible throughout.
 - A search shows what you searched for in the list header, with Save
   search and a button to clear it.
 
+### Changed
+
+- The selection's ripple is slower and gentler, settling over almost a
+  second.
+
 ### Fixed
 
 - Mark all read while searching marked the whole list read, not only the
