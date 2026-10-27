@@ -73,6 +73,7 @@ struct WideLayout: View {
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).frame(minWidth: 520, minHeight: 480) }
         .onKeyPress { press in keys(press) }
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
+        .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
         .onChange(of: app.selectedID) { _, id in if id != nil { settings = false } }
     }
 
@@ -89,12 +90,19 @@ struct WideLayout: View {
         case "A": Task { await app.markAllRead() }
         case "r": Task { await app.refreshTree(); await app.load() }
         case "/": searching = true
+        case "f": toggleFocus()
         case "v": if let u = app.article.flatMap({ URL(string: $0.url) }) { openOriginal(u) }
         default:
+            if press.key == .escape, columns == .detailOnly { toggleFocus(); return .handled }
             if press.key == .escape, app.article != nil { app.closeArticle(); return .handled }
             return .ignored
         }
         return .handled
+    }
+
+    /// Focused reading: the article alone, then back to three columns.
+    private func toggleFocus() {
+        withAnimation(.easeOut(duration: 0.2)) { columns = columns == .detailOnly ? .all : .detailOnly }
     }
 
     private func openOriginal(_ url: URL) {
