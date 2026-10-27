@@ -25,6 +25,7 @@ struct CorrespondentApp: App {
                 }
                 #endif
                 .task { await app.boot() }
+                .onOpenURL { url in Task { await app.open(url) } }
                 .onChange(of: phase) { _, now in
                     if now == .active, app.account != nil { Task { await app.resumed() } }
                     if now == .background { app.scheduleRefresh() }

@@ -152,6 +152,13 @@ struct PhoneLayout: View {
             }
         }
         .tint(theme.accent)
+        .onChange(of: app.openRequest) { _, id in
+            // A widget opened an article: show it in Unread.
+            guard id != nil else { return }
+            tab = .unread
+            unreadPath = [.article]
+            app.openRequest = nil
+        }
         .modifier(MinimizeTabBarOnScroll())
         .modifier(PlayerAccessory())
         .onChange(of: tab) { _, now in

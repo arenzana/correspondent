@@ -30,6 +30,8 @@ targets:
       - package: CorrespondentKit
       - target: Share
         destinationFilters: [iOS]
+      - target: Widgets
+        destinationFilters: [iOS]
     entitlements:
       path: App/Correspondent.entitlements
       properties:
@@ -42,6 +44,10 @@ targets:
         # plain HTTP; everything else needs HTTPS.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Widgets open the app at an article: correspondent://entry/ID.
+        CFBundleURLTypes:
+          - CFBundleURLName: org.arenzana.correspondent
+            CFBundleURLSchemes: [correspondent]
         # Read-aloud keeps playing with the screen locked.
         UIBackgroundModes: [audio, fetch]
         BGTaskSchedulerPermittedIdentifiers: [org.arenzana.correspondent.refresh]
@@ -100,4 +106,37 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Correspondent
+        SKIP_INSTALL: YES
+  Widgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Widgets/Sources
+      - path: App/Sources/Theme.swift
+      - path: App/Resources/Fonts
+        buildPhase: resources
+    dependencies:
+      - package: CorrespondentKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    entitlements:
+      path: Widgets/Widgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.org.arenzana.correspondent]
+        keychain-access-groups: ["$(AppIdentifierPrefix)org.arenzana.correspondent.shared"]
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Correspondent
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.arenzana.correspondent.widgets
+        PRODUCT_NAME: Widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES

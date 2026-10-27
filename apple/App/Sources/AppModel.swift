@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 import Network
 import UserNotifications
 #if os(iOS)
@@ -648,6 +649,8 @@ final class AppModel {
     static let refreshTask = "org.arenzana.correspondent.refresh"
 
     /// The unread count on the app icon (iOS asks first) or the Dock.
+    private var lastWidgetCount = -1
+
     var showBadge: Bool = UserDefaults.standard.bool(forKey: "showBadge") {
         didSet {
             UserDefaults.standard.set(showBadge, forKey: "showBadge")
@@ -665,8 +668,27 @@ final class AppModel {
         showBadge = on
     }
 
+    /// Opens what a widget points at: correspondent://unread or /entry/ID.
+    func open(_ url: URL) async {
+        guard url.scheme == "correspondent" else { return }
+        if url.host() == "entry", let id = url.pathComponents.last, id != "/" {
+            if source != .unread { await go(.unread) }
+            await select(id)
+            openRequest = id
+        } else {
+            await go(.unread)
+        }
+    }
+
+    /// An article a link asked to open (the iPhone layout pushes it).
+    var openRequest: EntryID?
+
     func updateBadge() async {
         let n = showBadge ? tree.counts.unread : 0
+        if n != lastWidgetCount {
+            lastWidgetCount = n
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         #if os(iOS)
         try? await UNUserNotificationCenter.current().setBadgeCount(n)
         #else
