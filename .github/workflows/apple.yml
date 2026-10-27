@@ -1,0 +1,45 @@
+name: Apple apps
+
+# Tests CorrespondentKit and builds the iPhone/iPad and Mac app (unsigned)
+# whenever the apps or the API they talk to change.
+
+on:
+  push:
+    branches: [main]
+    paths: ["apple/**", "internal/api/**", "internal/store/**", ".github/workflows/apple.yml"]
+  pull_request:
+    paths: ["apple/**", "internal/api/**", "internal/store/**", ".github/workflows/apple.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - name: Test CorrespondentKit
+        working-directory: apple/Kit
+        run: swift test
+      - name: Generate the project
+        working-directory: apple
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build for iPhone and iPad
+        working-directory: apple
+        run: xcodebuild -project Correspondent.xcodeproj -scheme Correspondent -destination 'generic/platform=iOS Simulator' -derivedDataPath build/dd build CODE_SIGNING_ALLOWED=NO | tail -5
+      - name: Build for Mac
+        working-directory: apple
+        run: xcodebuild -project Correspondent.xcodeproj -scheme Correspondent -destination 'platform=macOS' -derivedDataPath build/dd build CODE_SIGNING_ALLOWED=NO | tail -5
