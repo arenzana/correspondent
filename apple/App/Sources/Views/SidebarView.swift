@@ -158,6 +158,11 @@ struct SidebarView: View {
         Button {
             Task { await app.updateFeed(feed.id, .init(paused: !feed.paused), done: feed.paused ? "Updates resumed." : "Updates paused.") }
         } label: { Label(feed.paused ? "Resume updates" : "Pause updates", systemImage: feed.paused ? "play" : "pause") }
+        if app.notificationsAvailable {
+            Button {
+                Task { await app.updateFeed(feed.id, .init(notify: !feed.notify), done: feed.notify ? "Notifications off for \(feed.title)." : "You'll be notified about new articles in \(feed.title).") }
+            } label: { Label(feed.notify ? "Stop notifications" : "Notify me about new articles", systemImage: feed.notify ? "bell.slash" : "bell") }
+        }
         Button { Task { await app.refreshFeed(feed.id) } } label: { Label("Refresh now", systemImage: "arrow.clockwise") }
         Divider()
         Button(role: .destructive) { leaving = feed } label: { Label("Unsubscribe…", systemImage: "trash") }

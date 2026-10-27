@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/arenzana/correspondent/internal/push"
@@ -25,7 +26,37 @@ func (a *API) pushStatus(w http.ResponseWriter, r *http.Request) {
 	if ep := r.URL.Query().Get("endpoint"); ep != "" {
 		subscribed, _ = a.Store.HasPushSubscription(r.Context(), userID(r), ep)
 	}
-	reply(w, map[string]any{"publicKey": key, "subscribed": subscribed})
+	reply(w, map[string]any{"publicKey": key, "subscribed": subscribed, "apple": a.Push.APNS != nil})
+}
+
+// appleDevice registers (POST) or forgets (DELETE) an Apple app's device
+// token for notifications.
+func (a *API) appleDevice(w http.ResponseWriter, r *http.Request) {
+	if a.Push == nil || a.Push.APNS == nil {
+		fail(w, http.StatusNotImplemented, "Notifications to the Apple apps aren't set up on this server.")
+		return
+	}
+	var in struct {
+		Token       string `json:"token"`
+		Environment string `json:"environment"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	// A device token is hex, 64 characters today; allow for longer ones.
+	if len(in.Token) < 32 || len(in.Token) > 200 || strings.Trim(strings.ToLower(in.Token), "0123456789abcdef") != "" {
+		fail(w, http.StatusBadRequest, "Invalid device token.")
+		return
+	}
+	if r.Method == http.MethodDelete {
+		a.result(w, a.Store.DeleteAPNSDevice(r.Context(), userID(r), in.Token))
+		return
+	}
+	if in.Environment != "production" && in.Environment != "sandbox" {
+		fail(w, http.StatusBadRequest, "The environment is production or sandbox.")
+		return
+	}
+	a.result(w, a.Store.SaveAPNSDevice(r.Context(), userID(r), in.Token, in.Environment))
 }
 
 func (a *API) pushSubscribe(w http.ResponseWriter, r *http.Request) {

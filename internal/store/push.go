@@ -95,3 +95,47 @@ func (s *Store) NewUnread(ctx context.Context, feedID, after int64, limit int) (
 	}
 	return out, rows.Err()
 }
+
+// APNSDevice is an Apple app's device registered for notifications.
+type APNSDevice struct {
+	Token       string
+	Environment string
+}
+
+// SaveAPNSDevice registers a device token for a user (a token moves to the
+// account that last registered it).
+func (s *Store) SaveAPNSDevice(ctx context.Context, userID int64, token, environment string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO apns_devices (token, user_id, environment, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT (token) DO UPDATE SET user_id = excluded.user_id, environment = excluded.environment`,
+		token, userID, environment, time.Now().Unix())
+	return err
+}
+
+func (s *Store) APNSDevices(ctx context.Context, userID int64) ([]APNSDevice, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT token, environment FROM apns_devices WHERE user_id = ? ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []APNSDevice
+	for rows.Next() {
+		var d APNSDevice
+		if err := rows.Scan(&d.Token, &d.Environment); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// DeleteAPNSDevice forgets a user's device (turned off in the app).
+func (s *Store) DeleteAPNSDevice(ctx context.Context, userID int64, token string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM apns_devices WHERE token = ? AND user_id = ?`, token, userID)
+	return err
+}
+
+// ForgetAPNSDevice drops a token Apple says is no longer valid.
+func (s *Store) ForgetAPNSDevice(ctx context.Context, token string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM apns_devices WHERE token = ?`, token)
+	return err
+}

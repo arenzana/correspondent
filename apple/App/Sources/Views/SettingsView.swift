@@ -135,6 +135,13 @@ struct SettingsView: View {
                 Text("Unread and starred articles are kept on this device, with their text, for reading offline, and refreshed in the background.")
                     .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
                 toggle(badgeLabel, "Kept up to date in the background.", isOn: app.showBadge) { v in Task { await app.enableBadge(v) } }
+                if app.notificationsAvailable {
+                    toggle("Notifications on this device", "Only feeds you choose notify you: long-press a feed and turn on its bell.",
+                           isOn: app.notificationsOn) { v in Task { await app.setNotifications(v) } }
+                    if app.notificationsOn {
+                        Button("Send a test notification") { Task { await app.testNotification() } }.buttonStyle(QuietButton())
+                    }
+                }
                 Button {
                     saving = true
                     Task {

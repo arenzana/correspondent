@@ -37,6 +37,9 @@ targets:
       properties:
         com.apple.security.application-groups: [group.org.arenzana.correspondent]
         keychain-access-groups: ["$(AppIdentifierPrefix)org.arenzana.correspondent.shared"]
+        # Notifications through APNs; release builds switch to production when exported.
+        aps-environment: development
+        com.apple.developer.aps-environment: development
     info:
       path: App/Info.plist
       properties:

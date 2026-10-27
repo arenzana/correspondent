@@ -4,6 +4,11 @@ import SwiftUI
 struct CorrespondentApp: App {
     @State private var app = AppModel()
     @State private var player = Player()
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #else
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    #endif
     @Environment(\.scenePhase) private var phase
 
     init() {
@@ -26,7 +31,10 @@ struct CorrespondentApp: App {
             RootView()
                 .environment(app)
                 .environment(player)
-                .onAppear { player.app = app }
+                .onAppear {
+                    player.app = app
+                    Notifications.shared.app = app
+                }
                 #if DEBUG
                 .task {
                     // Screenshots: start reading the open article aloud.

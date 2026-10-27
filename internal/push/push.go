@@ -17,6 +17,7 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
+	"github.com/arenzana/correspondent/internal/apns"
 	"github.com/arenzana/correspondent/internal/store"
 )
 
@@ -59,12 +60,17 @@ type Payload struct {
 	URL   string `json:"url"` // in-app link to open on click
 	Tag   string `json:"tag"` // notifications with the same tag replace each other
 	Icon  string `json:"icon"`
+	// For the Apple apps: the article to open (one new article), and its feed.
+	Entry string `json:"-"`
+	Feed  int64  `json:"-"`
 }
 
 type Notifier struct {
 	Store *store.Store
 	Log   *slog.Logger
 	HTTP  *http.Client
+	// APNS sends to the Apple apps; nil when the server has no APNs key.
+	APNS *apns.Client
 	// Allowed overrides AllowedEndpoint (tests only).
 	Allowed func(string) bool
 }
@@ -117,9 +123,10 @@ func (n *Notifier) SetSubject(ctx context.Context, origin string) error {
 // Send delivers a notification to every device the user registered. Gone
 // subscriptions are removed; it returns how many devices accepted it.
 func (n *Notifier) Send(ctx context.Context, userID int64, p Payload) (int, error) {
+	sent := n.sendApple(ctx, userID, p)
 	subs, err := n.Store.PushSubscriptions(ctx, userID)
 	if err != nil || len(subs) == 0 {
-		return 0, err
+		return sent, err
 	}
 	pub, priv, err := n.keys(ctx)
 	if err != nil {
@@ -134,7 +141,6 @@ func (n *Notifier) Send(ctx context.Context, userID int64, p Payload) (int, erro
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
-	sent := 0
 	for _, s := range subs {
 		if !n.allowed(s.Endpoint) {
 			n.Store.ForgetPushEndpoint(ctx, s.Endpoint)
@@ -172,6 +178,33 @@ func (n *Notifier) Send(ctx context.Context, userID int64, p Payload) (int, erro
 	return sent, nil
 }
 
+// sendApple delivers to the user's Apple devices, forgetting the ones
+// Apple says are gone.
+func (n *Notifier) sendApple(ctx context.Context, userID int64, p Payload) int {
+	if n.APNS == nil {
+		return 0
+	}
+	devices, err := n.Store.APNSDevices(ctx, userID)
+	if err != nil {
+		return 0
+	}
+	sent := 0
+	for _, d := range devices {
+		r, err := n.APNS.Send(ctx, d.Token, d.Environment, apns.Notification{
+			Title: p.Title, Body: p.Body, Collapse: p.Tag, Entry: p.Entry, Feed: p.Feed,
+		})
+		switch r {
+		case apns.Sent:
+			sent++
+		case apns.Gone:
+			n.Store.ForgetAPNSDevice(ctx, d.Token)
+		default:
+			n.Log.Warn("apns", "err", err)
+		}
+	}
+	return sent
+}
+
 // topic lets push services replace an undelivered notification with a newer
 // one for the same feed (RFC 8030: up to 32 URL-safe characters).
 func topic(tag string) string {
@@ -205,9 +238,10 @@ func (n *Notifier) NewArticles(ctx context.Context, f store.Feed, since int64) {
 // BuildPayload words the notification for a batch of new articles.
 func BuildPayload(f store.Feed, entries []store.Entry, icon string) Payload {
 	feed := strconv.FormatInt(f.ID, 10)
-	p := Payload{Title: f.Title, Tag: "feed-" + feed, Icon: icon}
+	p := Payload{Title: f.Title, Tag: "feed-" + feed, Icon: icon, Feed: f.ID}
 	if len(entries) == 1 {
 		p.Body = entries[0].Title
+		p.Entry = strconv.FormatInt(entries[0].ID, 10)
 		p.URL = "/#/feed/" + feed + "/e/" + strconv.FormatInt(entries[0].ID, 10)
 	} else {
 		p.Body = fmt.Sprintf("%d new articles, the latest: %s", len(entries), entries[0].Title)

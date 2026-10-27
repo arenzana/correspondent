@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/arenzana/correspondent/internal/api"
+	"github.com/arenzana/correspondent/internal/apns"
 	"github.com/arenzana/correspondent/internal/extract"
 	"github.com/arenzana/correspondent/internal/fetch"
 	"github.com/arenzana/correspondent/internal/greader"
@@ -278,7 +279,7 @@ func run(log *slog.Logger, args []string) error {
 func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, dataDir, publicURL, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
-	notifier := &push.Notifier{Store: st, Log: log}
+	notifier := &push.Notifier{Store: st, Log: log, APNS: appleNotifications(log)}
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images,
 		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir, PublicURL: publicURL}
 	ing.AIFor = a.AIForApps
@@ -540,4 +541,27 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// appleNotifications sends to the Apple apps when the server has an APNs
+// key: CORRESPONDENT_APNS_KEY_FILE (the .p8), CORRESPONDENT_APNS_KEY_ID and
+// CORRESPONDENT_APNS_TEAM_ID; CORRESPONDENT_APNS_TOPIC is the app's bundle ID.
+func appleNotifications(log *slog.Logger) *apns.Client {
+	file := os.Getenv("CORRESPONDENT_APNS_KEY_FILE")
+	if file == "" {
+		return nil
+	}
+	key, err := os.ReadFile(file)
+	if err != nil {
+		log.Warn("apple notifications are off", "err", err)
+		return nil
+	}
+	c, err := apns.New(apns.Config{Key: key, KeyID: os.Getenv("CORRESPONDENT_APNS_KEY_ID"),
+		TeamID: os.Getenv("CORRESPONDENT_APNS_TEAM_ID"), Topic: envOr("CORRESPONDENT_APNS_TOPIC", "org.arenzana.correspondent")})
+	if err != nil {
+		log.Warn("apple notifications are off", "err", err)
+		return nil
+	}
+	log.Info("apple notifications are on")
+	return c
 }

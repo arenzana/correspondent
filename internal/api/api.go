@@ -138,6 +138,8 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/push", a.auth(a.pushStatus))
 	mux.HandleFunc("POST /api/v1/push/subscriptions", a.auth(a.pushSubscribe))
 	mux.HandleFunc("DELETE /api/v1/push/subscriptions", a.auth(a.pushUnsubscribe))
+	mux.HandleFunc("POST /api/v1/push/apple", a.auth(a.appleDevice))
+	mux.HandleFunc("DELETE /api/v1/push/apple", a.auth(a.appleDevice))
 	mux.HandleFunc("POST /api/v1/push/test", a.auth(a.pushTest))
 	return mux
 }

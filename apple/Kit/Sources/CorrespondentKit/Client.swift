@@ -159,7 +159,9 @@ public final class Client: Sendable {
         public var noFolder = false
         public var paused: Bool?
         public var fullText: Bool?
-        public init(title: String? = nil, folder: String? = nil, noFolder: Bool = false, paused: Bool? = nil, fullText: Bool? = nil) {
+        public var notify: Bool?
+        public init(title: String? = nil, folder: String? = nil, noFolder: Bool = false, paused: Bool? = nil, fullText: Bool? = nil, notify: Bool? = nil) {
+            self.notify = notify
             self.title = title
             self.folder = folder
             self.noFolder = noFolder
@@ -175,6 +177,7 @@ public final class Client: Sendable {
         if change.noFolder { body["noFolder"] = true }
         if let p = change.paused { body["paused"] = p }
         if let f = change.fullText { body["fullText"] = f }
+        if let n = change.notify { body["notify"] = n }
         let _: Empty = try await call("PATCH", "/feeds/\(id)", body: body)
     }
 
@@ -215,6 +218,32 @@ public final class Client: Sendable {
         let body = try JSONSerialization.data(withJSONObject: prefs)
         _ = try await data("PUT", "/prefs", raw: body)
         return try JSONDecoder().decode(Prefs.self, from: body)
+    }
+
+    // MARK: Notifications
+
+    /// Whether this server can notify the Apple apps.
+    public func appleNotificationsAvailable() async -> Bool {
+        struct Out: Decodable { var apple: Bool? }
+        let out: Out? = try? await call("GET", "/push")
+        return out?.apple ?? false
+    }
+
+    /// Registers this device's APNs token (hex); environment is
+    /// production or sandbox (development builds).
+    public func registerDevice(_ token: String, environment: String) async throws {
+        let _: Empty = try await call("POST", "/push/apple", body: ["token": token, "environment": environment])
+    }
+
+    public func unregisterDevice(_ token: String) async throws {
+        let _: Empty = try await call("DELETE", "/push/apple", body: ["token": token, "environment": "production"])
+    }
+
+    /// Sends a test notification to the reader's devices; returns how many got it.
+    public func testNotification() async throws -> Int {
+        struct Out: Decodable { var sent: Int }
+        let out: Out = try await call("POST", "/push/test")
+        return out.sent
     }
 
     // MARK: Read aloud

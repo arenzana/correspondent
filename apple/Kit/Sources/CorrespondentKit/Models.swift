@@ -81,6 +81,8 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
     public var fullText: Bool
     /// A site with no feed, read from its page.
     public var page: Bool
+    /// New articles notify the reader's devices.
+    public var notify: Bool
     public var lastError: String
 
     public init(id: Int64, folderId: Int64? = nil, url: String = "", siteUrl: String = "", title: String,
@@ -97,6 +99,7 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         self.errorCount = errorCount
         self.fullText = fullText
         self.page = page
+        self.notify = false
         self.lastError = lastError
     }
 
@@ -113,6 +116,7 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         errorCount = try c.decodeIfPresent(Int.self, forKey: .errorCount) ?? 0
         fullText = try c.decodeIfPresent(Bool.self, forKey: .fullText) ?? false
         page = try c.decodeIfPresent(Bool.self, forKey: .page) ?? false
+        notify = try c.decodeIfPresent(Bool.self, forKey: .notify) ?? false
         lastError = try c.decodeIfPresent(String.self, forKey: .lastError) ?? ""
     }
 }

@@ -161,6 +161,9 @@ final class AppModel {
         Task { await flushOutbox() }
         Task {
             if let me = try? await client?.me() { speechConfigured = me.speech != nil }
+            notificationsAvailable = await client?.appleNotificationsAvailable() ?? false
+            // Re-register each launch: tokens can change.
+            if notificationsOn, notificationsAvailable { _ = await Notifications.shared.enable() }
             if let me = try? await client?.me(), let p = me.prefs {
                 prefs = p
                 #if os(macOS)
@@ -643,6 +646,38 @@ final class AppModel {
 
     /// Article IDs are numbers (crawl time in µs) sent as strings.
     static func n(_ id: String) -> Int64 { Int64(id) ?? 0 }
+
+    // MARK: Notifications
+
+    /// Whether the server can notify the Apple apps (it has an APNs key).
+    var notificationsAvailable = false
+    var notificationsOn: Bool = UserDefaults.standard.bool(forKey: "notifications") {
+        didSet { UserDefaults.standard.set(notificationsOn, forKey: "notifications") }
+    }
+
+    func setNotifications(_ on: Bool) async {
+        if on {
+            guard await Notifications.shared.enable() else {
+                show("Allow notifications for Correspondent in the Settings app first.")
+                return
+            }
+            notificationsOn = true
+            if !tree.feeds.contains(where: \.notify) { show("Now choose feeds: long-press one and turn on its bell.") }
+        } else {
+            await Notifications.shared.disable()
+            notificationsOn = false
+        }
+    }
+
+    func testNotification() async {
+        guard let client else { return }
+        do {
+            let n = try await client.testNotification()
+            show(n > 0 ? "Sent. It should arrive in a few seconds." : "No device is registered for notifications.")
+        } catch {
+            show(error.localizedDescription)
+        }
+    }
 
     // MARK: Background refresh and the badge
 

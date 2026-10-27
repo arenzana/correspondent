@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- Notifications for the Apple apps through Apple's push service. With an
+  APNs key (CORRESPONDENT_APNS_KEY_FILE, _KEY_ID, _TEAM_ID; _TOPIC
+  defaults to org.arenzana.correspondent) the server sends feed
+  notifications, and the test notification, to the apps' devices as well
+  as to browsers, and forgets devices Apple says are gone.
+
 ## [0.17.2] - 2026-10-27
 
 ### Added
