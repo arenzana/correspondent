@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- The start of native apps for iPhone, iPad and Mac (`apple/`), with the
+  web app's design: sign-in with a device token, the feeds sidebar, the
+  wire with its time spine, the article with the web's styles, search,
+  live updates and an offline copy. iPhone uses iOS's own tab bar and
+  navigation. Not yet released.
+
 ## [0.17.1] - 2026-10-27
 
 ### Changed
