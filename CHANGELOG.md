@@ -7,8 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-27
+
 ### Added
 
+- The Apple apps grow up: adding and managing feeds, folders and saved
+  searches; an offline outbox; read-aloud with background audio and
+  lock-screen controls; background refresh and the unread count on the
+  icon; subscribing from the share sheet; widgets; Shortcuts and Siri;
+  Mac menus with shortcuts; long-press menus on articles; text controls,
+  focused reading, next and previous, and picture zoom; Dynamic Type and
+  VoiceOver throughout. The Mac app is attached to this release, signed
+  with Developer ID and notarized.
 - Notifications for the Apple apps through Apple's push service. With an
   APNs key (CORRESPONDENT_APNS_KEY_FILE, _KEY_ID, _TEAM_ID; _TOPIC
   defaults to org.arenzana.correspondent) the server sends feed
