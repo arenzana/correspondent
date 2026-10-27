@@ -131,6 +131,78 @@ public final class Client: Sendable {
         return out.summary
     }
 
+    // MARK: Subscriptions
+
+    /// The feeds a site offers. With ai, a page with no feed is read by the
+    /// reader's AI (which counts toward its daily limit).
+    public func discover(_ address: String, ai: Bool = false) async throws -> [Candidate] {
+        struct Out: Decodable { var candidates: [Candidate]? }
+        let out: Out = try await call("POST", ai ? "/discover/ai" : "/discover", body: ["url": address])
+        return out.candidates ?? []
+    }
+
+    /// Subscribes; a folder name is created if it doesn't exist.
+    @discardableResult
+    public func subscribe(_ c: Candidate, title: String? = nil, folder: String? = nil) async throws -> Int64 {
+        struct Out: Decodable { var id: Int64 }
+        var body: [String: any Sendable] = ["url": c.url, "title": title ?? c.title, "page": c.page]
+        if let folder, !folder.isEmpty { body["folderName"] = folder }
+        let out: Out = try await call("POST", "/feeds", body: body)
+        return out.id
+    }
+
+    /// Changes a feed: only the fields given.
+    public struct FeedChange: Sendable {
+        public var title: String?
+        /// A folder by name (created if needed), or noFolder to take it out.
+        public var folder: String?
+        public var noFolder = false
+        public var paused: Bool?
+        public var fullText: Bool?
+        public init(title: String? = nil, folder: String? = nil, noFolder: Bool = false, paused: Bool? = nil, fullText: Bool? = nil) {
+            self.title = title
+            self.folder = folder
+            self.noFolder = noFolder
+            self.paused = paused
+            self.fullText = fullText
+        }
+    }
+
+    public func updateFeed(_ id: Int64, _ change: FeedChange) async throws {
+        var body: [String: any Sendable] = [:]
+        if let t = change.title { body["title"] = t }
+        if let f = change.folder { body["folderName"] = f }
+        if change.noFolder { body["noFolder"] = true }
+        if let p = change.paused { body["paused"] = p }
+        if let f = change.fullText { body["fullText"] = f }
+        let _: Empty = try await call("PATCH", "/feeds/\(id)", body: body)
+    }
+
+    public func unsubscribe(_ id: Int64) async throws { let _: Empty = try await call("DELETE", "/feeds/\(id)") }
+
+    public func refreshFeed(_ id: Int64) async throws { let _: Empty = try await call("POST", "/feeds/\(id)/refresh") }
+
+    public func renameFolder(_ id: Int64, _ name: String) async throws {
+        let _: Empty = try await call("PATCH", "/folders/\(id)", body: ["name": name])
+    }
+
+    /// Deletes a folder; its feeds are kept, outside any folder.
+    public func deleteFolder(_ id: Int64) async throws { let _: Empty = try await call("DELETE", "/folders/\(id)") }
+
+    // MARK: Saved searches
+
+    public func saveSearch(_ query: String, name: String = "") async throws -> SavedSearch {
+        struct Out: Decodable { var search: SavedSearch }
+        let out: Out = try await call("POST", "/searches", body: ["query": query, "name": name])
+        return out.search
+    }
+
+    public func renameSearch(_ id: Int64, _ name: String) async throws {
+        let _: Empty = try await call("PATCH", "/searches/\(id)", body: ["name": name])
+    }
+
+    public func deleteSearch(_ id: Int64) async throws { let _: Empty = try await call("DELETE", "/searches/\(id)") }
+
     /// Changes some preferences. The server keeps them as one document the
     /// web app also writes (pane widths, the Sun theme's place…), so this
     /// reads the current one, changes only these keys, and writes it back.

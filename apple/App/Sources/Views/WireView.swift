@@ -66,6 +66,16 @@ struct WireView: View {
                 Text(app.subtitle).font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate).lineLimit(1)
             }
             Spacer()
+            if !app.query.isEmpty, !isSavedSearch {
+                Button { Task { await app.saveSearch() } } label: {
+                    Text("Save search").font(Typeface.ui.font(13.5, weight: 560)).foregroundStyle(theme.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .background(RoundedRectangle(cornerRadius: 6).stroke(theme.rule))
+                }
+                .buttonStyle(.plain)
+                Button { Task { await app.search("") ; await app.go(.all) } } label: { Image(systemName: "xmark") }
+                    .iconButton().accessibilityLabel("Clear search")
+            }
             if app.source != .starred {
                 Button { Task { await app.markAllRead() } } label: { Image(systemName: "checkmark.circle") }
                     .iconButton().accessibilityLabel("Mark all read")
@@ -74,6 +84,11 @@ struct WireView: View {
         .padding(.leading, 18).padding(.trailing, 12).padding(.vertical, 12)
         .background(theme.sheet)
         .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
+    }
+
+    private var isSavedSearch: Bool {
+        if case .search = app.source { return true }
+        return false
     }
 
     private var list: some View {

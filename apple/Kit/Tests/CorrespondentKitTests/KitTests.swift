@@ -139,6 +139,30 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     #expect(await OfflineStore(account: "isma@rss.example.org", directory: dir).tree() == nil)
 }
 
+extension ClientTests {
+    @Test func managesSubscriptions() async throws {
+        FakeServer.routes = [
+            "POST /api/v1/discover": (200, #"{"candidates":[{"url":"https://sixcolors.com/feed/","title":"Six Colors","itemCount":20}]}"#),
+            "POST /api/v1/feeds": (200, #"{"id":42}"#),
+            "PATCH /api/v1/feeds/42": (204, ""),
+            "DELETE /api/v1/feeds/42": (204, ""),
+            "POST /api/v1/searches": (200, #"{"search":{"id":3,"name":"duo","query":"duo","unread":2}}"#),
+        ]
+        FakeServer.seen = []
+        let c = Client(server: server, token: "t", session: FakeServer.session())
+        let found = try await c.discover("sixcolors.com")
+        #expect(found.first?.title == "Six Colors" && found.first?.page == false)
+        #expect(try await c.subscribe(found[0], folder: "Apple") == 42)
+        let sub = try JSONSerialization.jsonObject(with: FakeServer.seen[1].httpBody ?? Data()) as? [String: Any]
+        #expect(sub?["folderName"] as? String == "Apple" && sub?["page"] as? Bool == false)
+        try await c.updateFeed(42, .init(title: "6C", paused: true))
+        let patch = try JSONSerialization.jsonObject(with: FakeServer.seen[2].httpBody ?? Data()) as? [String: Any]
+        #expect(patch?["title"] as? String == "6C" && patch?["paused"] as? Bool == true && patch?["folderName"] == nil)
+        try await c.unsubscribe(42)
+        #expect(try await c.saveSearch("duo").unread == 2)
+    }
+}
+
 // The outbox shares the fake server: same serialized suite as the client's.
 extension ClientTests {
     @Test func mergesABurstAndKeepsMarkAllInPlace() {

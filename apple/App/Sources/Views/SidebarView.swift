@@ -11,6 +11,13 @@ struct SidebarView: View {
     /// On iPhone, choosing a list moves on to it.
     var onChoose: () -> Void = {}
 
+    @State private var adding = false
+    /// Renaming a feed, folder or saved search: what, and the new name.
+    @State private var renaming: Renaming?
+    @State private var newName = ""
+    @State private var leaving: Feed?
+    enum Renaming { case feed(Feed), folder(Folder), search(SavedSearch) }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -44,22 +51,36 @@ struct SidebarView: View {
 
                     if !app.tree.searches.isEmpty {
                         group("Searches")
-                        ForEach(app.tree.searches) { s in row(.search(s.id), s.name, "magnifyingglass", s.unread) }
+                        ForEach(app.tree.searches) { s in
+                            row(.search(s.id), s.name, "magnifyingglass", s.unread)
+                                .contextMenu {
+                                    Button { startRename(.search(s)) } label: { Label("Rename…", systemImage: "pencil") }
+                                    Button(role: .destructive) { Task { await app.deleteSearch(s) } } label: { Label("Remove search", systemImage: "trash") }
+                                }
+                        }
                         Divider().overlay(theme.rule.opacity(0.6)).padding(.vertical, 8).padding(.horizontal, 12)
                     }
 
                     ForEach(app.tree.folders.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) { folder in
                         folderRow(folder)
+                            .contextMenu {
+                                Button { startRename(.folder(folder)) } label: { Label("Rename…", systemImage: "pencil") }
+                                Button(role: .destructive) { Task { await app.deleteFolder(folder) } } label: {
+                                    Label("Delete folder (keeps its feeds)", systemImage: "trash")
+                                }
+                            }
                         if !app.collapsed.contains(folder.id) {
-                            ForEach(feeds(in: folder.id)) { feedRow($0) }
+                            ForEach(feeds(in: folder.id)) { f in feedRow(f).contextMenu { feedMenu(f) } }
                         }
                     }
-                    ForEach(feeds(in: nil)) { feedRow($0) }
+                    ForEach(feeds(in: nil)) { f in feedRow(f).contextMenu { feedMenu(f) } }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 12)
             }
 
             HStack(spacing: 2) {
+                Button { adding = true } label: { Image(systemName: "plus") }.iconButton()
+                    .accessibilityLabel("Add a feed")
                 Spacer()
                 Button(action: onSettings) { Image(systemName: "slider.horizontal.3") }.iconButton()
                     .accessibilityLabel("Settings")
@@ -68,6 +89,78 @@ struct SidebarView: View {
             .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
         }
         .background(theme.fog)
+        .sheet(isPresented: $adding) {
+            AddFeedView().environment(\.theme, theme)
+                #if os(macOS)
+                .frame(width: 520, height: 560)
+                #endif
+        }
+        .alert(renameTitle, isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $newName)
+            Button("Rename") { rename() }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .confirmationDialog("Unsubscribe from \(leaving?.title ?? "")?", isPresented: Binding(get: { leaving != nil }, set: { if !$0 { leaving = nil } }), titleVisibility: .visible) {
+            Button("Unsubscribe", role: .destructive) {
+                if let f = leaving { Task { await app.unsubscribe(f) } }
+                leaving = nil
+            }
+        } message: {
+            Text("Its articles are deleted, except starred ones.")
+        }
+    }
+
+    private var renameTitle: String {
+        switch renaming {
+        case .feed: "Rename the feed"
+        case .folder: "Rename the folder"
+        case .search: "Rename the search"
+        case nil: ""
+        }
+    }
+
+    private func startRename(_ r: Renaming) {
+        switch r {
+        case .feed(let f): newName = f.title
+        case .folder(let f): newName = f.name
+        case .search(let s): newName = s.name
+        }
+        renaming = r
+    }
+
+    private func rename() {
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, let r = renaming else { renaming = nil; return }
+        renaming = nil
+        Task {
+            switch r {
+            case .feed(let f): await app.updateFeed(f.id, .init(title: name))
+            case .folder(let f): await app.renameFolder(f.id, name)
+            case .search(let s): await app.renameSearch(s.id, name)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func feedMenu(_ feed: Feed) -> some View {
+        Button { startRename(.feed(feed)) } label: { Label("Rename…", systemImage: "pencil") }
+        Menu {
+            ForEach(app.tree.folders.filter { $0.id != feed.folderId }) { f in
+                Button(f.name) { Task { await app.updateFeed(feed.id, .init(folder: f.name), done: "Moved to \(f.name).") } }
+            }
+            if feed.folderId != nil {
+                Button("No folder") { Task { await app.updateFeed(feed.id, .init(noFolder: true)) } }
+            }
+        } label: { Label("Move to", systemImage: "folder") }
+        Button {
+            Task { await app.updateFeed(feed.id, .init(fullText: !feed.fullText), done: feed.fullText ? "Showing the feed's own text." : "Fetching full articles from now on.") }
+        } label: { Label(feed.fullText ? "Stop fetching full articles" : "Fetch full articles", systemImage: "doc.text") }
+        Button {
+            Task { await app.updateFeed(feed.id, .init(paused: !feed.paused), done: feed.paused ? "Updates resumed." : "Updates paused.") }
+        } label: { Label(feed.paused ? "Resume updates" : "Pause updates", systemImage: feed.paused ? "play" : "pause") }
+        Button { Task { await app.refreshFeed(feed.id) } } label: { Label("Refresh now", systemImage: "arrow.clockwise") }
+        Divider()
+        Button(role: .destructive) { leaving = feed } label: { Label("Unsubscribe…", systemImage: "trash") }
     }
 
     private func feeds(in folder: Int64?) -> [Feed] {

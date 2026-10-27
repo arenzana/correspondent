@@ -77,9 +77,15 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
     public var unread: Int
     public var paused: Bool
     public var errorCount: Int
+    /// New articles are fetched in full from their pages.
+    public var fullText: Bool
+    /// A site with no feed, read from its page.
+    public var page: Bool
+    public var lastError: String
 
     public init(id: Int64, folderId: Int64? = nil, url: String = "", siteUrl: String = "", title: String,
-                iconUrl: String = "", unread: Int = 0, paused: Bool = false, errorCount: Int = 0) {
+                iconUrl: String = "", unread: Int = 0, paused: Bool = false, errorCount: Int = 0,
+                fullText: Bool = false, page: Bool = false, lastError: String = "") {
         self.id = id
         self.folderId = folderId
         self.url = url
@@ -89,6 +95,9 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         self.unread = unread
         self.paused = paused
         self.errorCount = errorCount
+        self.fullText = fullText
+        self.page = page
+        self.lastError = lastError
     }
 
     public init(from decoder: Decoder) throws {
@@ -102,6 +111,9 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         unread = try c.decodeIfPresent(Int.self, forKey: .unread) ?? 0
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
         errorCount = try c.decodeIfPresent(Int.self, forKey: .errorCount) ?? 0
+        fullText = try c.decodeIfPresent(Bool.self, forKey: .fullText) ?? false
+        page = try c.decodeIfPresent(Bool.self, forKey: .page) ?? false
+        lastError = try c.decodeIfPresent(String.self, forKey: .lastError) ?? ""
     }
 }
 
@@ -121,6 +133,32 @@ public struct SavedSearch: Codable, Identifiable, Hashable, Sendable {
     public var name: String
     public var query: String
     public var unread: Int
+}
+
+/// A feed (or a page read without one) found at an address.
+public struct Candidate: Codable, Hashable, Sendable, Identifiable {
+    public var url: String
+    public var title: String
+    public var description: String
+    public var siteUrl: String
+    public var iconUrl: String
+    public var itemCount: Int
+    public var page: Bool
+    /// The newest article's titles, for a page read without a feed.
+    public var sample: [String]
+    public var id: String { url }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        url = try c.decode(String.self, forKey: .url)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        siteUrl = try c.decodeIfPresent(String.self, forKey: .siteUrl) ?? ""
+        iconUrl = try c.decodeIfPresent(String.self, forKey: .iconUrl) ?? ""
+        itemCount = try c.decodeIfPresent(Int.self, forKey: .itemCount) ?? 0
+        page = try c.decodeIfPresent(Bool.self, forKey: .page) ?? false
+        sample = try c.decodeIfPresent([String].self, forKey: .sample) ?? []
+    }
 }
 
 public struct Counts: Codable, Hashable, Sendable {

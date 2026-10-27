@@ -360,6 +360,79 @@ final class AppModel {
         }
     }
 
+    // MARK: Subscriptions and saved searches
+
+    /// Runs a change to subscriptions, refreshes the sidebar, and says how it went.
+    private func manage(_ done: String?, _ failed: String, _ work: (Client) async throws -> Void) async -> Bool {
+        guard let client else { return false }
+        do {
+            try await work(client)
+            await refreshTree()
+            if let done { show(done) }
+            return true
+        } catch {
+            show("\(failed) \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func subscribe(_ c: Candidate, folder: String?) async -> Bool {
+        var id: Int64 = 0
+        let ok = await manage("Subscribed to \(c.title.isEmpty ? c.url : c.title).", "Couldn't subscribe.") {
+            id = try await $0.subscribe(c, folder: folder)
+        }
+        if ok { await go(.feed(id)) }
+        return ok
+    }
+
+    func updateFeed(_ id: Int64, _ change: Client.FeedChange, done: String? = nil) async {
+        _ = await manage(done, "Couldn't change the feed.") { try await $0.updateFeed(id, change) }
+    }
+
+    func refreshFeed(_ id: Int64) async {
+        _ = await manage("Checking for new articles.", "Couldn't refresh the feed.") { try await $0.refreshFeed(id) }
+    }
+
+    func unsubscribe(_ feed: Feed) async {
+        if await manage("Unsubscribed from \(feed.title).", "Couldn't unsubscribe.", { try await $0.unsubscribe(feed.id) }),
+           source == .feed(feed.id) {
+            await go(.unread)
+        }
+    }
+
+    func renameFolder(_ id: Int64, _ name: String) async {
+        _ = await manage(nil, "Couldn't rename the folder.") { try await $0.renameFolder(id, name) }
+    }
+
+    func deleteFolder(_ folder: Folder) async {
+        if await manage("Deleted the folder \(folder.name). Its feeds are kept.", "Couldn't delete the folder.", { try await $0.deleteFolder(folder.id) }),
+           source == .folder(folder.id) {
+            await go(.unread)
+        }
+    }
+
+    /// Keeps the current search in the sidebar, and shows it from there.
+    func saveSearch() async {
+        let words = query.trimmingCharacters(in: .whitespaces)
+        guard !words.isEmpty else { return }
+        var saved: SavedSearch?
+        if await manage(nil, "Couldn't save the search.", { saved = try await $0.saveSearch(words) }), let saved {
+            await go(.search(saved.id))
+            show("Saved the search “\(saved.name)”. It's in the sidebar.")
+        }
+    }
+
+    func renameSearch(_ id: Int64, _ name: String) async {
+        _ = await manage(nil, "Couldn't rename the search.") { try await $0.renameSearch(id, name) }
+    }
+
+    func deleteSearch(_ s: SavedSearch) async {
+        if await manage("Removed the search “\(s.name)”.", "Couldn't remove the search.", { try await $0.deleteSearch(s.id) }),
+           source == .search(s.id) {
+            await go(.unread)
+        }
+    }
+
     // MARK: Changes
 
     func setRead(_ ids: [EntryID], _ read: Bool) async {
