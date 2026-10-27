@@ -87,6 +87,7 @@
         else if (app.focusMode) app.focusMode = false
         else if (app.navOpen) app.navOpen = false
         else if (app.pane === 'article' && window.matchMedia('(max-width: 699px)').matches) app.back()
+        else if (app.article) app.closeArticle()
       },
       g: () => {
         pendingG = true

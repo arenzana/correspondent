@@ -23,6 +23,14 @@ change behaviour; the Google Reader API stays compatible throughout.
   without feeds) and read-aloud together.
 - A sponsored post now asks whether you'd rather not see posts like it,
   with "Skip sponsored posts" and "Keep showing them".
+- `Esc` closes the open article.
+
+### Fixed
+
+- New articles now appear in the list (animated in at the top, or offered
+  as "N new articles" further down) however the reader learns of them.
+  Before, coming back to the app on a phone updated the unread count but
+  left the list as it was, even an empty "All caught up" list.
 
 ## [0.14.1] - 2026-10-27
 

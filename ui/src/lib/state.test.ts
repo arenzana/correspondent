@@ -515,3 +515,60 @@ describe('the sponsored-post question', () => {
     expect(app.prefs.sponsoredAsked).toBe(true)
   })
 })
+
+describe('articles arriving', () => {
+  const tree = (newest: string) => ({ folders: [], feeds: app.feeds, counts: { unread: 48, starred: 0, today: 48, newest } })
+
+  beforeEach(() => {
+    app.page = 'reader'
+    app.loading = false
+    app.query = ''
+    app.atTop = true
+    app.listBusyUntil = 0
+    app.pending = 0
+    app.entries = []
+    app.boundary = '3'
+    vi.mocked(api.entries).mockReset()
+  })
+
+  it('appear in an empty list when the counts are refreshed, however that happens', async () => {
+    // Coming back to the app refreshes the counts; no live event arrives.
+    vi.mocked(api.tree).mockResolvedValue(tree('9'))
+    vi.mocked(api.entries).mockResolvedValue({ entries: [entry('9'), entry('8')], cursor: '' })
+    await app.refreshTree()
+    await vi.waitFor(() => expect(app.entries.map((e) => e.id)).toEqual(['9', '8']))
+    expect(app.boundary).toBe('9')
+    expect([...app.arriving]).toEqual(['9', '8']) // animated in
+  })
+
+  it('are offered, never inserted, when reading further down', async () => {
+    app.entries = [entry('3'), entry('2')]
+    app.atTop = false
+    vi.mocked(api.tree).mockResolvedValue(tree('9'))
+    vi.mocked(api.entries).mockResolvedValue({ entries: [entry('9'), entry('3'), entry('2')], cursor: '' })
+    await app.refreshTree()
+    await vi.waitFor(() => expect(app.pending).toBe(1))
+    expect(app.entries.map((e) => e.id)).toEqual(['3', '2'])
+  })
+
+  it('for another list are looked for once', async () => {
+    vi.mocked(api.tree).mockResolvedValue(tree('9'))
+    vi.mocked(api.entries).mockResolvedValue({ entries: [], cursor: '' })
+    await app.refreshTree()
+    await vi.waitFor(() => expect(app.boundary).toBe('9'))
+    await app.refreshTree()
+    expect(api.entries).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('closing the article', () => {
+  it('goes back to the list', () => {
+    app.selectedId = '1'
+    app.article = { entry: entry('1'), enclosures: [] }
+    app.pane = 'article'
+    app.closeArticle()
+    expect(app.article).toBeNull()
+    expect(app.selectedId).toBeNull()
+    expect(app.pane).toBe('list')
+  })
+})

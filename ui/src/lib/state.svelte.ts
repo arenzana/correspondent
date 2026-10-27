@@ -405,20 +405,40 @@ class AppState {
   private async onNewEntries() {
     clearTimeout(this.syncSoonTimer)
     this.syncSoonTimer = setTimeout(() => void this.syncOffline(), 60_000)
-    const before = BigInt(this.counts.newest || '0')
-    await this.refreshTree()
+    await this.refreshTree().catch(() => {})
+  }
+
+  private checkingArrivals = false
+  /**
+   * Brings articles newer than the list's boundary into the list: in place
+   * when it's at the top, else offered as "N new articles". Called whenever
+   * the counts show something newer than the list has.
+   */
+  async checkArrivals() {
     const starred = this.source.kind === 'view' && this.source.view === 'starred'
-    if (starred || BigInt(this.counts.newest || '0') <= before) return
-    const fresh = await api.entries({ ...this.query_(), limit: 200 }).catch(() => null)
-    if (!fresh) return
-    const newer = fresh.entries.filter((e) => BigInt(e.id) > BigInt(this.boundary))
-    if (!newer.length) return
-    if (!this.atTop || this.query || Date.now() < this.listBusyUntil) {
-      // Reading further down: never move the list; offer the new ones.
-      this.pending = newer.length
-      return
+    if (starred || this.loading || this.checkingArrivals || this.page !== 'reader') return
+    this.checkingArrivals = true
+    try {
+      const boundary = this.boundary
+      const target = this.counts.newest || '0'
+      const fresh = await api.entries({ ...this.query_(), limit: 200 }).catch(() => null)
+      // The list was reloaded meanwhile: it has them already.
+      if (!fresh || boundary !== this.boundary) return
+      const newer = fresh.entries.filter((e) => BigInt(e.id) > BigInt(this.boundary))
+      if (!newer.length) {
+        // Nothing for this list (read elsewhere, or another list's articles).
+        if (BigInt(target) > BigInt(this.boundary)) this.boundary = target
+        return
+      }
+      if (!this.atTop || this.query || Date.now() < this.listBusyUntil) {
+        // Reading further down: never move the list; offer the new ones.
+        this.pending = newer.length
+        return
+      }
+      this.mergeArrivals(fresh.entries, newer)
+    } finally {
+      this.checkingArrivals = false
     }
-    this.mergeArrivals(fresh.entries, newer)
   }
 
   /**
@@ -555,6 +575,9 @@ class AppState {
     this.folders = t.folders
     this.feeds = t.feeds
     this.counts = t.counts
+    // However the counts were refreshed (a live event, coming back to the
+    // app, a reconnect), articles newer than the list holds are brought in.
+    if (BigInt(t.counts.newest || '0') > BigInt(this.boundary || '0')) void this.checkArrivals()
   }
 
   private query_() {
@@ -766,6 +789,16 @@ class AppState {
         return
       }
     }
+  }
+
+  /** Closes the open article, back to the list (Esc). */
+  closeArticle() {
+    if (!this.selectedId && !this.article) return
+    clearTimeout(this.dwell)
+    this.selectedId = null
+    this.article = null
+    this.pane = 'list'
+    this.writeHash()
   }
 
   back() {

@@ -17,6 +17,7 @@
         [['⇧', 'L'], 'Listen to unread articles with audio'],
         [['⇧', 'S'], 'Summary'],
         [['f'], 'Focused reading'],
+        [['Esc'], 'Close the article'],
       ],
     },
     {
