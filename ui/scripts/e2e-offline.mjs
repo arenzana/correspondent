@@ -392,7 +392,7 @@ try {
   // A virtual authenticator, as on a phone with Face ID.
   const authn = await carolCtx.newCDPSession(carol)
   await authn.send('WebAuthn.enable')
-  await authn.send('WebAuthn.addVirtualAuthenticator', {
+  const { authenticatorId } = await authn.send('WebAuthn.addVirtualAuthenticator', {
     options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   })
   await carol.goto(link)
@@ -416,8 +416,12 @@ try {
   await carol.getByRole('button', { name: 'Add a passkey on this device' }).click()
   await carol.locator('.settings .list li', { hasText: 'Added' }).first().waitFor({ timeout: 10_000 })
   check(await carol.locator('.settings .list li', { hasText: 'not used yet' }).count() === 1, 'a passkey can be added from Settings')
+  // The authenticator approves by itself, so passkey autofill could sign her
+  // straight back in before the sign-in page shows: hold it until then.
+  await authn.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: false })
   await carol.getByRole('button', { name: 'Sign out' }).last().click()
   await carol.locator('main.login').waitFor({ timeout: 10_000 })
+  await authn.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: true })
   const button = carol.getByRole('button', { name: 'Sign in with a passkey' })
   // The browser may already have signed in through passkey autofill.
   await Promise.race([button.click().catch(() => {}), carol.locator('.shell').waitFor({ timeout: 10_000 })])
