@@ -92,12 +92,37 @@ enum Typeface {
     /// size. On iPhone and iPad the size follows the reader's text size
     /// (Dynamic Type), up to the first accessibility size.
     func font(_ size: CGFloat, weight: CGFloat = 400, opsz: CGFloat? = nil, italic: Bool = false) -> Font {
-        Font(ctFont(Self.interface(size), weight: weight, opsz: opsz, italic: italic))
+        if self == .ui, Self.systemUI {
+            // The device's own typeface, as the web's "System" interface choice.
+            let f = Font.system(size: Self.interface(size), weight: Self.weight(weight))
+            return italic ? f.italic() : f
+        }
+        return Font(ctFont(Self.interface(size), weight: weight, opsz: opsz, italic: italic))
+    }
+
+    /// The interface in the system typeface instead of Schibsted Grotesk. Set by the app model.
+    static var systemUI: Bool {
+        get { InterfaceType.shared.system }
+        set { InterfaceType.shared.system = newValue }
+    }
+
+    private static func weight(_ w: CGFloat) -> Font.Weight {
+        switch w {
+        case ..<350: .light
+        case ..<450: .regular
+        case ..<550: .medium
+        case ..<650: .semibold
+        default: .bold
+        }
     }
 
     /// The interface size the reader chose on this device (the web's
-    /// Interface text size: 0.92, 1, 1.1, 1.2). Set by the app model.
-    nonisolated(unsafe) static var uiScale: CGFloat = 1
+    /// Interface text size: 0.92, 1, 1.1, 1.2). Set by the app model; views
+    /// that use these fonts redraw when it changes.
+    static var uiScale: CGFloat {
+        get { InterfaceType.shared.scale }
+        set { InterfaceType.shared.scale = newValue }
+    }
 
     /// A size in the interface: Dynamic Type, then the reader's interface size.
     static func interface(_ size: CGFloat) -> CGFloat { scaled(size) * uiScale }
@@ -137,4 +162,13 @@ enum Typeface {
             }
         }
     }
+}
+
+/// The interface's size and typeface, observed: a view that builds a font
+/// from them redraws when the reader changes them, with nothing rebuilt.
+@Observable
+final class InterfaceType: @unchecked Sendable {
+    nonisolated(unsafe) static let shared = InterfaceType()
+    var scale: CGFloat = 1
+    var system = false
 }

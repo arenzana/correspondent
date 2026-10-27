@@ -18,7 +18,7 @@ final class AppModel {
     var client: Client?
     var booting = true
     var prefs = AppModel.withDeviceSizes(Prefs()) {
-        didSet { Typeface.uiScale = prefs.uiScale }
+        didSet { Self.applyInterface(prefs) }
     }
     /// Moves when the Sun theme's phase changes (sunrise, sunset, dusk), so
     /// views that read it redraw in the new theme.
@@ -229,6 +229,13 @@ final class AppModel {
         ("readSize", \.readSize), ("measure", \.measure), ("uiScale", \.uiScale),
     ]
 
+    /// The interface's size and typeface, set only when they change (each
+    /// change redraws every view that shows text).
+    static func applyInterface(_ p: Prefs) {
+        if Typeface.uiScale != p.uiScale { Typeface.uiScale = p.uiScale }
+        if Typeface.systemUI != (p.uiFont == "system") { Typeface.systemUI = p.uiFont == "system" }
+    }
+
     /// Puts this device's sizes into the account's preferences. With `seed`,
     /// a size this device hasn't chosen yet starts from the account's.
     static func withDeviceSizes(_ p: Prefs, seed: Bool = false) -> Prefs {
@@ -241,7 +248,11 @@ final class AppModel {
                 d.set(p[keyPath: s.path], forKey: "size." + s.key)
             }
         }
-        Typeface.uiScale = p.uiScale
+        // The interface typeface is the account's, but the last one seen is
+        // kept here too, so the app starts in it rather than rebuilding
+        // itself when the account's preferences arrive.
+        if seed { d.set(p.uiFont, forKey: "cache.uiFont") } else if let cached = d.string(forKey: "cache.uiFont") { p.uiFont = cached }
+        applyInterface(p)
         return p
     }
 

@@ -241,6 +241,12 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var readSize: Double
     /// Line length in characters.
     public var measure: Double
+    /// comfortable or compact: how tightly the list's rows sit.
+    public var density = "comfortable"
+    /// grotesk (Schibsted Grotesk) or system: the interface's typeface.
+    public var uiFont = "grotesk"
+    /// The sidebar is shown (iPad and Mac, as the web's).
+    public var sidebar = true
     /// Answered the question on a sponsored post with "keep showing them".
     public var sponsoredAsked = false
     /// Interface text size: 0.92, 1, 1.1 or 1.2, as the web's.
@@ -293,6 +299,9 @@ public struct Prefs: Codable, Hashable, Sendable {
         uiScale = (try? c.decodeIfPresent(Double.self, forKey: .uiScale)) ?? 1
         bionic = (try? c.decodeIfPresent(Bool.self, forKey: .bionic)) ?? false
         sponsoredAsked = (try? c.decodeIfPresent(Bool.self, forKey: .sponsoredAsked)) ?? false
+        density = (try? c.decodeIfPresent(String.self, forKey: .density)) ?? "comfortable"
+        uiFont = (try? c.decodeIfPresent(String.self, forKey: .uiFont)) ?? "grotesk"
+        sidebar = (try? c.decodeIfPresent(Bool.self, forKey: .sidebar)) ?? true
         spotlight = (try? c.decodeIfPresent(String.self, forKey: .spotlight)) ?? "off"
     }
 }

@@ -171,11 +171,21 @@ struct ArticlePage: View {
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
     var onAction: (String) -> Void = { _ in }
+    @State private var progress = 0.0
 
     var body: some View {
         WebPage(html: ArticleHTML.page(entry: entry, feed: feed, summary: summary, theme: theme, prefs: prefs,
                                        next: next?.title, previous: previous?.title),
-                base: base, onNavigate: onNavigate, onImage: onImage, onAction: onAction)
+                base: base, onNavigate: onNavigate, onImage: onImage, onAction: onAction,
+                onProgress: { progress = $0 })
+            .overlay(alignment: .topLeading) {
+                // Reading progress, as the web's line under the toolbar.
+                GeometryReader { g in
+                    Rectangle().fill(theme.accent).frame(width: g.size.width * progress, height: 2)
+                }
+                .frame(height: 2)
+                .accessibilityHidden(true)
+            }
     }
 }
 
@@ -313,6 +323,10 @@ enum ArticleHTML {
         .source-note { margin: 0 0 22px; font-family: var(--font-ui); font-size: 13.5px; color: var(--slate); }
         .source-note a { color: var(--accent); text-decoration: none; }
         .media { display: block; width: 100%; margin: 0 0 24px; border-radius: 8px; }
+        .skeleton span { display: block; height: 14px; margin: 0 0 14px; border-radius: 4px; background: var(--fog); animation: breathe 1.6s ease-in-out infinite; }
+        .skeleton .short { width: 60%; }
+        @keyframes breathe { 50% { opacity: 0.45; } }
+        @media (prefers-reduced-motion: reduce) { .skeleton span { animation: none; } }
         </style></head><body data-bionic="\(prefs.bionic ? "1" : "0")" data-spotlight="\(prefs.spotlight)" data-line="\(Int(size * 1.66))"><div class="column">
         <p class="byline"><strong>\(escape(byline.first ?? ""))</strong>\(byline.count > 1 ? " " + escape(byline[1]) : "")</p>
         <h1 class="title">\(title)</h1>
@@ -320,7 +334,7 @@ enum ArticleHTML {
         \(notices(e, feed: feed, prefs: prefs).before)
         \(summaryHTML)
         \(media(e))
-        <div class="prose">\(e.content ?? "")</div>
+        \(e.content == nil ? "<div class=\"skeleton\" aria-label=\"Loading article\"><span></span><span></span><span></span><span class=\"short\"></span></div>" : "<div class=\"prose\">\(e.content ?? "")</div>")
         \(notices(e, feed: feed, prefs: prefs).after)
         \(footer)
         </div></body></html>
@@ -336,6 +350,7 @@ struct WebPage: UIViewRepresentable {
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
     var onAction: (String) -> Void = { _ in }
+    var onProgress: (Double) -> Void = { _ in }
     func makeCoordinator() -> WebDelegate { WebDelegate() }
     func makeUIView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
@@ -351,6 +366,7 @@ struct WebPage: UIViewRepresentable {
         context.coordinator.onImage = onImage
         context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
         context.coordinator.onAction = onAction
+        context.coordinator.onProgress = onProgress
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -364,6 +380,7 @@ struct WebPage: NSViewRepresentable {
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
     var onAction: (String) -> Void = { _ in }
+    var onProgress: (Double) -> Void = { _ in }
     func makeCoordinator() -> WebDelegate { WebDelegate() }
     func makeNSView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
@@ -377,6 +394,7 @@ struct WebPage: NSViewRepresentable {
         context.coordinator.onImage = onImage
         context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
         context.coordinator.onAction = onAction
+        context.coordinator.onProgress = onProgress
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -393,6 +411,7 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     var onEnd: () -> Void = {}
     /// A notice's button in the page (correspondent-action: links).
     var onAction: (String) -> Void = { _ in }
+    var onProgress: (Double) -> Void = { _ in }
     private var observers: [NSObjectProtocol] = []
 
     /// Keys the window handles for the page: ↓ and ↑ move the spotlight
@@ -436,6 +455,15 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
           e.preventDefault();
           window.webkit.messageHandlers.image.postMessage(img.currentSrc || img.src);
         });
+        // How far through the article: the bar along the top.
+        var frame = 0;
+        window.addEventListener('scroll', function () {
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(function () {
+            var max = document.documentElement.scrollHeight - window.innerHeight;
+            window.webkit.messageHandlers.progress.postMessage(max > 0 ? window.scrollY / max : 1);
+          });
+        }, { passive: true });
         """
         c.userContentController.addUserScript(WKUserScript(source: tap, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
         // Bionic reading and the spotlight (Resources/reading.js).
@@ -443,10 +471,15 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
             c.userContentController.addUserScript(WKUserScript(source: reading, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
         }
         c.userContentController.add(delegate, contentWorld: .defaultClient, name: "image")
+        c.userContentController.add(delegate, contentWorld: .defaultClient, name: "progress")
         return c
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "progress" {
+            if let p = message.body as? Double { onProgress(min(max(p, 0), 1)) }
+            return
+        }
         if let s = message.body as? String, let url = URL(string: s) { onImage(url) }
     }
 

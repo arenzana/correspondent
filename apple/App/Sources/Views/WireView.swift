@@ -87,6 +87,10 @@ struct WireView: View {
             }
             unreadSwitch
             if let f = currentFeed {
+                Button { Task { await app.updateFeed(f.id, .init(fullText: !f.fullText), done: f.fullText ? "Back to the text the feed publishes." : "Fetching full articles for \(f.title). Recent ones are on their way.") } } label: {
+                    Image(systemName: f.fullText ? "doc.text.fill" : "doc.text")
+                }
+                .iconButton().accessibilityLabel(f.fullText ? "Stop fetching full articles for this feed" : "Fetch full articles for this feed")
                 Button { Task { await app.updateFeed(f.id, .init(notify: !f.notify)) } } label: { Image(systemName: f.notify ? "bell.fill" : "bell") }
                     .iconButton().accessibilityLabel(f.notify ? "Turn off notifications for this feed" : "Notify me about new articles in this feed")
             }
@@ -339,6 +343,10 @@ struct WireRow: View {
     var feed: Feed?
     var selected: Bool
 
+    /// The web's list density: compact rows sit closer, one line of excerpt, smaller pictures.
+    private var compact: Bool { app.prefs.density == "compact" }
+    private var pad: CGFloat { compact ? 9 : 14 }
+
     private var spoken: String {
         let state = [entry.read ? nil : "Unread", entry.starred ? "starred" : nil].compactMap { $0 }.joined(separator: ", ")
         let when = entry.published.formatted(.relative(presentation: .named))
@@ -358,7 +366,7 @@ struct WireRow: View {
                         .padding(.top, 20).offset(x: 4)
                 }
             }
-            .padding(.vertical, 14)
+            .padding(.vertical, pad)
             .frame(width: WireView.gutter, alignment: .trailing)
 
             // The spine and this article's dot.
@@ -368,7 +376,7 @@ struct WireRow: View {
                     .fill(entry.read ? theme.sheet : theme.accent)
                     .overlay(Circle().stroke(entry.read ? theme.ring : theme.accent, lineWidth: 1.5))
                     .frame(width: 9, height: 9)
-                    .padding(.top, 20)
+                    .padding(.top, pad + 6)
             }
             .frame(width: 18)
 
@@ -382,19 +390,19 @@ struct WireRow: View {
                     .foregroundStyle(entry.read ? theme.ink.opacity(0.78) : theme.ink)
                     .lineLimit(3)
                 if !entry.excerpt.isEmpty {
-                    Text(entry.excerpt).font(Typeface.ui.font(14)).foregroundStyle(theme.slate).lineLimit(2)
+                    Text(entry.excerpt).font(Typeface.ui.font(14)).foregroundStyle(theme.slate).lineLimit(compact ? 1 : 2)
                 }
             }
             .padding(.leading, 12)
-            .padding(.vertical, 14)
+            .padding(.vertical, pad)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let url = app.client?.absolute(entry.imageUrl) {
                 RemoteImage(url: url, size: CGSize(width: 76, height: 76)) { theme.fog }
-                    .frame(width: 76, height: 76)
+                    .frame(width: compact ? 52 : 76, height: compact ? 52 : 76)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .padding(.leading, 10)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, pad)
             }
         }
         .padding(.trailing, 16)

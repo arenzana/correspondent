@@ -43,8 +43,10 @@ struct RootView: View {
             }
             .padding(.bottom, 24 + (player.now != nil && !isPhone ? 110 : 0))
         }
-        // Fonts are sized when built: a new text size rebuilds the views.
-        .id("\(textSize)-\(app.prefs.uiScale)")
+        // The device's text size (Dynamic Type) is read when fonts are made:
+        // a new one rebuilds the views. The interface size and typeface are
+        // observed instead (InterfaceType), so changing them keeps your place.
+        .id(textSize)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.notices)
         .animation(reduceMotion ? nil : .spring(duration: 0.35), value: player.now?.id)
         .environment(\.theme, theme)
@@ -110,6 +112,10 @@ struct WideLayout: View {
         .onReceive(NotificationCenter.default.publisher(for: .escape)) { _ in _ = escape() }
         #endif
         .onChange(of: app.selectedID) { _, id in if id != nil { settings = false } }
+        // The sidebar as the reader left it (here or on the web).
+        .onChange(of: app.prefs.sidebar, initial: true) { _, shown in
+            if columns != .detailOnly { columns = shown ? .all : .doubleColumn }
+        }
     }
 
     /// The web's keyboard shortcuts (iPad with a keyboard; the Mac uses the monitor below).
@@ -213,8 +219,11 @@ struct WideLayout: View {
         .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
     }
 
+    /// Shows or hides the sidebar, remembered with the account as on the web.
     private func toggleSidebar() {
-        withAnimation(.easeOut(duration: 0.2)) { columns = collapsed ? .all : .doubleColumn }
+        let show = collapsed
+        withAnimation(.easeOut(duration: 0.2)) { columns = show ? .all : .doubleColumn }
+        app.setPrefs({ $0.sidebar = show }, ["sidebar": show])
     }
 
     /// Focused reading: the article alone, then back to three columns.

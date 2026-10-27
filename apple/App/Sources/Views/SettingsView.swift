@@ -16,7 +16,7 @@ struct SettingsView: View {
     /// The sections, with the words each answers to (as the web's settings search).
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
-        ("Reading", "text size interface larger smaller font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
+        ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
         ("This device", "offline badge count icon dock notifications bell test save background"),
         ("Account", "server sign out password passkey web token"),
         ("About", "version build source"),
@@ -139,6 +139,12 @@ struct SettingsView: View {
                         Text("Larger").tag(1.2)
                     }
                     .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+                }
+                choice("Interface typeface", app.prefs.uiFont, [("grotesk", "Grotesk"), ("system", "System")]) { v in
+                    app.setPrefs({ $0.uiFont = v }, ["uiFont": v])
+                }
+                choice("List density", app.prefs.density, [("comfortable", "Comfortable"), ("compact", "Compact")]) { v in
+                    app.setPrefs({ $0.density = v }, ["density": v])
                 }
                 labeled("Article text", "\(Int(app.prefs.readSize)) pt") {
                     Stepper("", value: Binding(get: { app.prefs.readSize }, set: { v in
@@ -326,6 +332,17 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// A label over a few choices, as segments.
+    private func choice(_ label: String, _ value: String, _ options: [(String, String)], set: @escaping (String) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+            Picker(label, selection: Binding(get: { value }, set: set)) {
+                ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+        }
     }
 
     private func labeled<Control: View>(_ label: String, _ value: String?, @ViewBuilder control: () -> Control) -> some View {
