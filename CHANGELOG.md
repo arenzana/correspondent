@@ -7,6 +7,25 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-27
+
+### Added
+
+- corr: `corr summary ID`, and `corr searches` to list, save, rename and
+  remove saved searches; `corr list --saved ID` and
+  `corr mark-all-read --search/--saved` (only the matches are read).
+- corr's reader: `S` shows the article's summary above its text, `l`
+  reads it aloud in the background (`l` again stops), and saved searches
+  sit with the feeds and folders. Search there finds words in the text.
+- AI tools (MCP): `summarize_article`, `save_search` and `remove_search`;
+  `list_feeds` includes saved searches, and `list_articles` and
+  `mark_all_read` take a saved search.
+
+### Fixed
+
+- `corr mark-all-read` always said it had marked 0 articles (it did mark
+  them).
+
 ## [0.16.0] - 2026-10-27
 
 ### Added

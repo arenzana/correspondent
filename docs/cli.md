@@ -62,9 +62,11 @@ Night desk; System and Sun use the terminal's background), or pass
 | `s` | star or unstar |
 | `m` | mark read or unread |
 | `f` | fetch the full article from its page |
+| `S` | the article's summary, above its text (`S` again hides it); made by your AI only if no one has had one made |
+| `l` (reading) | read the article aloud in the background; `l` again stops |
 | `o` | open the original in your browser |
-| `/` | search; `esc` clears it |
-| `tab`, `h` | feeds and folders |
+| `/` | search titles and text; `esc` clears it |
+| `tab`, `h` | feeds, folders and saved searches |
 | `A` `A` | mark everything here read |
 | `r` | refresh |
 | `?` | all keys |
@@ -81,10 +83,10 @@ instead of moving.
 
 | Command | |
 |---|---|
-| `corr list [--view unread\|starred\|today\|all] [--feed ID] [--folder ID] [--search TEXT] [--limit N] [--cursor C] [--oldest]` | articles, newest first (unread by default) |
+| `corr list [--view unread\|starred\|today\|all] [--feed ID] [--folder ID] [--search TEXT] [--saved ID] [--limit N] [--cursor C] [--oldest]` | articles, newest first (unread by default); `--search` finds words in titles and text, `--saved` uses a saved search |
 | `corr read ID [--full] [--html] [--keep-unread]` | an article, as Markdown; marks it read unless `--keep-unread` |
 | `corr mark read\|unread\|star\|unstar ID…` | change articles; `-` reads IDs from stdin, one per line |
-| `corr mark-all-read [--feed ID \| --folder ID \| --view today]` | everything in a feed, folder, today, or all |
+| `corr mark-all-read [--feed ID \| --folder ID \| --view today] [--search TEXT \| --saved ID]` | everything in a feed, folder, today, or all; with a search, only what matches |
 | `corr feeds`, `corr folders` | subscriptions and folders with unread counts |
 | `corr discover URL [--ai]` | the feeds a site offers (with `--ai`, let your AI read a site without one) |
 | `corr subscribe URL [--title T] [--folder F] [--ai]` | subscribe (the first feed found) |
@@ -93,6 +95,8 @@ instead of moving.
 | `corr opml export [FILE]`, `corr opml import FILE\|-` | OPML |
 | `corr watch [--feed ID] [--folder ID] [--notify]` | new articles as they arrive, until Ctrl-C; with `--json`, one JSON object per line; `--notify` also shows desktop notifications |
 | `corr listen ID [-o FILE]` | the article read aloud: played with the system's player (afplay, mpv, ffplay or mpg123), or saved with `-o` (`-` for stdout). Uses existing audio, or makes it with your text-to-speech key (Settings → AI) |
+| `corr summary ID` | the article's short summary: the shared one, or written now by your AI (Settings → AI) |
+| `corr searches` | saved searches with unread counts; `corr searches save WORDS [--name N]`, `rename ID NAME`, `remove ID` |
 | `corr version` | |
 
 Flags work before or after the command: `--json`, `--server URL`,
@@ -156,10 +160,14 @@ claude mcp add --transport http correspondent https://rss.example.org/mcp \
   --header "Authorization: Bearer corr_…"
 ```
 
-Tools: `list_articles`, `read_article` (Markdown; doesn't mark read unless
-asked), `set_article_state`, `mark_all_read`, `list_feeds`, `find_feeds`,
-`subscribe`, `unsubscribe`, `update_feed`. Tools that change things are
-marked as such, and the destructive ones (`unsubscribe`, `mark_all_read`)
-as destructive, so clients can ask you first. The server enforces the
+Tools: `list_articles` (search finds words in the text; or a saved search),
+`read_article` (Markdown; doesn't mark read unless asked),
+`summarize_article` (the shared summary, or written by your AI),
+`set_article_state`, `mark_all_read` (optionally only a search's matches),
+`list_feeds` (with saved searches), `save_search`, `remove_search`,
+`find_feeds`, `subscribe`, `unsubscribe`, `update_feed`. Tools that change
+things are marked as such, and the destructive ones (`unsubscribe`,
+`mark_all_read`, `remove_search`) as destructive, so clients can ask you
+first. The server enforces the
 token's scope; article text is presented to models as content, never as
 instructions.

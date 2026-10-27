@@ -34,10 +34,10 @@ Usage:
   corr auth login [--server URL] [--username NAME] [--password-stdin] [--read-only]
   corr auth status | logout
   corr list [--view unread|starred|today|all] [--feed ID] [--folder ID]
-            [--search TEXT] [--limit N] [--cursor C] [--oldest]
+            [--search TEXT] [--saved ID] [--limit N] [--cursor C] [--oldest]
   corr read ID [--full] [--html] [--keep-unread]
   corr mark read|unread|star|unstar ID...
-  corr mark-all-read [--feed ID | --folder ID | --view today]
+  corr mark-all-read [--feed ID | --folder ID | --view today] [--search TEXT | --saved ID]
   corr feeds | folders
   corr discover URL [--ai]
   corr subscribe URL [--title T] [--folder F] [--ai]
@@ -47,6 +47,8 @@ Usage:
   corr opml export [FILE] | opml import FILE
   corr watch [--feed ID] [--folder ID] [--notify]   new articles as they arrive
   corr listen ID [-o FILE]                          hear an article read aloud
+  corr summary ID                                   an article's short summary
+  corr searches [save WORDS [--name N] | rename ID NAME | remove ID]
   corr version
 
 Global flags (before or after the command):
@@ -186,6 +188,10 @@ func (a *app) run(args []string) error {
 		return a.watch(rest)
 	case "listen":
 		return a.listen(rest)
+	case "summary":
+		return a.summary(rest)
+	case "searches":
+		return a.searches(rest)
 	case "version":
 		return emit(a.asJSON, map[string]string{"version": version.Version, "commit": version.Commit}, func(w io.Writer) {
 			line(w, "corr "+version.String())

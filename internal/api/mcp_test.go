@@ -88,7 +88,7 @@ func TestMCP(t *testing.T) {
 		hints[tl.Name] = tl.Annotations
 	}
 	sort.Strings(names)
-	if strings.Join(names, ",") != "find_feeds,list_articles,list_feeds,mark_all_read,read_article,set_article_state,subscribe,unsubscribe,update_feed" {
+	if strings.Join(names, ",") != "find_feeds,list_articles,list_feeds,mark_all_read,read_article,remove_search,save_search,set_article_state,subscribe,summarize_article,unsubscribe,update_feed" {
 		t.Fatalf("tools: %v", names)
 	}
 	if !hints["list_articles"].ReadOnlyHint || hints["unsubscribe"].DestructiveHint == nil || !*hints["unsubscribe"].DestructiveHint {
@@ -138,6 +138,48 @@ func TestMCP(t *testing.T) {
 	if e, _ := st.Entry(ctx, uid, mustID(id)); !e.Starred {
 		t.Error("star not applied")
 	}
+
+	// Saved searches: saved, listed with the feeds, used to list and to
+	// mark only their matches read, and removed.
+	st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "2", Title: "Harbour log", Content: "<p>Pilots board at dawn.</p>",
+		Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+	var saved struct{ ID int64 }
+	if res := call(ro, "save_search", map[string]any{"query": "pilots"}, nil); !res.IsError {
+		t.Error("read-only token saved a search")
+	}
+	call(cs, "save_search", map[string]any{"query": "pilots", "name": "Harbour"}, &saved)
+	var tree struct{ Searches []struct{ ID, Unread int64 } }
+	call(cs, "list_feeds", nil, &tree)
+	if len(tree.Searches) != 1 || tree.Searches[0].ID != saved.ID || tree.Searches[0].Unread != 1 {
+		t.Fatalf("searches in list_feeds: %+v", tree.Searches)
+	}
+	list.Articles = nil
+	call(cs, "list_articles", map[string]any{"saved_search_id": saved.ID}, &list)
+	if len(list.Articles) != 1 || list.Articles[0].Title != "Harbour log" {
+		t.Errorf("list by saved search: %+v", list)
+	}
+	var changed struct{ Changed int }
+	call(cs, "mark_all_read", map[string]any{"saved_search_id": saved.ID}, &changed)
+	if changed.Changed != 1 {
+		t.Errorf("mark all read in a search: %d", changed.Changed)
+	}
+	if e, _ := st.Entry(ctx, uid, mustID(id)); e.Read {
+		t.Error("marking a search read touched an article outside it")
+	}
+	if res := call(cs, "list_articles", map[string]any{"saved_search_id": 999}, nil); !res.IsError {
+		t.Error("an unknown saved search listed")
+	}
+	call(cs, "remove_search", map[string]any{"id": saved.ID}, nil)
+	call(cs, "list_feeds", nil, &tree)
+	if len(tree.Searches) != 0 {
+		t.Errorf("removed search still listed: %+v", tree.Searches)
+	}
+
+	// Summaries need AI (this server has none): a clear error, not a hang.
+	res := call(cs, "summarize_article", map[string]any{"id": id}, nil)
+	if !res.IsError || !strings.Contains(textOf(res), "AI") {
+		t.Errorf("summarize without AI: %+v", res.Content)
+	}
 }
 
 func mustID(s string) int64 {
@@ -146,4 +188,14 @@ func mustID(s string) int64 {
 		n = n*10 + int64(c-'0')
 	}
 	return n
+}
+
+func textOf(res *mcp.CallToolResult) string {
+	var b strings.Builder
+	for _, c := range res.Content {
+		if t, ok := c.(*mcp.TextContent); ok {
+			b.WriteString(t.Text)
+		}
+	}
+	return b.String()
 }

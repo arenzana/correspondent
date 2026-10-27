@@ -121,11 +121,13 @@ func (a *app) login(args []string) error {
 
 func (a *app) list(args []string) error {
 	var q client.Query
+	var saved int64
 	fs, pos, err := flags("list", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&q.View, "view", "unread", "")
 		fs.Int64Var(&q.FeedID, "feed", 0, "")
 		fs.Int64Var(&q.FolderID, "folder", 0, "")
 		fs.StringVar(&q.Search, "search", "", "")
+		fs.Int64Var(&saved, "saved", 0, "")
 		fs.IntVar(&q.Limit, "limit", 30, "")
 		fs.StringVar(&q.Cursor, "cursor", "", "")
 		fs.BoolVar(&q.Oldest, "oldest", false, "")
@@ -141,6 +143,13 @@ func (a *app) list(args []string) error {
 	case "unread", "starred", "today", "all":
 	default:
 		return usagef("--view is unread, starred, today or all")
+	}
+	if saved != 0 {
+		words, err := a.savedQuery(saved)
+		if err != nil {
+			return err
+		}
+		q.Search = strings.TrimSpace(words + " " + q.Search)
 	}
 	page, err := a.api.Entries(a.ctx, q)
 	if err != nil {
@@ -283,12 +292,14 @@ func readIDs(r io.Reader) []string {
 }
 
 func (a *app) markAll(args []string) error {
-	var feed, folder int64
-	var view string
+	var feed, folder, saved int64
+	var view, search string
 	_, pos, err := flags("mark-all-read", args, func(fs *flag.FlagSet) {
 		fs.Int64Var(&feed, "feed", 0, "")
 		fs.Int64Var(&folder, "folder", 0, "")
 		fs.StringVar(&view, "view", "", "")
+		fs.StringVar(&search, "search", "", "")
+		fs.Int64Var(&saved, "saved", 0, "")
 	})
 	if err != nil {
 		return err
@@ -296,7 +307,14 @@ func (a *app) markAll(args []string) error {
 	if len(pos) > 0 {
 		return usagef("mark-all-read takes flags only")
 	}
-	n, err := a.api.MarkAllRead(a.ctx, feed, folder, view)
+	if saved != 0 {
+		words, err := a.savedQuery(saved)
+		if err != nil {
+			return err
+		}
+		search = strings.TrimSpace(words + " " + search)
+	}
+	n, err := a.api.MarkAllRead(a.ctx, feed, folder, view, search)
 	if err != nil {
 		return err
 	}
@@ -608,4 +626,105 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// --- summaries and saved searches ------------------------------------------------
+
+// summary prints an article's short summary: the shared one, or one written
+// now by the reader's AI.
+func (a *app) summary(args []string) error {
+	_, pos, err := flags("summary", args, func(*flag.FlagSet) {})
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return usagef("summary needs one article ID")
+	}
+	text, err := a.api.Summarize(a.ctx, pos[0])
+	if err != nil {
+		return err
+	}
+	return emit(a.asJSON, map[string]string{"id": pos[0], "summary": text}, func(w io.Writer) {
+		line(w, text)
+	})
+}
+
+// searches lists saved searches, or saves, renames or removes one.
+func (a *app) searches(args []string) error {
+	if len(args) == 0 {
+		t, err := a.api.Tree(a.ctx)
+		if err != nil {
+			return err
+		}
+		if t.Searches == nil {
+			t.Searches = []client.Search{}
+		}
+		return emit(a.asJSON, map[string]any{"searches": t.Searches}, func(w io.Writer) {
+			if len(t.Searches) == 0 {
+				line(w, styles.dim.Render("No saved searches. Save one with: corr searches save WORDS"))
+			}
+			for _, x := range t.Searches {
+				name := x.Name
+				if x.Name != x.Query {
+					name += styles.dim.Render(" (" + x.Query + ")")
+				}
+				line(w, fmt.Sprintf("%s  %s %s", styles.accent.Render(fmt.Sprintf("%4d", x.Unread)), styles.dim.Render(fmt.Sprintf("%5d", x.ID)), name))
+			}
+		})
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "save":
+		var name string
+		_, pos, err := flags("searches save", rest, func(fs *flag.FlagSet) { fs.StringVar(&name, "name", "", "") })
+		if err != nil {
+			return err
+		}
+		if len(pos) == 0 {
+			return usagef("searches save needs the words to search for")
+		}
+		x, err := a.api.SaveSearch(a.ctx, strings.Join(pos, " "), name)
+		if err != nil {
+			return err
+		}
+		return emit(a.asJSON, x, func(w io.Writer) {
+			line(w, fmt.Sprintf("Saved the search %q (%d).", x.Name, x.ID))
+		})
+	case "rename", "remove", "rm":
+		if len(rest) == 0 {
+			return usagef("searches %s needs a search ID (corr searches lists them)", sub)
+		}
+		id, err := strconv.ParseInt(rest[0], 10, 64)
+		if err != nil {
+			return usagef("%q isn't a search ID", rest[0])
+		}
+		if sub == "rename" {
+			if len(rest) < 2 {
+				return usagef("searches rename ID NAME")
+			}
+			if err := a.api.RenameSearch(a.ctx, id, strings.Join(rest[1:], " ")); err != nil {
+				return err
+			}
+			return emit(a.asJSON, map[string]int64{"renamed": id}, func(w io.Writer) { line(w, "Renamed.") })
+		}
+		if err := a.api.DeleteSearch(a.ctx, id); err != nil {
+			return err
+		}
+		return emit(a.asJSON, map[string]int64{"removed": id}, func(w io.Writer) { line(w, "Removed.") })
+	}
+	return usagef("searches takes save, rename or remove")
+}
+
+// savedQuery is a saved search's words, by its ID.
+func (a *app) savedQuery(id int64) (string, error) {
+	t, err := a.api.Tree(a.ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, x := range t.Searches {
+		if x.ID == id {
+			return x.Query, nil
+		}
+	}
+	return "", &client.Error{Status: 404, Message: fmt.Sprintf("no saved search %d (corr searches lists them)", id)}
 }

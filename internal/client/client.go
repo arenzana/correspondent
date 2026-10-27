@@ -164,10 +164,19 @@ type Counts struct {
 	Newest  string `json:"newest"`
 }
 
+// Search is a saved search, kept in the sidebar like a folder.
+type Search struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Query  string `json:"query"`
+	Unread int    `json:"unread"`
+}
+
 type Tree struct {
-	Folders []Folder `json:"folders"`
-	Feeds   []Feed   `json:"feeds"`
-	Counts  Counts   `json:"counts"`
+	Folders  []Folder `json:"folders"`
+	Feeds    []Feed   `json:"feeds"`
+	Counts   Counts   `json:"counts"`
+	Searches []Search `json:"searches"`
 }
 
 type Entry struct {
@@ -183,7 +192,8 @@ type Entry struct {
 	Read        bool   `json:"read"`
 	Starred     bool   `json:"starred"`
 	FullText    bool   `json:"fullText"`
-	Audio       bool   `json:"audio"` // read-aloud audio exists
+	Audio       bool   `json:"audio"`             // read-aloud audio exists
+	Summary     string `json:"summary,omitempty"` // shared summary, if anyone made one
 }
 
 type Candidate struct {
@@ -212,7 +222,7 @@ func (c *Client) Tree(ctx context.Context) (Tree, error) {
 }
 
 // Query selects articles: View is unread, starred, today or all; FeedID or
-// FolderID narrow it; Search matches title, excerpt and author.
+// FolderID narrow it; Search matches title, excerpt, author and text.
 type Query struct {
 	View     string
 	FeedID   int64
@@ -267,29 +277,35 @@ func (c *Client) Entries(ctx context.Context, q Query) (Page, error) {
 
 func (c *Client) Entry(ctx context.Context, id string) (Entry, error) {
 	var r struct{ Entry Entry }
-	return r.Entry, c.do(ctx, "GET", "/entries/"+url.PathEscape(id), nil, &r)
+	err := c.do(ctx, "GET", "/entries/"+url.PathEscape(id), nil, &r)
+	return r.Entry, err
 }
 
 // FullArticle fetches the article from its web page.
 func (c *Client) FullArticle(ctx context.Context, id string) (Entry, error) {
 	var r struct{ Entry Entry }
-	return r.Entry, c.do(ctx, "POST", "/entries/"+url.PathEscape(id)+"/full", nil, &r)
+	err := c.do(ctx, "POST", "/entries/"+url.PathEscape(id)+"/full", nil, &r)
+	return r.Entry, err
 }
 
 // SetState applies read, unread, star or unstar; it returns how many changed.
 func (c *Client) SetState(ctx context.Context, action string, ids []string) (int, error) {
 	var r struct{ Changed int }
-	return r.Changed, c.do(ctx, "POST", "/entries/state", map[string]any{"action": action, "ids": ids}, &r)
+	err := c.do(ctx, "POST", "/entries/state", map[string]any{"action": action, "ids": ids}, &r)
+	return r.Changed, err
 }
 
 // MarkAllRead marks everything in a feed, folder or view read, up to the
-// newest article now on the server.
-func (c *Client) MarkAllRead(ctx context.Context, feedID, folderID int64, view string) (int, error) {
+// newest article now on the server; with search, only what matches it.
+func (c *Client) MarkAllRead(ctx context.Context, feedID, folderID int64, view, search string) (int, error) {
 	t, err := c.Tree(ctx)
 	if err != nil {
 		return 0, err
 	}
 	body := map[string]string{"before": t.Counts.Newest, "view": view}
+	if search != "" {
+		body["q"] = search
+	}
 	if feedID != 0 {
 		body["feed"] = strconv.FormatInt(feedID, 10)
 	}
@@ -297,24 +313,52 @@ func (c *Client) MarkAllRead(ctx context.Context, feedID, folderID int64, view s
 		body["folder"] = strconv.FormatInt(folderID, 10)
 	}
 	var r struct{ IDs []string }
-	return len(r.IDs), c.do(ctx, "POST", "/entries/mark-all-read", body, &r)
+	// The request runs first: len would otherwise read the empty list.
+	err = c.do(ctx, "POST", "/entries/mark-all-read", body, &r)
+	return len(r.IDs), err
+}
+
+// Summarize returns an article's short summary: the shared one, or one
+// written now by the reader's AI (which counts toward its daily limit).
+func (c *Client) Summarize(ctx context.Context, id string) (string, error) {
+	var r struct{ Summary string }
+	err := c.do(ctx, "POST", "/entries/"+url.PathEscape(id)+"/summary", nil, &r)
+	return r.Summary, err
+}
+
+// SaveSearch keeps a search in the sidebar; saving the same query renames it.
+func (c *Client) SaveSearch(ctx context.Context, query, name string) (Search, error) {
+	var r struct{ Search Search }
+	err := c.do(ctx, "POST", "/searches", map[string]string{"query": query, "name": name}, &r)
+	return r.Search, err
+}
+
+func (c *Client) RenameSearch(ctx context.Context, id int64, name string) error {
+	return c.do(ctx, "PATCH", "/searches/"+strconv.FormatInt(id, 10), map[string]string{"name": name}, nil)
+}
+
+func (c *Client) DeleteSearch(ctx context.Context, id int64) error {
+	return c.do(ctx, "DELETE", "/searches/"+strconv.FormatInt(id, 10), nil, nil)
 }
 
 func (c *Client) Discover(ctx context.Context, address string) ([]Candidate, error) {
 	var r struct{ Candidates []Candidate }
-	return r.Candidates, c.do(ctx, "POST", "/discover", map[string]string{"url": address}, &r)
+	err := c.do(ctx, "POST", "/discover", map[string]string{"url": address}, &r)
+	return r.Candidates, err
 }
 
 // DiscoverAI asks the server for a parser written by the reader's AI.
 func (c *Client) DiscoverAI(ctx context.Context, address string) ([]Candidate, error) {
 	var r struct{ Candidates []Candidate }
-	return r.Candidates, c.do(ctx, "POST", "/discover/ai", map[string]string{"url": address}, &r)
+	err := c.do(ctx, "POST", "/discover/ai", map[string]string{"url": address}, &r)
+	return r.Candidates, err
 }
 
 // Subscribe follows a feed (or, with page, a page read by its parser).
 func (c *Client) Subscribe(ctx context.Context, address, title, folder string, page bool) (int64, error) {
 	var r struct{ ID int64 }
-	return r.ID, c.do(ctx, "POST", "/feeds", map[string]any{"url": address, "title": title, "folderName": folder, "page": page}, &r)
+	err := c.do(ctx, "POST", "/feeds", map[string]any{"url": address, "title": title, "folderName": folder, "page": page}, &r)
+	return r.ID, err
 }
 
 // FeedPatch changes a feed; nil fields are left as they are.
@@ -342,7 +386,8 @@ func (c *Client) RefreshFeed(ctx context.Context, id int64) error {
 
 func (c *Client) CreateFolder(ctx context.Context, name string) (int64, error) {
 	var r struct{ ID int64 }
-	return r.ID, c.do(ctx, "POST", "/folders", map[string]string{"name": name}, &r)
+	err := c.do(ctx, "POST", "/folders", map[string]string{"name": name}, &r)
+	return r.ID, err
 }
 
 func (c *Client) RenameFolder(ctx context.Context, id int64, name string) error {
@@ -389,5 +434,6 @@ func (c *Client) Logout(ctx context.Context) error {
 // ImportOPML subscribes to every feed in an OPML file.
 func (c *Client) ImportOPML(ctx context.Context, opml []byte) (int, error) {
 	var r struct{ Added int }
-	return r.Added, c.do(ctx, "POST", "/opml", opml, &r)
+	err := c.do(ctx, "POST", "/opml", opml, &r)
+	return r.Added, err
 }

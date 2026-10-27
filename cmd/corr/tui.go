@@ -58,6 +58,7 @@ type source struct {
 	view     string
 	feedID   int64
 	folderID int64
+	search   string // a saved search's words
 	unread   int
 	indent   bool
 	header   bool // a non-selectable group label
@@ -79,11 +80,19 @@ type reader struct {
 	offset  int // first visible row of the list
 	loading bool
 
-	article  *client.Entry
-	vp       viewport.Model
-	search   textinput.Model
-	query    string
-	searchOn bool
+	article *client.Entry
+	// The open article as Markdown, around where its summary goes.
+	articleHead, articleBody string
+	showSummary              bool
+	summarizing              bool
+	// Reading aloud: the article playing, and how to stop it.
+	playingID string
+	playSeq   int
+	stopPlay  context.CancelFunc
+	vp        viewport.Model
+	search    textinput.Model
+	query     string
+	searchOn  bool
 
 	help    bool
 	keepID  string // the article to stay on when the list reloads
@@ -100,8 +109,15 @@ type (
 		append bool
 	}
 	articleMsg struct {
-		e    client.Entry
-		body string
+		e          client.Entry
+		head, body string // Markdown, around where the summary goes
+	}
+	summaryMsg struct{ id, text string }
+	// playMsg: audio for an article is ready to play (file), or played to the end (done).
+	playMsg struct {
+		id, file string
+		seq      int
+		done     bool
 	}
 	statusMsg string
 	errMsg    struct{ err error }
@@ -117,7 +133,7 @@ var (
 func newReader(a *app) *reader {
 	ti := textinput.New()
 	ti.Prompt = "/ "
-	ti.Placeholder = "Search titles, excerpts, authors"
+	ti.Placeholder = "Search titles and text"
 	return &reader{app: a, ctx: a.ctx, focus: paneList, search: ti, vp: viewport.New(), loading: true}
 }
 
@@ -143,6 +159,8 @@ func (m *reader) query_() client.Query {
 		if s.view != "" {
 			q.View = s.view
 		}
+		// A search typed in a saved search narrows it: every word must match.
+		q.Search = strings.TrimSpace(s.search + " " + m.query)
 	}
 	return q
 }
@@ -180,13 +198,13 @@ func (m *reader) openArticle(e client.Entry, full bool) tea.Cmd {
 			}
 		}
 		feed := m.titles[got.FeedID]
-		doc := "# " + got.Title + "\n\n" + feed
+		head := "# " + got.Title + "\n\n" + feed
 		if got.Author != "" {
-			doc += " · " + got.Author
+			head += " · " + got.Author
 		}
-		doc += " · " + time.Unix(got.PublishedAt, 0).Format("Monday, January 2, 2006") + "\n\n---\n\n" +
-			textify.Numbered(got.Content, m.app.cfg.Server+"/")
-		return articleMsg{got, renderMarkdown(doc, width)}
+		head += " · " + time.Unix(got.PublishedAt, 0).Format("Monday, January 2, 2006")
+		_ = width
+		return articleMsg{got, head, textify.Numbered(got.Content, m.app.cfg.Server+"/")}
 	}
 }
 
@@ -250,12 +268,25 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case articleMsg:
 		e := msg.e
 		m.article = &e
+		m.articleHead, m.articleBody = msg.head, msg.body
+		m.showSummary = false
 		m.patch(e.ID, func(x *client.Entry) { x.Read, x.Starred, x.FullText = e.Read, e.Starred, e.FullText })
-		m.vp.SetContent(msg.body)
+		m.renderArticle()
 		m.vp.GotoTop()
 		m.focus = paneArticle
 		m.status = ""
 		return m, nil
+	case summaryMsg:
+		m.summarizing = false
+		if m.article != nil && m.article.ID == msg.id {
+			m.article.Summary = msg.text
+			m.showSummary = true
+			m.renderArticle()
+			m.vp.GotoTop()
+		}
+		return m, nil
+	case playMsg:
+		return m, m.played(msg)
 	case liveMsg:
 		return m, m.live(client.Event(msg))
 	case statusMsg:
@@ -274,6 +305,7 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *reader) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
 	if key == "ctrl+c" {
+		m.stopListening()
 		return m, tea.Quit
 	}
 	if m.searchOn {
@@ -324,6 +356,7 @@ func (m *reader) key(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *reader) listKey(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "q":
+		m.stopListening()
 		return m, tea.Quit
 	case "j", "down":
 		return m, m.move(1)
@@ -373,7 +406,7 @@ func (m *reader) listKey(key string) (tea.Model, tea.Cmd) {
 		m.confirm = ""
 		s := m.sources[m.src]
 		return m, func() tea.Msg {
-			n, err := m.app.api.MarkAllRead(m.ctx, s.feedID, s.folderID, map[bool]string{true: "today", false: ""}[s.view == "today"])
+			n, err := m.app.api.MarkAllRead(m.ctx, s.feedID, s.folderID, map[bool]string{true: "today", false: ""}[s.view == "today"], m.query_().Search)
 			if err != nil {
 				return errMsg{err}
 			}
@@ -394,6 +427,7 @@ func (m *reader) sourcesKey(key string) (tea.Model, tea.Cmd) {
 	}
 	switch key {
 	case "q":
+		m.stopListening()
 		return m, tea.Quit
 	case "j", "down":
 		step(1)
@@ -448,6 +482,10 @@ func (m *reader) articleKey(key string) (tea.Model, tea.Cmd) {
 			m.status = "Fetching the full article…"
 			return m, m.openArticle(*e, true)
 		}
+	case "S":
+		return m, m.summary()
+	case "l":
+		return m, m.listen()
 	case "o", "v":
 		if e.URL != "" {
 			return m, openURL(e.URL)
@@ -543,6 +581,12 @@ func (m *reader) buildSources() {
 		{label: "Today", view: "today", unread: t.Counts.Today},
 		{label: "Starred", view: "starred", unread: t.Counts.Starred},
 		{label: "All articles", view: "all"},
+	}
+	if len(t.Searches) > 0 {
+		src = append(src, source{label: "Searches", header: true})
+		for _, x := range t.Searches {
+			src = append(src, source{label: x.Name, view: "all", search: x.Query, unread: x.Unread, indent: true})
+		}
 	}
 	byFolder := map[int64][]client.Feed{}
 	var loose []client.Feed
@@ -816,8 +860,10 @@ func (m *reader) helpView() string {
 		{"s", "star or unstar"},
 		{"m", "mark read or unread"},
 		{"f", "fetch the full article from its page"},
+		{"S", "summary of the article (made by your AI if needed)"},
+		{"l", "read the article aloud; l again stops"},
 		{"o", "open the original in your browser"},
-		{"/", "search; esc clears it"},
+		{"/", "search titles and text; esc clears it"},
 		{"tab, h", "feeds and folders"},
 		{"A A", "mark everything here read"},
 		{"r", "refresh"},
@@ -831,4 +877,43 @@ func (m *reader) helpView() string {
 	}
 	b.WriteString("\n" + sDim.Render("Press any key to go back."))
 	return lipgloss.NewStyle().Padding(1, 3).Render(b.String())
+}
+
+// renderArticle shows the open article, with its summary above the text
+// when asked for.
+func (m *reader) renderArticle() {
+	if m.article == nil {
+		return
+	}
+	doc := m.articleHead + "\n\n"
+	if m.showSummary && m.article.Summary != "" {
+		doc += "> **Summary.** " + m.article.Summary + "\n>\n> _Written by AI._\n\n"
+	}
+	doc += "---\n\n" + m.articleBody
+	m.vp.SetContent(renderMarkdown(doc, m.articleWidth()))
+}
+
+// summary shows or hides the open article's summary, asking for one (the
+// shared one, or written now by the reader's AI) the first time.
+func (m *reader) summary() tea.Cmd {
+	e := m.article
+	if e == nil || m.summarizing {
+		return nil
+	}
+	if e.Summary != "" {
+		m.showSummary = !m.showSummary
+		m.renderArticle()
+		m.vp.GotoTop()
+		return nil
+	}
+	m.summarizing = true
+	m.status = "Summarizing…"
+	id := e.ID
+	return func() tea.Msg {
+		text, err := m.app.api.Summarize(m.ctx, id)
+		if err != nil {
+			return tea.Batch(func() tea.Msg { return summaryMsg{id: id} }, func() tea.Msg { return errMsg{err} })()
+		}
+		return summaryMsg{id, text}
+	}
 }

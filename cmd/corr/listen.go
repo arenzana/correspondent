@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // listen reads an article aloud: it saves the audio with -o (- for stdout),
@@ -86,4 +88,90 @@ func player(ctx context.Context, file string) *exec.Cmd {
 // status tells a person at the terminal what's happening, on stderr.
 func status(msg string) {
 	fmt.Fprintln(os.Stderr, sDim.Render(msg))
+}
+
+// --- in the reader (tui.go) ------------------------------------------------------
+
+// listen reads the open article aloud in the background, with the system's
+// player; l again stops it. Audio is made only for the article asked for.
+func (m *reader) listen() tea.Cmd {
+	e := m.article
+	if e == nil {
+		return nil
+	}
+	if m.playingID != "" {
+		was := m.playingID
+		m.stopListening()
+		if was == e.ID {
+			m.status = "Stopped reading aloud."
+			return nil
+		}
+	}
+	m.playSeq++
+	seq, id := m.playSeq, e.ID
+	m.status = "Preparing the audio. A long article can take a minute."
+	return func() tea.Msg {
+		mp3, err := m.app.api.Audio(m.ctx, id)
+		if err != nil {
+			return errMsg{err}
+		}
+		f, err := os.CreateTemp("", "corr-*.mp3")
+		if err != nil {
+			return errMsg{err}
+		}
+		_, err = f.Write(mp3)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			os.Remove(f.Name())
+			return errMsg{err}
+		}
+		return playMsg{id: id, file: f.Name(), seq: seq}
+	}
+}
+
+// played starts the audio that's ready, or notes that it ended.
+func (m *reader) played(msg playMsg) tea.Cmd {
+	if msg.seq != m.playSeq {
+		// Asked for again, or stopped, since.
+		if !msg.done {
+			os.Remove(msg.file)
+		}
+		return nil
+	}
+	if msg.done {
+		m.playingID, m.stopPlay = "", nil
+		m.status = "Finished reading aloud."
+		return nil
+	}
+	ctx, cancel := context.WithCancel(m.ctx)
+	cmd := player(ctx, msg.file)
+	if cmd == nil {
+		cancel()
+		m.status = "No audio player found (afplay, mpv, ffplay or mpg123). The audio is in " + msg.file
+		return nil
+	}
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	if err := cmd.Start(); err != nil {
+		cancel()
+		os.Remove(msg.file)
+		return func() tea.Msg { return errMsg{err} }
+	}
+	m.playingID, m.stopPlay = msg.id, cancel
+	m.status = "Reading aloud. Press l to stop."
+	return func() tea.Msg {
+		cmd.Wait()
+		os.Remove(msg.file)
+		return playMsg{id: msg.id, seq: msg.seq, done: true}
+	}
+}
+
+// stopListening stops the audio playing, if any.
+func (m *reader) stopListening() {
+	if m.stopPlay != nil {
+		m.stopPlay()
+	}
+	m.playingID, m.stopPlay = "", nil
+	m.playSeq++
 }

@@ -2,9 +2,14 @@ package main
 
 import (
 	"bytes"
+	tea "charm.land/bubbletea/v2"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/arenzana/correspondent/internal/content"
+	"github.com/arenzana/correspondent/internal/pagefeed"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -279,5 +284,119 @@ func TestListen(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(out); string(b) != "mp3-bytes" {
 		t.Errorf("saved %q", b)
+	}
+}
+
+// TestSummaryAndSearches covers corr summary (the shared summary; a clear
+// failure without AI) and saving, listing, using and removing searches.
+func TestSummaryAndSearches(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	box, _ := secretbox.Load(filepath.Join(t.TempDir(), "keyring"))
+	a := &api.API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute), DataDir: t.TempDir(), Keyring: box}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	uid, _ := st.CreateUser(ctx, "alice", "password-alice")
+	fid, _ := st.AddFeed(ctx, uid, "https://notes.example/feed", "Notes", nil)
+	st.UpsertEntries(ctx, fid, []store.NewEntry{
+		{GUID: "1", Title: "Ships", Content: "<p>Pilots guide ships.</p>", Enclosures: "[]", PublishedAt: time.Now()},
+		{GUID: "2", Title: "Gardens", Content: "<p>Roses.</p>", Enclosures: "[]", PublishedAt: time.Now()},
+	}, time.Time{})
+	ids, _, _ := st.EntryIDs(ctx, store.Filter{UserID: uid, Query: "pilots"})
+	ships := strconv.FormatInt(ids[0], 10)
+	token, _, _ := st.CreateToken(ctx, uid, "test", store.ScopeWrite)
+
+	run := func(args ...string) (string, error) {
+		app := &app{ctx: ctx, asJSON: true}
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		app.setup(srv.URL, token)
+		f, _ := os.CreateTemp(t.TempDir(), "out")
+		old := os.Stdout
+		os.Stdout = f
+		err := app.run(args)
+		os.Stdout = old
+		f.Close()
+		b, _ := os.ReadFile(f.Name())
+		return string(b), err
+	}
+
+	if _, err := run("summary", ships); err == nil || !strings.Contains(err.Error(), "Settings") {
+		t.Errorf("summary without AI: %v", err)
+	}
+	// A summary someone already had made of this text comes back as is.
+	text := content.SearchText("<p>Pilots guide ships.</p>", pagefeed.SummaryInput)
+	sum := sha256.Sum256([]byte("Ships\x00" + text))
+	st.SaveSummary(ctx, hex.EncodeToString(sum[:])[:20], "Pilots guide ships into port.")
+	if out, err := run("summary", ships); err != nil || !strings.Contains(out, "Pilots guide ships into port.") {
+		t.Errorf("shared summary: %q %v", out, err)
+	}
+
+	// In the reader: S shows the summary above the article, S again hides it.
+	ra := &app{ctx: ctx}
+	ra.setup(srv.URL, token)
+	chooseTheme("day", "").apply()
+	m := newReader(ra)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	e, _ := ra.api.Entry(ctx, ships)
+	m.Update(m.openArticle(e, false)())
+	// The shared summary came with the article, so S shows it at once.
+	if cmd := m.summary(); cmd != nil {
+		m.Update(cmd())
+	}
+	if !m.showSummary || !strings.Contains(m.vp.View(), "Pilots guide ships into port.") {
+		t.Errorf("reader summary not shown:\n%s", m.vp.View())
+	}
+	m.summary()
+	if m.showSummary || strings.Contains(m.vp.View(), "into port") {
+		t.Error("S again didn't hide the summary")
+	}
+	// Opening it in the reader read it; unread again for what follows.
+	if _, err := run("mark", "unread", ships); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := run("searches", "save", "pilots", "--name", "Harbour")
+	if err != nil || !strings.Contains(out, `"name": "Harbour"`) {
+		t.Fatalf("save: %q %v", out, err)
+	}
+	var saved struct{ ID int64 }
+	json.Unmarshal([]byte(out), &saved)
+	if out, _ := run("searches"); !strings.Contains(out, `"unread": 1`) {
+		t.Errorf("list: %q", out)
+	}
+	// The reader lists it among its sources, and its list is its matches.
+	m.Update(m.loadTree()())
+	var at = -1
+	for i, src := range m.sources {
+		if src.label == "Harbour" && src.search == "pilots" {
+			at = i
+		}
+	}
+	if at < 0 {
+		t.Fatalf("saved search not in the reader's sources: %+v", m.sources)
+	}
+	m.src = at
+	if q := m.query_(); q.Search != "pilots" {
+		t.Errorf("reader query for a saved search: %+v", q)
+	}
+	id := strconv.FormatInt(saved.ID, 10)
+	if out, _ := run("list", "--saved", id); !strings.Contains(out, "Ships") || strings.Contains(out, "Gardens") {
+		t.Errorf("list --saved: %q", out)
+	}
+	if out, _ := run("mark-all-read", "--saved", id); !strings.Contains(out, `"changed": 1`) {
+		t.Errorf("mark-all-read --saved: %q", out)
+	}
+	if out, _ := run("list"); !strings.Contains(out, "Gardens") {
+		t.Errorf("mark-all-read --saved read more than its matches: %q", out)
+	}
+	if _, err := run("searches", "remove", id); err != nil {
+		t.Error(err)
+	}
+	if _, err := run("list", "--saved", id); err == nil {
+		t.Error("a removed search still lists")
 	}
 }
