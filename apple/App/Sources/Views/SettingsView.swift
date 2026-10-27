@@ -35,6 +35,10 @@ struct SettingsView: View {
         ("About", "version build source"),
     ]
 
+    /// A section's place to scroll to. Not its bare title: the section
+    /// buttons have those ids, and scrollTo found the button instead.
+    static func anchor(_ title: String) -> String { "section." + title }
+
     private var shown: [String] {
         let words = search.lowercased().split(separator: " ").map(String.init)
         return Self.sections.filter { s in
@@ -60,16 +64,23 @@ struct SettingsView: View {
 
             ScrollViewReader { proxy in
                 guide(proxy)
+                    #if DEBUG
+                    .task {
+                        guard let to = ProcessInfo.processInfo.environment["CORR_SETTINGS_JUMP"] else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        withAnimation { proxy.scrollTo(Self.anchor(to), anchor: .top) }
+                    }
+                    #endif
                 ScrollView {
                     VStack(alignment: .leading, spacing: 34) {
-                        if shown.contains("Appearance") { appearance.id("Appearance") }
-                        if shown.contains("Reading") { reading.id("Reading") }
-                        if shown.contains("Feeds") { feeds.id("Feeds") }
-                        if shown.contains("AI"), app.me?.aiAvailable == true { ai.id("AI") }
-                        if shown.contains("Apps & sync") { apps.id("Apps & sync") }
-                        if shown.contains("This device") { device.id("This device") }
-                        if shown.contains("Account") { account.id("Account") }
-                        if shown.contains("About") { about.id("About") }
+                        if shown.contains("Appearance") { appearance.id(Self.anchor("Appearance")) }
+                        if shown.contains("Reading") { reading.id(Self.anchor("Reading")) }
+                        if shown.contains("Feeds") { feeds.id(Self.anchor("Feeds")) }
+                        if shown.contains("AI"), app.me?.aiAvailable == true { ai.id(Self.anchor("AI")) }
+                        if shown.contains("Apps & sync") { apps.id(Self.anchor("Apps & sync")) }
+                        if shown.contains("This device") { device.id(Self.anchor("This device")) }
+                        if shown.contains("Account") { account.id(Self.anchor("Account")) }
+                        if shown.contains("About") { about.id(Self.anchor("About")) }
                         if shown.isEmpty {
                             Text("No settings match “\(search.trimmingCharacters(in: .whitespaces))”.")
                                 .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
@@ -398,11 +409,12 @@ struct SettingsView: View {
                 HStack(spacing: 6) {
                     ForEach(shown, id: \.self) { title in
                         Button {
-                            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(title, anchor: .top) }
+                            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.anchor(title), anchor: .top) }
                         } label: {
                             Text(title).font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
                                 .padding(.horizontal, 11).frame(height: 28)
                                 .background(Capsule().stroke(theme.rule))
+                                .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
                     }
