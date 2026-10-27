@@ -122,6 +122,7 @@ struct WireView: View {
                                     .tint(theme.seal)
                                 }
                                 .onAppear { if e.id == app.entries.last?.id { Task { await app.loadMore() } } }
+                                .contextMenu { rowMenu(e) }
                         }
                     } header: {
                         DayLabel(label: group.label)
@@ -150,6 +151,42 @@ struct WireView: View {
             .onChange(of: app.selectedID) { _, id in
                 if let id { withAnimation { proxy.scrollTo(id) } }
             }
+        }
+    }
+
+    /// What a long-press (or right-click) on an article offers.
+    @ViewBuilder
+    private func rowMenu(_ e: Entry) -> some View {
+        Button { Task { await app.toggleRead(e.id) } } label: {
+            Label(e.read ? "Mark as Unread" : "Mark as Read", systemImage: e.read ? "circle" : "checkmark.circle")
+        }
+        Button { Task { await app.toggleStar(e.id) } } label: {
+            Label(e.starred ? "Unstar" : "Star", systemImage: e.starred ? "star.slash" : "star")
+        }
+        if app.speechConfigured || e.audio {
+            Button { Task { await player.play(e) } } label: { Label("Read Aloud", systemImage: "headphones") }
+        }
+        Divider()
+        if let i = app.entries.firstIndex(where: { $0.id == e.id }) {
+            let above = app.entries[..<i].filter { !$0.read }.map(\.id)
+            let below = app.entries[(i + 1)...].filter { !$0.read }.map(\.id)
+            Button { Task { await app.setRead(above, true) } } label: { Label("Mark Above as Read", systemImage: "arrow.up.to.line") }
+                .disabled(above.isEmpty)
+            Button { Task { await app.setRead(below, true) } } label: { Label("Mark Below as Read", systemImage: "arrow.down.to.line") }
+                .disabled(below.isEmpty)
+        }
+        if let url = URL(string: e.url), !e.url.isEmpty {
+            Divider()
+            Link(destination: url) { Label("Open Original", systemImage: "safari") }
+            ShareLink(item: url, subject: Text(e.title)) { Label("Share…", systemImage: "square.and.arrow.up") }
+            Button {
+                #if os(iOS)
+                UIPasteboard.general.url = url
+                #else
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                #endif
+            } label: { Label("Copy Link", systemImage: "link") }
         }
     }
 
