@@ -63,7 +63,7 @@ struct SettingsWindow: View {
     @Environment(AppModel.self) private var app
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        let theme = Theme.resolve(app.prefs.theme, scheme: scheme)
+        let theme = app.theme(scheme)
         Group {
             if app.account == nil {
                 Text("Sign in to Correspondent first.").font(Typeface.ui.font(15)).foregroundStyle(theme.slate)

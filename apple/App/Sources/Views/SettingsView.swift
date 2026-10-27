@@ -56,10 +56,13 @@ struct SettingsView: View {
                 Text("Theme").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
                     themeTile("auto", "Match system", [Theme.day, Theme.night])
-                    themeTile("sun", "Sunrise and sunset", [Theme.day, Theme.evening])
+                    themeTile("sun", "Sunrise and sunset", [Theme.day, Theme.evening, Theme.night])
                     themeTile("day", "Day", [Theme.day])
                     themeTile("evening", "Evening", [Theme.evening])
                     themeTile("night", "Night desk", [Theme.night])
+                }
+                if app.prefs.theme == "sun" {
+                    Text(sunNote).font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -211,10 +214,18 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// What the Sun theme does next, as the web's note under the themes.
+    private var sunNote: String {
+        let s = Theme.sun(place: app.prefs.place)
+        let next = ["day": "Evening", "evening": "Night desk", "night": "Day"][s.phase.rawValue] ?? ""
+        let time = s.next.formatted(date: .omitted, time: .shortened)
+        return "\(next) at \(time)" + (app.prefs.place?.estimated ?? true ? ", estimated from your time zone." : ".")
+    }
+
     private func themeTile(_ id: String, _ label: String, _ swatches: [Theme]) -> some View {
         let on = app.prefs.theme == id
         return Button {
-            app.setPrefs({ $0.theme = id }, ["theme": id])
+            app.setTheme(id)
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 0) {

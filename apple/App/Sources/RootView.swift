@@ -21,7 +21,7 @@ struct RootView: View {
     }
 
     var body: some View {
-        let theme = Theme.resolve(app.prefs.theme, scheme: scheme)
+        let theme = app.theme(scheme)
         ZStack(alignment: .bottom) {
             if app.booting {
                 theme.fog.ignoresSafeArea()

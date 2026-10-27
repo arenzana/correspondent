@@ -18,6 +18,9 @@ final class AppModel {
     var client: Client?
     var booting = true
     var prefs = Prefs()
+    /// Moves when the Sun theme's phase changes (sunrise, sunset, dusk), so
+    /// views that read it redraw in the new theme.
+    private(set) var sunPhase: Sun.Phase?
     /// Whether the reader set up text-to-speech (on the web): articles can be read aloud.
     var speechConfigured = false
     var online = true
@@ -158,6 +161,7 @@ final class AppModel {
         offline = OfflineStore(account: account.key)
         outbox = Outbox(account: account.key)
         watchNetwork()
+        watchSun()
         Task { await flushOutbox() }
         Task {
             if let me = try? await client?.me() { speechConfigured = me.speech != nil }
@@ -182,6 +186,36 @@ final class AppModel {
     }
 
     // MARK: Preferences
+
+    /// Checks the Sun theme every minute; a change of phase redraws the app.
+    private func watchSun() {
+        Task { [weak self] in
+            while let self {
+                let phase = prefs.theme == "sun" ? Theme.sun(place: prefs.place).phase : nil
+                if phase != sunPhase { sunPhase = phase }
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
+    }
+
+    /// The theme in use now, on a device in this colour scheme.
+    func theme(_ scheme: ColorScheme) -> Theme {
+        _ = sunPhase
+        return Theme.resolve(prefs.theme, scheme: scheme, place: prefs.place)
+    }
+
+    /// Picks a theme. Sun needs a rough position: the one the web saved, or
+    /// one estimated from the time zone (saved as estimated, as the web does).
+    func setTheme(_ id: String) {
+        if id == "sun", prefs.place == nil {
+            let e = Sun.estimate()
+            let place = Prefs.Place(lat: e.lat, lon: e.lon, estimated: true)
+            setPrefs({ $0.theme = id; $0.place = place }, ["theme": id, "place": ["lat": place.lat, "lon": place.lon, "estimated": true] as [String: any Sendable]])
+        } else {
+            setPrefs({ $0.theme = id }, ["theme": id])
+        }
+        sunPhase = id == "sun" ? Theme.sun(place: prefs.place).phase : nil
+    }
 
     /// Changes preferences at once, and saves them with the web app's (only
     /// these keys change). If the server refuses, they go back.

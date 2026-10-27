@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreText
+import CorrespondentKit
 
 // The web app's design tokens (ui/src/app.css), so the apps look the same:
 // fog (chrome), sheet (reading surfaces), ink and slate (text), rule
@@ -38,17 +39,22 @@ struct Theme: Equatable {
     }
 
     /// The reader's choice in the web app (auto, sun, day, night, evening) on this device.
-    static func resolve(_ pref: String, scheme: ColorScheme) -> Theme {
+    static func resolve(_ pref: String, scheme: ColorScheme, place: Prefs.Place? = nil, now: Date = Date()) -> Theme {
         switch pref {
         case "day": return .day
         case "night": return .night
         case "evening": return .evening
-        case "sun":
-            // Day until evening falls, as the web's Sun theme does by sunset.
-            let h = Calendar.current.component(.hour, from: Date())
-            return (7..<19).contains(h) ? .day : .evening
+        case "sun": return sun(place: place, now: now).theme
         default: return scheme == .dark ? .night : .day
         }
+    }
+
+    /// The Sun theme as the web has it: Day from sunrise, Evening from sunset,
+    /// Night desk from nautical dusk; and when it next changes.
+    static func sun(place: Prefs.Place?, now: Date = Date()) -> (theme: Theme, phase: Sun.Phase, next: Date) {
+        let p = place ?? { let e = Sun.estimate(now: now); return Prefs.Place(lat: e.lat, lon: e.lon, estimated: true) }()
+        let r = Sun.theme(now, lat: p.lat, lon: p.lon)
+        return (r.phase == .day ? .day : r.phase == .evening ? .evening : .night, r.phase, r.next)
     }
 
     /// A wash of the accent, as the web's color-mix(… 8%).

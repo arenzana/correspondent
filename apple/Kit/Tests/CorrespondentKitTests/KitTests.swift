@@ -212,3 +212,41 @@ extension ClientTests {
         #expect(await box.count == 1)
     }
 }
+
+// The Sun theme, against the same NOAA reference values as the web's sun.test.ts.
+@Suite struct SunTests {
+    func date(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
+    func minutesApart(_ a: Date?, _ b: String) -> Double { abs((a?.timeIntervalSince(date(b)) ?? .infinity) / 60) }
+    let madrid = (lat: 40.4168, lon: -3.7038)
+
+    @Test func matchesNOAASunriseAndSunset() {
+        let t = Sun.times(date("2026-06-21T12:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(minutesApart(t.sunrise, "2026-06-21T04:44:00Z") < 4)
+        #expect(minutesApart(t.sunset, "2026-06-21T19:48:00Z") < 4)
+        let ny = Sun.times(date("2026-12-21T12:00:00Z"), lat: 40.7128, lon: -74.006)
+        #expect(minutesApart(ny.sunrise, "2026-12-21T12:16:00Z") < 4)
+        #expect(minutesApart(ny.sunset, "2026-12-21T21:32:00Z") < 4)
+        #expect(Sun.times(date("2026-12-21T12:00:00Z"), lat: 69.65, lon: 18.96).polar == .night)
+        #expect(Sun.times(date("2026-06-21T12:00:00Z"), lat: 69.65, lon: 18.96).polar == .day)
+    }
+
+    @Test func movesThroughDayEveningAndNight() {
+        let noon = Sun.theme(date("2026-06-21T12:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(noon.phase == .day && minutesApart(noon.next, "2026-06-21T19:48:00Z") < 4)
+        let dusk = Sun.theme(date("2026-06-21T20:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(dusk.phase == .evening && minutesApart(dusk.next, "2026-06-21T20:58:00Z") < 6)
+        let night = Sun.theme(date("2026-06-21T22:00:00Z"), lat: madrid.lat, lon: madrid.lon)
+        #expect(night.phase == .night && minutesApart(night.next, "2026-06-22T04:44:00Z") < 5)
+        #expect(Sun.theme(date("2026-06-22T03:00:00Z"), lat: madrid.lat, lon: madrid.lon).phase == .night)
+    }
+
+    @Test func handlesSkiesThatNeverDarkenAndPolarSeasons() {
+        #expect(Sun.nauticalTwilight(date("2026-06-21T12:00:00Z"), lat: 59.91, lon: 10.75).polar == .day)
+        #expect(Sun.theme(date("2026-06-21T23:30:00Z"), lat: 59.91, lon: 10.75).phase == .evening)
+        #expect(Sun.theme(date("2026-06-21T23:00:00Z"), lat: 69.65, lon: 18.96).phase == .day)
+        let polar = Sun.theme(date("2026-12-21T12:00:00Z"), lat: 69.65, lon: 18.96)
+        #expect(polar.phase == .night && polar.next > date("2026-12-21T12:00:00Z"))
+        #expect(Sun.coarse(40.41678) == 40.4 && Sun.coarse(-3.70379) == -3.7)
+        #expect(Sun.estimate(zone: TimeZone(secondsFromGMT: 3600)!).lon == 15)
+    }
+}

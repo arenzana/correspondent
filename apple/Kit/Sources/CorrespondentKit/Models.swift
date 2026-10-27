@@ -230,6 +230,19 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var readFont: String
     /// wire, byline or morse: the app's icon, as the web app's.
     public var appIcon: String
+    /// Coarse position (about 11 km) for the Sun theme, saved by the web app.
+    public var place: Place?
+
+    public struct Place: Codable, Hashable, Sendable {
+        public var lat: Double
+        public var lon: Double
+        public var estimated: Bool
+        public init(lat: Double, lon: Double, estimated: Bool) {
+            self.lat = lat
+            self.lon = lon
+            self.estimated = estimated
+        }
+    }
 
     public init(theme: String = "auto", unreadOnly: Bool = true, markOnOpen: Bool = true, skipSponsored: Bool = false,
                 readSize: Double = 19, measure: Double = 68, readFont: String = "serif", appIcon: String = "wire") {
@@ -253,6 +266,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         measure = try c.decodeIfPresent(Double.self, forKey: .measure) ?? 68
         readFont = try c.decodeIfPresent(String.self, forKey: .readFont) ?? "serif"
         appIcon = try c.decodeIfPresent(String.self, forKey: .appIcon) ?? "wire"
+        place = try? c.decodeIfPresent(Place.self, forKey: .place)
     }
 }
 
