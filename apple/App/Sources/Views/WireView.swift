@@ -39,7 +39,10 @@ struct WireView: View {
             }
             ZStack(alignment: .top) {
                 if app.entries.isEmpty && !app.loading {
-                    empty
+                    // Scrollable so it can be pulled down to refresh too
+                    // ("All caught up" is when you most want to check).
+                    ScrollView { empty.frame(maxWidth: .infinity, alignment: .leading) }
+                        .refreshable { await app.refreshTree(); await app.load() }
                 } else {
                     list
                 }
