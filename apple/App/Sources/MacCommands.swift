@@ -99,6 +99,7 @@ extension Notification.Name {
     /// Pages the article: the object is 1 (down) or -1 (up).
     static let page = Notification.Name("org.arenzana.correspondent.page")
     static let shortcuts = Notification.Name("org.arenzana.correspondent.shortcuts")
+    static let openSettings = Notification.Name("org.arenzana.correspondent.openSettings")
     /// Moves the article's spotlight: the object is 1 (down) or -1 (up).
     static let spotlightStep = Notification.Name("org.arenzana.correspondent.spotlightStep")
 }

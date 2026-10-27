@@ -105,6 +105,7 @@ struct WideLayout: View {
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
         .onReceive(NotificationCenter.default.publisher(for: .sidebar)) { _ in toggleSidebar() }
         .onReceive(NotificationCenter.default.publisher(for: .shortcuts)) { _ in showingKeys = true }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettings)) { _ in settings = true }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: .escape)) { _ in _ = escape() }
         #endif
