@@ -24,6 +24,7 @@ struct WireView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            feedNotice
             if app.outboxCount > 0 {
                 Text("\(app.outboxCount) \(app.outboxCount == 1 ? "change" : "changes") waiting to be sent.")
                     .font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
@@ -83,6 +84,11 @@ struct WireView: View {
                 .buttonStyle(.plain)
                 Button { Task { await app.search("") ; await app.go(.all) } } label: { Image(systemName: "xmark") }
                     .iconButton().accessibilityLabel("Clear search")
+            }
+            unreadSwitch
+            if let f = currentFeed {
+                Button { Task { await app.updateFeed(f.id, .init(notify: !f.notify)) } } label: { Image(systemName: f.notify ? "bell.fill" : "bell") }
+                    .iconButton().accessibilityLabel(f.notify ? "Turn off notifications for this feed" : "Notify me about new articles in this feed")
             }
             if app.entries.contains(where: { $0.audio && !$0.read }) {
                 Button { Task { await player.playList(app.entries, from: app.selectedID) } } label: { Image(systemName: "headphones") }
@@ -206,20 +212,73 @@ struct WireView: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(app.query.isEmpty ? (app.unreadFilter ? "All caught up." : "No articles yet.") : "No articles match “\(app.query)”.")
-                .font(Typeface.read.font(22, weight: 520)).foregroundStyle(theme.ink)
-            if app.unreadFilter && app.query.isEmpty {
-                Text("New articles will appear here as your feeds update.").font(Typeface.ui.font(15)).foregroundStyle(theme.slate)
-                Button("Show today’s articles") { Task { await app.go(.today) } }
-                    .buttonStyle(.bordered).tint(theme.ink).padding(.top, 6)
-            }
             if !app.loadError.isEmpty {
-                Text(app.loadError).font(Typeface.ui.font(14)).foregroundStyle(theme.danger)
+                Text("Couldn't load articles. \(app.loadError)").font(Typeface.ui.font(15)).foregroundStyle(theme.ink)
+                Button("Try again") { Task { await app.load() } }.buttonStyle(QuietButton()).padding(.top, 6)
+            } else if !app.query.isEmpty {
+                headline("No articles match “\(app.query)”.")
+                Button("Clear search") { Task { await app.search("") } }.buttonStyle(QuietButton()).padding(.top, 6)
+            } else if app.unreadFilter {
+                headline("All caught up.")
+                note("New articles will appear here as your feeds update.")
+                Button("Show today’s articles") { Task { await app.go(.today) } }.buttonStyle(QuietButton()).padding(.top, 6)
+            } else if app.source == .starred {
+                headline("Nothing starred yet.")
+                note("Star an article (s, or swipe) to keep it here.")
+            } else {
+                headline("No articles yet.")
+                note("This feed hasn't published anything Correspondent has seen.")
             }
             Spacer()
         }
         .padding(.leading, Self.spineX + 26).padding(.trailing, 24).padding(.top, 56)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func headline(_ s: String) -> some View { Text(s).font(Typeface.read.font(22, weight: 520)).foregroundStyle(theme.ink) }
+    private func note(_ s: String) -> some View { Text(s).font(Typeface.ui.font(15)).foregroundStyle(theme.slate) }
+
+    /// The feed the list shows, if it's one feed.
+    private var currentFeed: Feed? {
+        if case .feed(let id) = app.source { return app.feedsByID[id] }
+        return nil
+    }
+
+    /// A paused or failing feed says so above its articles, with the remedy.
+    @ViewBuilder private var feedNotice: some View {
+        if let f = currentFeed, f.paused || f.errorCount > 0 {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: f.paused ? "pause.circle" : "exclamationmark.triangle").foregroundStyle(theme.slate)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(f.paused ? "Updates for this feed are paused." : "Couldn't update this feed. \(f.lastError)")
+                        .font(Typeface.ui.font(14)).foregroundStyle(theme.ink).fixedSize(horizontal: false, vertical: true)
+                    Button(f.paused ? "Resume updates" : "Retry now") {
+                        Task {
+                            if f.paused { await app.updateFeed(f.id, .init(paused: false), done: "Updates resumed for \(f.title).") }
+                            else { await app.refreshFeed(f.id) }
+                        }
+                    }
+                    .buttonStyle(.plain).font(Typeface.ui.font(14, weight: 560)).foregroundStyle(theme.accent)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18).padding(.vertical, 10)
+            .background(theme.fog)
+            .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
+        }
+    }
+
+    /// Feeds and folders can show only their unread articles, or all of them.
+    @ViewBuilder private var unreadSwitch: some View {
+        switch app.source {
+        case .feed, .folder, .search:
+            Picker("Show", selection: Binding(get: { app.prefs.unreadOnly }, set: { v in app.setPrefs({ $0.unreadOnly = v }, ["unreadOnly": v]) })) {
+                Text("Unread").tag(true)
+                Text("All").tag(false)
+            }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+        default: EmptyView()
+        }
     }
 
     // MARK: Days
