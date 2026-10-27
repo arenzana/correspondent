@@ -454,7 +454,6 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-bottom: env(safe-area-inset-bottom);
     scrollbar-width: thin;
     /* The spine runs the full height of the list. */
     background:
@@ -717,8 +716,11 @@
     opacity: 0.8;
   }
 
+  /* The home-indicator inset belongs to the opaque ends, never to the
+     scroller, or the spine would show through below them. */
   .tail {
-    min-height: 64px;
+    min-height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     align-items: center;
     padding-left: calc(var(--spine-x) - 5px);
@@ -736,7 +738,7 @@
 
   .state {
     position: relative;
-    padding: 56px 24px 24px calc(var(--spine-x) + 26px);
+    padding: 56px 24px calc(24px + env(safe-area-inset-bottom)) calc(var(--spine-x) + 26px);
     background: var(--sheet);
     min-height: 100%;
   }

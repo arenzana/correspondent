@@ -22,6 +22,11 @@ change behaviour; the Google Reader API stays compatible throughout.
   Settings → This device; nothing is downloaded when the device is saving
   data. Signing out forgets it.
 
+### Fixed
+
+- On iPhones, a stray piece of the list's timeline no longer shows above
+  the tab bar when the list is empty or at its end.
+
 ## [0.13.0] - 2026-10-26
 
 ### Added
