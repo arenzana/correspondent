@@ -34,8 +34,9 @@ struct RootView: View {
             } else {
                 WideLayout()
             }
-            if !isPhone {
+            if !isPhone, player.now != nil {
                 PlayerBar().frame(maxWidth: 640).padding(.horizontal, 16).padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             VStack(spacing: 8) {
                 ForEach(app.notices) { n in Toast(notice: n) }
@@ -45,6 +46,7 @@ struct RootView: View {
         // Fonts are sized when built: a new text size rebuilds the views.
         .id("\(textSize)-\(app.prefs.uiScale)")
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.notices)
+        .animation(reduceMotion ? nil : .spring(duration: 0.35), value: player.now?.id)
         .environment(\.theme, theme)
         .tint(theme.accent)
         .preferredColorScheme(theme.dark ? .dark : .light)

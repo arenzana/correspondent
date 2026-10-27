@@ -9,6 +9,7 @@ struct WireView: View {
     @Environment(AppModel.self) private var app
     @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onOpen: (EntryID) -> Void = { _ in }
     /// Pushed on iPhone: the navigation bar shows the title.
     var pushed = false
@@ -53,8 +54,10 @@ struct WireView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
+            .animation(reduceMotion ? nil : .spring(duration: 0.35), value: app.pending > 0)
             if let footer { footer }
         }
         .background(theme.sheet)
@@ -108,6 +111,8 @@ struct WireView: View {
                         ForEach(group.entries) { e in
                             WireRow(entry: e, feed: app.feedsByID[e.feedId], selected: e.id == app.selectedID)
                                 .id(e.id)
+                                // Arrivals grow in where they land, as on the web.
+                                .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)), removal: .opacity))
                                 .listRowInsets(EdgeInsets())
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
@@ -147,6 +152,11 @@ struct WireView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: app.entries.map(\.id))
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top < 40 } action: { _, top in
+                if app.atTop != top { app.atTop = top }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: app.selectedID)
             .environment(\.defaultMinListRowHeight, 1)
             .refreshable {
                 await app.refreshTree()

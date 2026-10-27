@@ -44,6 +44,8 @@ final class AppModel {
     var boundary = "0"
     /// Articles that arrived since the list loaded, offered rather than inserted.
     var pending = 0
+    /// The list is scrolled to its top: arrivals can join it in place.
+    var atTop = true
 
     // The article
     var selectedID: EntryID?
@@ -714,19 +716,25 @@ final class AppModel {
         }
     }
 
-    /// After coming back (or a live "refresh"): newer articles than the list
-    /// holds are offered as "N new articles", never moved in under the reader.
+    /// After coming back (or a live "refresh"): articles newer than the
+    /// list holds join it in place when it's at the top, as on the web;
+    /// further down they're offered as "N new articles", never moved in
+    /// under the reader.
     func catchUp() async {
         await refreshTree()
         guard let client, Self.n(tree.counts.newest) > Self.n(boundary), source != .starred else { return }
-        if let page = try? await client.entries(query(for: source)) {
-            let newer = page.entries.filter { Self.n($0.id) > Self.n(boundary) }
-            if !newer.isEmpty, entries.isEmpty {
-                await load()
-            } else {
-                pending = newer.count
-            }
-        }
+        guard let page = try? await client.entries(query(for: source)) else { return }
+        let newer = page.entries.filter { Self.n($0.id) > Self.n(boundary) }
+        if newer.isEmpty { return }
+        if entries.isEmpty { await load(); return }
+        guard atTop, query.isEmpty else { pending = newer.count; return }
+        let have = Set(entries.map(\.id))
+        let inPage = Set(page.entries.map(\.id))
+        // The fresh page in its order, then anything loaded beyond it.
+        entries = page.entries.filter { have.contains($0.id) || Self.n($0.id) > Self.n(boundary) }
+            + entries.filter { !inPage.contains($0.id) }
+        boundary = newer.map(\.id).max { Self.n($0) < Self.n($1) } ?? boundary
+        pending = 0
     }
 
     /// Keeps unread and starred articles, with their text, for reading offline.

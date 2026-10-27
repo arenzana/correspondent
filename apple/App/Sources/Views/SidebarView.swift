@@ -6,6 +6,7 @@ import CorrespondentKit
 struct SidebarView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onSearch: () -> Void
     var onSettings: () -> Void
     /// On iPhone, choosing a list moves on to it.
@@ -77,7 +78,10 @@ struct SidebarView: View {
                                 }
                             }
                         if !app.collapsed.contains(folder.id) {
-                            ForEach(feeds(in: folder.id)) { f in feedRow(f).contextMenu { feedMenu(f) } }
+                            ForEach(feeds(in: folder.id)) { f in
+                                feedRow(f).contextMenu { feedMenu(f) }
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
                         }
                     }
                     ForEach(feeds(in: nil)) { f in feedRow(f).contextMenu { feedMenu(f) } }
@@ -209,7 +213,9 @@ struct SidebarView: View {
         let s = Source.folder(folder.id)
         return HStack(spacing: 4) {
             Button {
-                if open { app.collapsed.insert(folder.id) } else { app.collapsed.remove(folder.id) }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                    if open { app.collapsed.insert(folder.id) } else { app.collapsed.remove(folder.id) }
+                }
             } label: {
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                     .rotationEffect(.degrees(open ? 90 : 0)).foregroundStyle(theme.slate).frame(width: 18, height: 30)
