@@ -137,6 +137,11 @@ struct WideLayout: View {
                   event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
             if let text = window.firstResponder as? NSText, text.isEditable { return event }
             if searching { return event }
+            // With the spotlight on, ↓ and ↑ move it, as on the web.
+            if app.article != nil, app.prefs.spotlight != "off", event.keyCode == 125 || event.keyCode == 126 {
+                NotificationCenter.default.post(name: .spotlightStep, object: event.keyCode == 125 ? 1 : -1)
+                return nil
+            }
             return shortcut(event.charactersIgnoringModifiers.map { event.modifierFlags.contains(.shift) ? $0.uppercased() : $0 } ?? "") ? nil : event
         }
     }

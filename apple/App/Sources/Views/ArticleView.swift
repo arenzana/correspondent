@@ -219,6 +219,11 @@ enum ArticleHTML {
         .summary p { margin: 0 0 6px; }
         .summary small { color: var(--slate); font-size: 12px; }
         .prose { font-family: \(family); font-size: \(Int(size))px; line-height: 1.66; font-variation-settings: 'opsz' 16; overflow-wrap: break-word; hanging-punctuation: first; }
+        .prose b.bionic { font-weight: 680; }
+        .spotlit .sl { opacity: 0.28; transition: opacity 0.25s ease; }
+        .spotlit .sl.lit { opacity: 1; }
+        .veil { position: fixed; left: 0; right: 0; pointer-events: none; z-index: 2; background: color-mix(in srgb, var(--sheet) 72%, transparent); }
+        @media (prefers-reduced-motion: reduce) { .spotlit .sl { transition: none; } }
         .prose p, .prose ul, .prose ol, .prose pre, .prose table, .prose figure, .prose blockquote { margin: 0 0 1.05em; }
         .prose h1, .prose h2, .prose h3, .prose h4 { font-family: var(--font-read); font-weight: 560; line-height: 1.2; letter-spacing: -0.01em; margin: 1.7em 0 0.55em; text-wrap: balance; }
         .prose h1, .prose h2 { font-size: 1.32em; }
@@ -240,7 +245,7 @@ enum ArticleHTML {
         .turn a { display: block; max-width: 48%; color: var(--ink); text-decoration: none; font-family: var(--font-read); font-size: 17px; font-weight: 560; line-height: 1.3; }
         .turn a small { display: block; margin-bottom: 4px; font-family: var(--font-ui); font-size: 12.5px; font-weight: 500; color: var(--slate); }
         .turn .next { text-align: right; margin-left: auto; }
-        </style></head><body><div class="column">
+        </style></head><body data-bionic="\(prefs.bionic ? "1" : "0")" data-spotlight="\(prefs.spotlight)" data-line="\(Int(size * 1.66))"><div class="column">
         <p class="byline"><strong>\(escape(byline.first ?? ""))</strong>\(byline.count > 1 ? " " + escape(byline[1]) : "")</p>
         <h1 class="title">\(title)</h1>
         <p class="dateline"><span>\(escape(date))</span><span>\(minutes) min read</span></p>
@@ -288,6 +293,7 @@ struct WebPage: NSViewRepresentable {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
         v.navigationDelegate = context.coordinator
         v.setValue(false, forKey: "drawsBackground")
+        context.coordinator.watchSpotlight(v)
         return v
     }
     func updateNSView(_ v: WKWebView, context: Context) {
@@ -305,6 +311,17 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     var loaded = ""
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
+    private var spotlight: NSObjectProtocol?
+
+    /// ↓ and ↑ from the Mac's keys move the page's spotlight (reading.js).
+    func watchSpotlight(_ web: WKWebView) {
+        spotlight = NotificationCenter.default.addObserver(forName: .spotlightStep, object: nil, queue: .main) { [weak web] note in
+            let by = note.object as? Int ?? 1
+            MainActor.assumeIsolated {
+                web?.evaluateJavaScript("window.correspondentSpotlight && window.correspondentSpotlight(\(by))", in: nil, in: .defaultClient) { _ in }
+            }
+        }
+    }
 
     static func configuration(_ delegate: WebDelegate) -> WKWebViewConfiguration {
         let c = WKWebViewConfiguration()
@@ -321,6 +338,10 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
         });
         """
         c.userContentController.addUserScript(WKUserScript(source: tap, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
+        // Bionic reading and the spotlight (Resources/reading.js).
+        if let url = Bundle.main.url(forResource: "reading", withExtension: "js"), let reading = try? String(contentsOf: url, encoding: .utf8) {
+            c.userContentController.addUserScript(WKUserScript(source: reading, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
+        }
         c.userContentController.add(delegate, contentWorld: .defaultClient, name: "image")
         return c
     }
@@ -391,6 +412,7 @@ struct TextControls: View {
                 Text("Sans").tag("sans")
             }
             .pickerStyle(.segmented)
+            ReadingAids()
             VStack(alignment: .leading, spacing: 6) {
                 Text("Line length · \(Int(app.prefs.measure))").font(Typeface.ui.font(13.5)).foregroundStyle(theme.slate)
                 Slider(value: Binding(get: { app.prefs.measure }, set: { v in
@@ -408,6 +430,42 @@ struct TextControls: View {
     private func set(size: Double) {
         let v = min(max(size, 14), 30)
         app.setPrefs({ $0.readSize = v }, ["readSize": v])
+    }
+}
+
+/// Bionic reading and the spotlight, as the web's text controls have them.
+struct ReadingAids: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: Binding(get: { app.prefs.bionic }, set: { v in app.setPrefs({ $0.bionic = v }, ["bionic": v]) })) {
+                (Text("Bi").bold() + Text("onic reading")).font(Typeface.ui.font(15, weight: 500)).foregroundStyle(theme.ink)
+            }
+            .toggleStyle(.switch).tint(theme.accent)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Spotlight").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                Picker("Spotlight", selection: Binding(get: { app.prefs.spotlight }, set: { v in app.setPrefs({ $0.spotlight = v }, ["spotlight": v]) })) {
+                    Text("Off").tag("off")
+                    Text("Paragraph").tag("paragraph")
+                    Text("Line").tag("line")
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                if app.prefs.spotlight != "off" {
+                    Text(spotlightHint).font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var spotlightHint: String {
+        #if os(macOS)
+        "One \(app.prefs.spotlight) clear, the rest dimmed. ↓ and ↑ move it; scrolling moves it too."
+        #else
+        "One \(app.prefs.spotlight) clear, the rest dimmed. Scrolling moves it."
+        #endif
     }
 }
 

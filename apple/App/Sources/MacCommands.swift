@@ -91,4 +91,6 @@ extension Notification.Name {
     static let search = Notification.Name("org.arenzana.correspondent.search")
     static let escape = Notification.Name("org.arenzana.correspondent.escape")
     static let sidebar = Notification.Name("org.arenzana.correspondent.sidebar")
+    /// Moves the article's spotlight: the object is 1 (down) or -1 (up).
+    static let spotlightStep = Notification.Name("org.arenzana.correspondent.spotlightStep")
 }

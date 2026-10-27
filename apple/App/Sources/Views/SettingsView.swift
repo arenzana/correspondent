@@ -16,7 +16,7 @@ struct SettingsView: View {
     /// The sections, with the words each answers to (as the web's settings search).
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
-        ("Reading", "text size interface larger smaller font typeface serif sans line length unread only mark read opened sponsored skip"),
+        ("Reading", "text size interface larger smaller font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
         ("This device", "offline badge count icon dock notifications bell test save background"),
         ("Account", "server sign out password passkey web token"),
         ("About", "version build source"),
@@ -154,6 +154,7 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 200)
                 }
+                ReadingAids()
                 labeled("Line length", "\(Int(app.prefs.measure)) characters") {
                     Slider(value: Binding(get: { app.prefs.measure }, set: { v in
                         let r = v.rounded()

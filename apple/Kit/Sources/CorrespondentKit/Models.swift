@@ -228,6 +228,10 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var measure: Double
     /// Interface text size: 0.92, 1, 1.1 or 1.2, as the web's.
     public var uiScale: Double = 1
+    /// Bold the start of each word, for the eye to jump from word to word.
+    public var bionic = false
+    /// off, paragraph or line: one paragraph or line clear, the rest dimmed.
+    public var spotlight = "off"
     /// serif (Newsreader) or sans (Schibsted Grotesk).
     public var readFont: String
     /// wire, byline or morse: the app's icon, as the web app's.
@@ -270,6 +274,8 @@ public struct Prefs: Codable, Hashable, Sendable {
         appIcon = try c.decodeIfPresent(String.self, forKey: .appIcon) ?? "wire"
         place = try? c.decodeIfPresent(Place.self, forKey: .place)
         uiScale = (try? c.decodeIfPresent(Double.self, forKey: .uiScale)) ?? 1
+        bionic = (try? c.decodeIfPresent(Bool.self, forKey: .bionic)) ?? false
+        spotlight = (try? c.decodeIfPresent(String.self, forKey: .spotlight)) ?? "off"
     }
 }
 
