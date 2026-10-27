@@ -25,5 +25,8 @@ open Correspondent.xcodeproj
 Debug builds can start signed in for tests and screenshots:
 `CORR_SERVER=http://127.0.0.1:8099 CORR_TOKEN=corr_… CORR_OPEN_FIRST=1`.
 
-The Mac app is distributed as a notarized download; iPhone and iPad through
-TestFlight and the App Store.
+The Mac app is distributed as a notarized download attached to each GitHub
+release (`scripts/release-mac.sh VERSION`); iPhone and iPad through
+TestFlight and the App Store. The script needs Developer ID signing: the
+App Store Connect key with access to cloud-managed Developer ID
+certificates, or a Developer ID Application certificate in the keychain.
