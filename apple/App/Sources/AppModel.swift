@@ -142,7 +142,12 @@ final class AppModel {
         client = Client(server: account.server, token: token)
         offline = OfflineStore(account: account.key)
         Task {
-            if let me = try? await client?.me(), let p = me.prefs { prefs = p }
+            if let me = try? await client?.me(), let p = me.prefs {
+                prefs = p
+                #if os(macOS)
+                AppIconChoice(rawValue: p.appIcon)?.apply()
+                #endif
+            }
         }
     }
 

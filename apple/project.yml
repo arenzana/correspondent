@@ -38,6 +38,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.arenzana.correspondent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Byline AppIcon-Morse
+        "ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=macosx*]": ""
         PRODUCT_NAME: Correspondent
         INFOPLIST_KEY_CFBundleDisplayName: Correspondent
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.news

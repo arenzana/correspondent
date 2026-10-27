@@ -62,6 +62,27 @@ struct SettingsView: View {
                     themeTile("night", "Night desk", [Theme.night])
                 }
             }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("App icon").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                HStack(spacing: 14) {
+                    ForEach(AppIconChoice.allCases) { icon in
+                        let on = app.prefs.appIcon == icon.rawValue
+                        Button {
+                            app.setPrefs({ $0.appIcon = icon.rawValue }, ["appIcon": icon.rawValue])
+                            icon.apply()
+                        } label: {
+                            VStack(spacing: 6) {
+                                icon.preview.resizable().frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 13.5, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 13.5, style: .continuous).stroke(on ? theme.accent : .clear, lineWidth: 2.5).padding(-4))
+                                Text(icon.label).font(Typeface.ui.font(13, weight: on ? 600 : 450)).foregroundStyle(on ? theme.accent : theme.ink)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+            }
         }
     }
 

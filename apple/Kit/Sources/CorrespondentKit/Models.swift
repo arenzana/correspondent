@@ -186,9 +186,11 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var measure: Double
     /// serif (Newsreader) or sans (Schibsted Grotesk).
     public var readFont: String
+    /// wire, byline or morse: the app's icon, as the web app's.
+    public var appIcon: String
 
     public init(theme: String = "auto", unreadOnly: Bool = true, markOnOpen: Bool = true, skipSponsored: Bool = false,
-                readSize: Double = 19, measure: Double = 68, readFont: String = "serif") {
+                readSize: Double = 19, measure: Double = 68, readFont: String = "serif", appIcon: String = "wire") {
         self.theme = theme
         self.unreadOnly = unreadOnly
         self.markOnOpen = markOnOpen
@@ -196,6 +198,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         self.readSize = readSize
         self.measure = measure
         self.readFont = readFont
+        self.appIcon = appIcon
     }
 
     public init(from decoder: Decoder) throws {
@@ -207,6 +210,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         readSize = try c.decodeIfPresent(Double.self, forKey: .readSize) ?? 19
         measure = try c.decodeIfPresent(Double.self, forKey: .measure) ?? 68
         readFont = try c.decodeIfPresent(String.self, forKey: .readFont) ?? "serif"
+        appIcon = try c.decodeIfPresent(String.self, forKey: .appIcon) ?? "wire"
     }
 }
 
