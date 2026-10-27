@@ -72,6 +72,7 @@
       m: () => app.toggleRead(),
       l: () => (app.listening && app.listening.id === app.article?.entry.id ? listen?.toggle() : app.readAloud()),
       L: () => app.listenToList(),
+      S: () => app.summarize(),
       v: () => app.article?.entry.url && window.open(app.article.entry.url, '_blank', 'noopener,noreferrer'),
       A: () => app.markAllRead(),
       r: () => { app.refreshTree(); app.load() },

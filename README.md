@@ -28,6 +28,13 @@ clients are concerned.
   on the server and ship built in for popular AI labs; checking for new
   articles never uses AI, and the model only ever returns CSS selectors,
   which are checked against the page before use. Works from Reeder too.
+- **Search everything you've read.** Search finds articles by their text,
+  not only titles: results appear as you type in the search box (`⌘K`, `/`
+  or the Search tab), and work offline for articles kept on the device.
+- **Summaries when you want one.** `Shift+S` (or the summary button) shows a
+  two-or-three-sentence summary, written by your own AI only when you ask,
+  and shared: once anyone has had an article summarized, everyone with it
+  can read the summary without using their AI.
 - **Notifications you choose.** Off by default; turn them on per device and
   pick feeds with the bell.
 - **Live across devices.** Read something in Reeder and it updates in the
@@ -146,8 +153,8 @@ or ⌘K): each invitation is a one-time link, valid for a week, where the
 person chooses their own username and password; a password reset is a
 one-time link too, so passwords never pass through the admin. Each reader
 has their own feeds, folders, read state, settings, Reeder password and AI
-key; parsers for sites without feeds, read-aloud audio and the image cache
-are shared.
+key; parsers for sites without feeds, summaries, read-aloud audio and the
+image cache are shared.
 
 The admin can make others admins, disable an account (it is signed out
 everywhere at once, Reeder included, and its feeds stop updating; its data
@@ -192,7 +199,7 @@ make vuln    # govulncheck + npm audit
 
 Any article can be read aloud in a natural voice (English), with your own
 text-to-speech key: OpenAI or a compatible service, ElevenLabs, or
-Deepgram (Settings → Reading). Press `l` or the headphones in an article;
+Deepgram (Settings → AI). Press `l` or the headphones in an article;
 it keeps playing while you browse, with lock-screen controls on phones.
 
 Audio is made once and shared: when anyone on the server has had an

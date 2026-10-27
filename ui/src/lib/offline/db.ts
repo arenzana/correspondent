@@ -117,7 +117,8 @@ export async function queryEntries(query: OfflineQuery, feedsInFolder: (folder: 
       if (query.view === 'unread' && e.read) return false
       if (query.view === 'starred' && !e.starred) return false
       if (query.view === 'today' && e.publishedAt * 1000 < today.getTime()) return false
-      if (needle && !`${e.title} ${e.excerpt} ${e.author}`.toLowerCase().includes(needle)) return false
+      // Offline, the article text is searched too (without its markup).
+      if (needle && !`${e.title} ${e.excerpt} ${e.author} ${(e.content ?? '').replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(needle)) return false
       return true
     })
     .sort((a, b) => b.publishedAt - a.publishedAt || (BigInt(b.id) > BigInt(a.id) ? 1 : -1))

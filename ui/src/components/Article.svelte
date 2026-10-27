@@ -93,6 +93,19 @@
           <Icon name="external" />
         </a>
       {/if}
+      {#if app.ai || a.entry.summary}
+        <button
+          class="icon-btn"
+          class:busy={app.summarizing === a.entry.id}
+          aria-pressed={app.summaryOpen === a.entry.id}
+          aria-label={app.summarizing === a.entry.id ? 'Summarizing' : 'Summary'}
+          title={app.summarizing === a.entry.id ? 'Summarizing' : a.entry.summary ? 'Summary (Shift+S)' : 'Summarize (Shift+S)'}
+          disabled={!!app.summarizing || !a.entry.content}
+          onclick={() => app.summarize()}
+        >
+          <Icon name="summary" />
+        </button>
+      {/if}
       {#if app.speech || a.entry.audio}
         <button
           class="icon-btn"
@@ -141,6 +154,23 @@
             {#if minutes}<span>{minutes} min read</span>{/if}
           </p>
         </header>
+
+        {#if a.entry.sponsored && !app.prefs.skipSponsored && !app.prefs.sponsoredAsked}
+          <div class="partial sponsored" role="note">
+            <p>We think this is a sponsored post. Would you rather not see posts like it?</p>
+            <div class="partial-actions">
+              <button class="btn primary" onclick={() => app.answerSponsored(true)}>Skip sponsored posts</button>
+              <button class="btn" onclick={() => app.answerSponsored(false)}>Keep showing them</button>
+            </div>
+          </div>
+        {/if}
+
+        {#if app.summaryOpen === a.entry.id && a.entry.summary}
+          <aside class="summary" aria-label="Summary">
+            <p>{a.entry.summary}</p>
+            <small>Summary written by AI.</small>
+          </aside>
+        {/if}
 
         {#each audio as en (en.url)}
           <audio class="media" controls preload="none" src={en.url}></audio>
@@ -214,6 +244,22 @@
 <style>
   .icon-btn.busy {
     animation: breathe 1.2s ease-in-out infinite;
+  }
+  .summary {
+    margin: 0 0 28px;
+    padding: 2px 0 2px 16px;
+    border-left: 2px solid var(--accent);
+    font-family: var(--font-ui);
+    font-size: calc(15.5px * var(--ui-scale));
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  .summary p {
+    margin: 0 0 6px;
+  }
+  .summary small {
+    color: var(--slate);
+    font-size: calc(12px * var(--ui-scale));
   }
   @keyframes breathe {
     50% {
@@ -450,6 +496,9 @@
     padding: 16px 18px;
     border-radius: var(--radius-l);
     background: var(--fog);
+  }
+  .partial.sponsored {
+    margin: 0 0 28px;
   }
   .partial p {
     margin: 0 0 12px;

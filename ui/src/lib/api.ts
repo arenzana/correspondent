@@ -61,6 +61,10 @@ export interface Entry {
   fullError?: string
   /** Audio of the article read aloud exists. */
   audio?: boolean
+  /** Looks like a paid post (by its title or the feed's category). */
+  sponsored?: boolean
+  /** The article's shared summary, when anyone has had one made (single articles only). */
+  summary?: string
 }
 
 export interface Enclosure {
@@ -301,6 +305,8 @@ export const api = {
   deleteSpeech: () => request<void>('DELETE', '/speech'),
   /** Makes (or finds) the article's audio; resolves when it's ready to play. */
   makeAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio`),
+  /** The article's summary: the shared one, or one written now by the reader's AI. */
+  summarize: (id: ID) => request<{ summary: string }>('POST', `/entries/${id}/summary`),
   /** Finds audio that already exists, never making any (404 when there's none). */
   findAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio?make=0`),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),

@@ -1,7 +1,9 @@
 <script lang="ts">
-  // ⌘K: one place to jump to any feed or folder, search article text, or run
-  // an action. Items are ranked by a simple subsequence score.
+  // ⌘K: one place to jump to any feed or folder, find articles by their
+  // text, or run an action. Feeds and actions are ranked by a simple
+  // subsequence score; articles come from the server's full-text search.
   import { app, type Source } from '../lib/state.svelte'
+  import { api, type Entry } from '../lib/api'
   import Modal from './Modal.svelte'
   import Icon, { type IconName } from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
@@ -9,6 +11,24 @@
   type Item = { id: string; label: string; hint?: string; icon?: IconName; feedIcon?: string; group: string; run: () => void }
 
   let q = $state('')
+  /** Articles whose title or text match, as you type. */
+  let found = $state<Entry[]>([])
+  $effect(() => {
+    const term = q.trim()
+    if (term.length < 2 || !app.online) {
+      found = []
+      return
+    }
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.entries({ view: 'all', q: term, limit: 8 })
+        if (q.trim() === term) found = r.entries
+      } catch {
+        found = []
+      }
+    }, 180)
+    return () => clearTimeout(t)
+  })
   let active = $state(0)
   let input: HTMLInputElement | undefined = $state()
 
@@ -31,6 +51,9 @@
         hint: f.unread ? `${f.unread} unread` : undefined, run: go({ kind: 'feed', id: f.id }),
       })),
       { id: 'a-mark', label: `Mark all as read in ${scopeName}`, icon: 'checkAll', group: 'Actions', hint: '⇧A', run: () => app.markAllRead() },
+      ...(app.article && (app.ai || app.article.entry.summary)
+        ? [{ id: 'a-summary', label: 'Summary of this article', icon: 'summary' as IconName, group: 'Actions', hint: '⇧S', run: () => app.summarize() }]
+        : []),
       { id: 'a-listen', label: `Listen to unread with audio in ${scopeName}`, icon: 'headphones', group: 'Actions', hint: '⇧L', run: () => app.listenToList() },
       { id: 'a-manage', label: 'Manage subscriptions', icon: 'rss', group: 'Actions', hint: 'g m', run: () => app.manage() },
       { id: 'a-add', label: 'Add feed…', icon: 'plus', group: 'Actions', hint: 'a', run: () => (app.addFeedOpen = true) },
@@ -86,11 +109,19 @@
       .map((it) => ({ it, s: score(it.label, q) }))
       .filter((r) => r.s > 0)
     if (q.trim()) ranked.sort((a, b) => b.s - a.s)
-    const list = ranked.slice(0, q.trim() ? 12 : 40).map((r) => r.it)
-    if (q.trim()) {
+    const term = q.trim()
+    const list = ranked.slice(0, term ? (found.length ? 5 : 12) : 40).map((r) => r.it)
+    if (term) {
+      for (const e of found) {
+        const feed = app.feedById.get(e.feedId)
+        list.push({
+          id: 'e' + e.id, label: e.title || 'Untitled', hint: feed?.title, feedIcon: feed?.iconUrl ?? '', group: 'Articles',
+          run: () => app.openFound(term, e.id),
+        })
+      }
       list.push({
-        id: 'search', label: `Search articles for “${q.trim()}”`, icon: 'search', group: 'Search',
-        run: () => { app.query = q.trim(); app.go({ kind: 'view', view: 'all' }) },
+        id: 'search', label: `All articles matching “${term}”`, icon: 'search', group: 'Articles',
+        run: () => { app.query = term; app.go({ kind: 'view', view: 'all' }) },
       })
     }
     return list
@@ -135,7 +166,7 @@
       bind:this={input}
       bind:value={q}
       onkeydown={onkey}
-      placeholder="Jump to a feed, search articles, or run a command"
+      placeholder="Search articles, jump to a feed, or run a command"
       role="combobox"
       aria-expanded="true"
       aria-controls="palette-list"

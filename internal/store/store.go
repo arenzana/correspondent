@@ -53,6 +53,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	if _, err := s.FillSearchText(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("index article text: %w", err)
+	}
 	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(id), 0) FROM entries`).Scan(&s.lastID); err != nil {
 		db.Close()
 		return nil, err

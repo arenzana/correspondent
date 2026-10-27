@@ -179,16 +179,56 @@
     }
   }
 
-  const sections = [
+  const sections = $derived([
     { id: 'account', label: 'Account' },
     { id: 'appearance', label: 'Appearance' },
     { id: 'reading', label: 'Reading' },
     { id: 'feeds', label: 'Feeds' },
+    ...(app.aiAvailable ? [{ id: 'ai', label: 'AI' }] : []),
     { id: 'apps', label: 'Apps & sync' },
     { id: 'about', label: 'About' },
-  ]
+  ])
   let scroller: HTMLElement | undefined = $state()
   let current = $state('account')
+
+  // Search: hides the cards and rows that don't mention every word typed
+  // (their text, or their data-terms), and sections left empty. A section
+  // whose title matches shows whole.
+  let search = $state('')
+  let nothingFound = $state(false)
+  function filter() {
+    const words = search.toLowerCase().split(/\s+/).filter(Boolean)
+    const matches = (el: Element) => {
+      const text = `${el.textContent} ${el.getAttribute('data-terms') ?? ''}`.toLowerCase()
+      return words.every((w) => text.includes(w))
+    }
+    let any = false
+    for (const sec of scroller?.querySelectorAll<HTMLElement>('.content > section') ?? []) {
+      const whole = !words.length || matches(sec.querySelector('h2') ?? sec)
+      let shown = 0
+      for (const el of sec.children) {
+        if (el.tagName === 'H2') continue
+        const show = whole || matches(el)
+        el.toggleAttribute('data-unmatched', !show)
+        if (show) shown++
+      }
+      sec.toggleAttribute('data-unmatched', !whole && shown === 0)
+      if (whole || shown) any = true
+    }
+    nothingFound = !any
+  }
+  $effect(() => {
+    void search
+    filter()
+  })
+  // Cards that appear later (a form opening, a list loading) follow the search too.
+  $effect(() => {
+    const content = scroller?.querySelector('.content')
+    if (!content) return
+    const mo = new MutationObserver(() => search && filter())
+    mo.observe(content, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  })
 
   function show(id: string) {
     current = id
@@ -338,6 +378,10 @@
       <h1 id="settings-title">Settings</h1>
       <p class="sub">Signed in as {app.user}</p>
     </div>
+    <label class="find">
+      <Icon name="search" size={16} />
+      <input type="search" placeholder="Search settings" aria-label="Search settings" bind:value={search} autocomplete="off" spellcheck="false" />
+    </label>
   </header>
 
   <nav class="chips" aria-label="Settings sections">
@@ -357,6 +401,7 @@
     </nav>
 
     <div class="content">
+      {#if nothingFound}<p class="none" role="status">No settings match “{search.trim()}”.</p>{/if}
       <section id="settings-account">
         <h2>Account</h2>
         <div class="whoami">
@@ -557,8 +602,73 @@
           <input type="checkbox" role="switch" checked={app.prefs.skipSponsored} onchange={(e) => app.setPrefs({ skipSponsored: e.currentTarget.checked })} />
         </label>
 
-        {#if app.aiAvailable}
-          <div class="card">
+      </section>
+
+      <section id="settings-feeds">
+        <h2>Feeds</h2>
+        <div class="stats">
+          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.total}</strong><span>feeds</span></button>
+          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.full}</strong><span>with full articles</span></button>
+          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.pages}</strong><span>read from pages</span></button>
+          <button class="stat" class:warn={feedStats.failing > 0} onclick={() => app.manage()}><strong>{feedStats.failing}</strong><span>failing</span></button>
+        </div>
+        <div class="actions-row">
+          <button class="btn primary" onclick={() => app.manage()}>Open Subscriptions</button>
+          <button class="btn" onclick={() => (app.addFeedOpen = true)}><Icon name="plus" size={16} />Add feed</button>
+          <button class="btn" onclick={() => fileInput?.click()}>Import OPML…</button>
+          <a class="btn" href="/api/v1/opml" download>Export OPML</a>
+          <input bind:this={fileInput} type="file" accept=".opml,.xml,text/xml,text/x-opml" hidden onchange={importFile} />
+        </div>
+        {#if importMessage}<p class="msg" role="status">{importMessage}</p>{/if}
+
+      </section>
+
+      {#if app.aiAvailable}
+        <section id="settings-ai">
+          <h2>AI</h2>
+          <div class="card" data-terms="openai anthropic claude gpt key model parser summary summaries site page">
+            <h3>AI model</h3>
+            <p class="hint">Your own AI, used only when you ask, and shared so nothing is done twice:</p>
+            <ul class="hint uses">
+              <li><strong>Summaries.</strong> A short summary of an article (<kbd>Shift</kbd>+<kbd>S</kbd> or the summary
+                button). Once made, everyone here with that article can read it.</li>
+              <li><strong>Sites without feeds.</strong> When a site you add has no feed and its articles can’t be found on
+                the page, your AI writes a parser for it, once. Checking for new articles never uses AI. It also reads
+                sites added from Reeder.</li>
+            </ul>
+            <form class="ai" onsubmit={saveAI}>
+              <label>
+                <span>Provider</span>
+                <select class="field" bind:value={aiProvider}>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="openai">OpenAI or compatible</option>
+                </select>
+              </label>
+              <label>
+                <span>Model</span>
+                <input class="field" bind:value={aiModel} autocomplete="off" spellcheck="false"
+                  placeholder={aiProvider === 'anthropic' ? 'claude-opus-5-5' : 'Model name'} required={aiProvider === 'openai'} />
+              </label>
+              <label class="wide">
+                <span>Address <small>(optional, for a compatible service)</small></span>
+                <input class="field" type="url" bind:value={aiBase} autocomplete="off" spellcheck="false"
+                  placeholder={aiProvider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'} />
+              </label>
+              <label class="wide">
+                <span>API key</span>
+                <input class="field" type="password" bind:value={aiKey} autocomplete="off" spellcheck="false"
+                  placeholder={app.ai?.keyHint ? `Saved key ending ${app.ai.keyHint}` : 'Paste your API key'} required={!app.ai} />
+              </label>
+              <div class="actions-row wide">
+                <button class="btn primary" disabled={aiBusy}>{aiBusy ? 'Checking…' : 'Save'}</button>
+                {#if app.ai}<button type="button" class="btn" onclick={removeAI}>Remove</button>{/if}
+              </div>
+            </form>
+            <p class="hint">The key is checked with the provider, stored encrypted, and never shown again. Up to 100 summaries and 20 sites a day.</p>
+            {#if aiMessage}<p class="msg" role="status">{aiMessage}</p>{/if}
+          </div>
+
+          <div class="card" data-terms="tts text to speech voice audio listen podcast openai elevenlabs deepgram key">
             <h3>Read aloud</h3>
             <p class="hint">
               Listen to any article in a natural voice, with your own text-to-speech key. Press <kbd>l</kbd> or the
@@ -609,67 +719,8 @@
             </p>
             {#if speechMessage}<p class="msg" role="status">{speechMessage}</p>{/if}
           </div>
-        {/if}
-      </section>
-
-      <section id="settings-feeds">
-        <h2>Feeds</h2>
-        <div class="stats">
-          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.total}</strong><span>feeds</span></button>
-          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.full}</strong><span>with full articles</span></button>
-          <button class="stat" onclick={() => app.manage()}><strong>{feedStats.pages}</strong><span>read from pages</span></button>
-          <button class="stat" class:warn={feedStats.failing > 0} onclick={() => app.manage()}><strong>{feedStats.failing}</strong><span>failing</span></button>
-        </div>
-        <div class="actions-row">
-          <button class="btn primary" onclick={() => app.manage()}>Open Subscriptions</button>
-          <button class="btn" onclick={() => (app.addFeedOpen = true)}><Icon name="plus" size={16} />Add feed</button>
-          <button class="btn" onclick={() => fileInput?.click()}>Import OPML…</button>
-          <a class="btn" href="/api/v1/opml" download>Export OPML</a>
-          <input bind:this={fileInput} type="file" accept=".opml,.xml,text/xml,text/x-opml" hidden onchange={importFile} />
-        </div>
-        {#if importMessage}<p class="msg" role="status">{importMessage}</p>{/if}
-
-        {#if app.aiAvailable}
-          <div class="card">
-            <h3>AI for sites without feeds</h3>
-            <p class="hint">
-              When a site you add has no feed and its articles can’t be found on the page, your AI writes a parser for it,
-              once. Everyone on this server who follows that page shares it, and checking for new articles never uses AI.
-              It also reads sites added from Reeder.
-            </p>
-            <form class="ai" onsubmit={saveAI}>
-              <label>
-                <span>Provider</span>
-                <select class="field" bind:value={aiProvider}>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="openai">OpenAI or compatible</option>
-                </select>
-              </label>
-              <label>
-                <span>Model</span>
-                <input class="field" bind:value={aiModel} autocomplete="off" spellcheck="false"
-                  placeholder={aiProvider === 'anthropic' ? 'claude-opus-5-5' : 'Model name'} required={aiProvider === 'openai'} />
-              </label>
-              <label class="wide">
-                <span>Address <small>(optional, for a compatible service)</small></span>
-                <input class="field" type="url" bind:value={aiBase} autocomplete="off" spellcheck="false"
-                  placeholder={aiProvider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'} />
-              </label>
-              <label class="wide">
-                <span>API key</span>
-                <input class="field" type="password" bind:value={aiKey} autocomplete="off" spellcheck="false"
-                  placeholder={app.ai?.keyHint ? `Saved key ending ${app.ai.keyHint}` : 'Paste your API key'} required={!app.ai} />
-              </label>
-              <div class="actions-row wide">
-                <button class="btn primary" disabled={aiBusy}>{aiBusy ? 'Checking…' : 'Save'}</button>
-                {#if app.ai}<button type="button" class="btn" onclick={removeAI}>Remove</button>{/if}
-              </div>
-            </form>
-            <p class="hint">The key is checked with the provider, stored encrypted, and never shown again. Up to 20 AI requests a day.</p>
-            {#if aiMessage}<p class="msg" role="status">{aiMessage}</p>{/if}
-          </div>
-        {/if}
-      </section>
+        </section>
+      {/if}
 
       <section id="settings-apps">
         <h2>Apps &amp; sync</h2>
@@ -763,6 +814,55 @@
   .titles {
     flex: 1;
     min-width: 0;
+  }
+  .find {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: min(260px, 40%);
+    color: var(--slate);
+  }
+  .find :global(svg) {
+    position: absolute;
+    left: 10px;
+    pointer-events: none;
+  }
+  .find input {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px 0 32px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-s);
+    background: var(--sheet);
+    color: var(--ink);
+    font: inherit;
+    font-size: calc(14px * var(--ui-scale));
+  }
+  .find input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  @media (max-width: 599px) {
+    .head {
+      flex-wrap: wrap;
+    }
+    .find {
+      width: 100%;
+    }
+  }
+  /* Search hides what doesn't match, whatever display a card has. */
+  .content :global([data-unmatched]) {
+    display: none !important;
+  }
+  .none {
+    color: var(--slate);
+  }
+  .uses {
+    margin: 0 0 12px;
+    padding-left: 18px;
+  }
+  .uses li + li {
+    margin-top: 6px;
   }
   h1 {
     margin: 0;

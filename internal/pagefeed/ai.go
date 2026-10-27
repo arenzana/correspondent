@@ -84,9 +84,19 @@ type Suggester struct {
 
 // model is one provider: a conversation that answers with JSON text.
 type model interface {
-	start() chat
+	start(t task) chat
 	verify(ctx context.Context) error
 }
+
+// task is what a conversation is for: its instructions and the JSON shape
+// of every answer.
+type task struct {
+	system string
+	name   string
+	schema map[string]any
+}
+
+var selectorsTask = task{system: system, name: "page_selectors", schema: schema}
 
 type chat interface {
 	ask(ctx context.Context, text string) (string, error)
@@ -173,7 +183,7 @@ func (s *Suggester) Suggest(ctx context.Context, body []byte, pageURL string) (R
 	if err != nil {
 		return Rules{}, nil, err
 	}
-	c := s.model.start()
+	c := s.model.start(selectorsTask)
 	prompt := "Page address: " + pageURL + "\n\n<outline>\n" + outline + "\n</outline>"
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
@@ -224,10 +234,11 @@ func (m *anthropicModel) verify(ctx context.Context) error {
 	return nil
 }
 
-func (m *anthropicModel) start() chat { return &anthropicChat{m: m} }
+func (m *anthropicModel) start(t task) chat { return &anthropicChat{m: m, t: t} }
 
 type anthropicChat struct {
 	m        *anthropicModel
+	t        task
 	messages []anthropic.BetaMessageParam
 }
 
@@ -237,10 +248,10 @@ func (c *anthropicChat) ask(ctx context.Context, text string) (string, error) {
 	params := anthropic.BetaMessageNewParams{
 		Model:     c.m.model,
 		MaxTokens: 16000,
-		System:    []anthropic.BetaTextBlockParam{{Text: system}},
+		System:    []anthropic.BetaTextBlockParam{{Text: c.t.system}},
 		Messages:  c.messages,
 		OutputConfig: anthropic.BetaOutputConfigParam{
-			Format: anthropic.BetaJSONOutputFormatParam{Schema: schema},
+			Format: anthropic.BetaJSONOutputFormatParam{Schema: c.t.schema},
 		},
 	}
 	if c.m.official {
@@ -277,7 +288,7 @@ type openAI struct {
 	base, key, model string
 }
 
-func (m *openAI) start() chat { return &openAIChat{m: m} }
+func (m *openAI) start(t task) chat { return &openAIChat{m: m, t: t} }
 
 func (m *openAI) verify(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.base+"/models", nil)
@@ -303,6 +314,7 @@ type openAIMessage struct {
 
 type openAIChat struct {
 	m        *openAI
+	t        task
 	messages []openAIMessage
 	// plainJSON falls back to json_object for services without json_schema.
 	plainJSON bool
@@ -310,11 +322,11 @@ type openAIChat struct {
 
 func (c *openAIChat) ask(ctx context.Context, text string) (string, error) {
 	if c.messages == nil {
-		c.messages = []openAIMessage{{Role: "system", Content: system}}
+		c.messages = []openAIMessage{{Role: "system", Content: c.t.system}}
 	}
 	c.messages = append(c.messages, openAIMessage{Role: "user", Content: text})
 	for {
-		format := map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "page_selectors", "strict": true, "schema": schema}}
+		format := map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": c.t.name, "strict": true, "schema": c.t.schema}}
 		if c.plainJSON {
 			format = map[string]any{"type": "json_object"}
 		}

@@ -101,7 +101,7 @@
           <button class="btn primary" disabled={busy} onclick={() => askAI()}>Find the articles with AI</button>
         {:else if app.aiAvailable}
           <p>Set up AI in Settings and it can write a parser for pages like this one.</p>
-          <button class="btn" onclick={() => { close(); app.openSettings('feeds') }}>Open Settings</button>
+          <button class="btn" onclick={() => { close(); app.openSettings('ai') }}>Open Settings</button>
         {/if}
       </div>
     {/if}

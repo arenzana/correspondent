@@ -7,6 +7,23 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- Summaries: `Shift+S`, the summary button or the command palette shows a
+  short summary of the article (two or three sentences), written by your
+  own AI only when you ask. Summaries are shared: once anyone has had an
+  article summarized, everyone with the same article reads it without
+  using their AI. Up to 100 new summaries a day per reader.
+- Search finds articles by their text, not only titles and excerpts.
+  Matching articles appear as you type in the search box (`⌘K`, `/`, or the
+  Search tab), and offline search covers the text of articles kept on the
+  device. Articles already stored are indexed when the server starts.
+- Search in Settings.
+- Settings has an AI section, with your AI model (summaries and sites
+  without feeds) and read-aloud together.
+- A sponsored post now asks whether you'd rather not see posts like it,
+  with "Skip sponsored posts" and "Keep showing them".
+
 ## [0.14.1] - 2026-10-27
 
 ### Added

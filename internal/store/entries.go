@@ -37,8 +37,12 @@ type Entry struct {
 	FullError   string `json:"fullError"` // why fetching the full article failed
 	Audio       string `json:"-"`         // file of the audio read aloud, if made
 	HasAudio    bool   `json:"audio"`
-	StarredAt   int64  `json:"-"`
-	ReadAt      int64  `json:"-"`
+	Sponsored   bool   `json:"sponsored,omitempty"` // looks like a paid post (title or feed category)
+	// Summary is the article's shared summary, when anyone has had one made
+	// (filled in by the API for a single article, never in lists).
+	Summary   string `json:"summary,omitempty"`
+	StarredAt int64  `json:"-"`
+	ReadAt    int64  `json:"-"`
 }
 
 // NewEntry is a normalized, sanitized item ready to store.
@@ -129,11 +133,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url,
 				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at,
-				                     feed_content, full_error, sponsored)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				                     feed_content, full_error, sponsored, search_text)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				s.nextID(now), feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt,
 				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix(),
-				feedContent, it.FullError, it.Sponsored)
+				feedContent, it.FullError, it.Sponsored, searchText(it.Content))
 			if err != nil {
 				return 0, 0, fmt.Errorf("insert %q: %w", it.GUID, err)
 			}
@@ -153,10 +157,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			_, err = tx.ExecContext(ctx, `
 				UPDATE entries SET url = ?, title = ?, author = ?,
 				       content = CASE WHEN feed_content IS NULL THEN ? ELSE content END,
+				       search_text = CASE WHEN feed_content IS NULL THEN ? ELSE search_text END,
 				       feed_content = CASE WHEN feed_content IS NULL THEN NULL ELSE ? END,
 				       excerpt = ?, image_url = CASE WHEN ? <> '' THEN ? ELSE image_url END,
 				       enclosures = ?, content_hash = ?, updated_at = ? WHERE id = ?`,
-				it.URL, it.Title, it.Author, it.Content, it.Content, it.Excerpt, it.ImageURL, it.ImageURL,
+				it.URL, it.Title, it.Author, it.Content, searchText(it.Content), it.Content, it.Excerpt, it.ImageURL, it.ImageURL,
 				it.Enclosures, it.ContentHash, now.Unix(), id)
 			if err != nil {
 				return 0, 0, err
@@ -183,7 +188,7 @@ type Filter struct {
 	FolderID int64
 	State    State
 	Exclude  State   // e.g. exclude read (Reader xt=read)
-	Query    string  // FTS5 query over title/excerpt/author
+	Query    string  // FTS5 query over title, excerpt, author and article text
 	IDs      []int64 // restrict to these IDs
 	MinID    int64   // id >= MinID (crawl-time lower bound)
 	MaxID    int64   // id <= MaxID (crawl-time upper bound)
@@ -287,11 +292,11 @@ func ftsQuery(q string) string {
 
 const entryColumns = `e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.excerpt, e.image_url, e.enclosures,
 	e.published_at, e.updated_at, COALESCE(e.read_at, 0), COALESCE(e.starred_at, 0),
-	e.feed_content IS NOT NULL, e.full_error, COALESCE(e.audio, '')`
+	e.feed_content IS NOT NULL, e.full_error, COALESCE(e.audio, ''), e.sponsored`
 
 func scanEntry(sc interface{ Scan(...any) error }, e *Entry, extra ...any) error {
 	dest := []any{&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Excerpt, &e.ImageURL,
-		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError, &e.Audio}
+		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError, &e.Audio, &e.Sponsored}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -679,10 +684,12 @@ func (s *Store) ImportEntries(ctx context.Context, feedID int64, items []Importe
 		}
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url, enclosures,
-			                     content_hash, published_at, updated_at, read_at, starred_at, state_at, imported, last_seen_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT DO NOTHING`,
+			                     content_hash, published_at, updated_at, read_at, starred_at, state_at, imported, last_seen_at,
+			                     search_text)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING`,
 			it.ID, feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt, it.ImageURL,
-			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, stateAt, it.LastSeen)
+			it.Enclosures, it.ContentHash, pub, it.ID/1_000_000, readAt, starredAt, stateAt, it.LastSeen,
+			searchText(it.Content))
 		if err != nil {
 			return n, err
 		}
@@ -732,11 +739,11 @@ func (s *Store) KnownGUIDs(ctx context.Context, feedID int64, guids []string) (m
 // excerpt or image is filled from the article.
 func (s *Store) SetFullText(ctx context.Context, userID, entryID int64, html, excerpt, imageURL string) error {
 	return checkAffected(s.db.ExecContext(ctx, `
-		UPDATE entries SET feed_content = COALESCE(feed_content, content), content = ?, full_error = '',
+		UPDATE entries SET feed_content = COALESCE(feed_content, content), content = ?, search_text = ?, full_error = '',
 		       excerpt = CASE WHEN excerpt = '' THEN ? ELSE excerpt END,
 		       image_url = CASE WHEN image_url = '' THEN ? ELSE image_url END
 		 WHERE id = ? AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`,
-		html, excerpt, imageURL, entryID, userID))
+		html, searchText(html), excerpt, imageURL, entryID, userID))
 }
 
 // SetFullError records why fetching an entry's full article failed.
@@ -748,10 +755,18 @@ func (s *Store) SetFullError(ctx context.Context, userID, entryID int64, msg str
 
 // RevertFullText puts the feed's own content back.
 func (s *Store) RevertFullText(ctx context.Context, userID, entryID int64) error {
+	var feedHTML sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT feed_content FROM entries
+		 WHERE id = ? AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`, entryID, userID).Scan(&feedHTML)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !feedHTML.Valid) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
 	return checkAffected(s.db.ExecContext(ctx, `
-		UPDATE entries SET content = feed_content, feed_content = NULL
+		UPDATE entries SET content = feed_content, search_text = ?, feed_content = NULL
 		 WHERE id = ? AND feed_content IS NOT NULL AND feed_id IN (SELECT id FROM feeds WHERE user_id = ?)`,
-		entryID, userID))
+		searchText(feedHTML.String), entryID, userID))
 }
 
 // WithoutFullText lists a feed's newest entries (unread first) that still

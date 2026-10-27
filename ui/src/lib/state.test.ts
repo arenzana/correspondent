@@ -494,3 +494,24 @@ describe('listening to a list', () => {
     expect(app.listening?.id).toBe('4')
   })
 })
+
+describe('the sponsored-post question', () => {
+  beforeEach(() => {
+    app.prefs = { ...app.prefs, skipSponsored: false, sponsoredAsked: false }
+    vi.mocked(api.setState).mockResolvedValue({ changed: 1 })
+  })
+
+  it('skips sponsored posts from now on, and this one is read', () => {
+    app.article = { entry: entry('1', { sponsored: true }), enclosures: [] }
+    app.answerSponsored(true)
+    expect(app.prefs.skipSponsored).toBe(true)
+    expect(api.setState).toHaveBeenCalledWith('read', ['1'])
+    expect(app.toasts.at(-1)?.message).toMatch(/Settings → Reading/)
+  })
+
+  it('keeps showing them, and stops asking', () => {
+    app.answerSponsored(false)
+    expect(app.prefs.skipSponsored).toBe(false)
+    expect(app.prefs.sponsoredAsked).toBe(true)
+  })
+})

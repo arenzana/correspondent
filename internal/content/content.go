@@ -220,3 +220,44 @@ func LooksPartial(html string) bool {
 	}
 	return len(text) < partialMaxTeaser && ellipsisEnd.MatchString(string(text))
 }
+
+// SearchText is an article's words as plain text, for search and for
+// summaries: block boundaries become spaces (so "end.</p><p>Next" stays
+// two words), and scripts and styles are dropped. It is cut at max bytes.
+func SearchText(htmlText string, max int) string {
+	z := html.NewTokenizer(strings.NewReader(htmlText))
+	var b strings.Builder
+	skip := 0
+	for b.Len() < max+64 {
+		tt := z.Next()
+		if tt == html.ErrorToken {
+			break
+		}
+		switch tt {
+		case html.StartTagToken, html.EndTagToken:
+			name, _ := z.TagName()
+			if a := atom.Lookup(name); a == atom.Script || a == atom.Style {
+				if tt == html.StartTagToken {
+					skip++
+				} else if skip > 0 {
+					skip--
+				}
+			}
+			b.WriteByte(' ')
+		case html.SelfClosingTagToken:
+			b.WriteByte(' ')
+		case html.TextToken:
+			if skip == 0 {
+				b.Write(z.Text())
+			}
+		}
+	}
+	s := collapse(b.String())
+	if len(s) > max {
+		s = s[:max]
+		for !utf8.ValidString(s) {
+			s = s[:len(s)-1]
+		}
+	}
+	return strings.TrimSpace(s)
+}

@@ -117,6 +117,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/speech", a.session(a.putSpeech))
 	mux.HandleFunc("DELETE /api/v1/speech", a.session(a.deleteSpeech))
 	mux.HandleFunc("POST /api/v1/entries/{id}/audio", a.auth(a.makeAudio))
+	mux.HandleFunc("POST /api/v1/entries/{id}/summary", a.auth(a.summarize))
 	mux.HandleFunc("GET /api/v1/entries/{id}/audio", a.auth(a.audio))
 	mux.HandleFunc("GET /api/v1/audio/{token}", a.audioLink)
 	mux.HandleFunc("DELETE /api/v1/ai", a.session(a.deleteAI))
@@ -409,6 +410,7 @@ func (a *API) entry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sharedAudio(r.Context(), userID(r), e)
+	a.sharedSummary(r.Context(), e)
 	a.proxyEntry(e)
 	var encl []store.Enclosure
 	json.Unmarshal([]byte(e.Enclosures), &encl)
@@ -567,6 +569,9 @@ func (a *API) replyCandidates(w http.ResponseWriter, c []ingest.Candidate) {
 
 const aiContext = "user:%d:ai-key"
 
+// errNoAI: the reader hasn't set up AI.
+var errNoAI = errors.New("set up AI in Settings first")
+
 // aiConfig reads a user's AI setup; ok is false when none is saved.
 func (a *API) aiConfig(ctx context.Context, uid int64) (cfg pagefeed.Config, sealed []byte, ok bool, err error) {
 	sealed, raw, err := a.Store.AI(ctx, uid)
@@ -589,7 +594,7 @@ func (a *API) suggester(ctx context.Context, uid int64) (*pagefeed.Suggester, er
 		return nil, err
 	}
 	if !ok {
-		return nil, errors.New("set up AI in Settings first")
+		return nil, errNoAI
 	}
 	key, err := a.Keyring.Open(sealed, fmt.Sprintf(aiContext, uid))
 	if err != nil {

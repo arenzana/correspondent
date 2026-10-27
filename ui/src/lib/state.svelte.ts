@@ -43,6 +43,8 @@ export interface Prefs {
   markOnOpen: boolean
   /** Read by the server too: sponsored posts arrive already read. */
   skipSponsored: boolean
+  /** Answered the question on a sponsored post with "keep showing them". */
+  sponsoredAsked: boolean
   /** Keep read-aloud audio on this device, to listen offline. */
   offlineAudio: boolean
   sidebar: boolean
@@ -65,6 +67,7 @@ const defaultPrefs: Prefs = {
   unreadOnly: true,
   markOnOpen: true,
   skipSponsored: false,
+  sponsoredAsked: false,
   offlineAudio: true,
   sidebar: true,
   place: null,
@@ -653,6 +656,13 @@ class AppState {
     this.load()
   }
 
+  /** Opens an article found by search, with the matching list behind it. */
+  openFound(query: string, id: ID) {
+    this.query = query
+    this.go({ kind: 'view', view: 'all' })
+    this.select(id)
+  }
+
   sourceKey(s: Source = this.source): string {
     return s.kind === 'view' ? s.view : `${s.kind}/${s.id}`
   }
@@ -1102,6 +1112,48 @@ class AppState {
     }
   }
 
+
+  /** The article whose summary is showing, and the one being summarized. */
+  summaryOpen = $state<ID | null>(null)
+  summarizing = $state<ID | null>(null)
+
+  /** Shows or hides the open article's summary, asking for one if it has none yet. */
+  async summarize() {
+    const e = this.article?.entry
+    if (!e || this.summarizing) return
+    if (this.summaryOpen === e.id) {
+      this.summaryOpen = null
+      return
+    }
+    if (e.summary) {
+      this.summaryOpen = e.id
+      return
+    }
+    this.summarizing = e.id
+    try {
+      const { summary } = await api.summarize(e.id)
+      if (this.article?.entry.id === e.id) this.article = { ...this.article, entry: { ...this.article.entry, summary } }
+      offline.patchEntries([e.id], { summary }).catch(() => {})
+      this.summaryOpen = e.id
+    } catch (err) {
+      this.toast(`Couldn't summarize this article. ${(err as Error).message}`)
+    } finally {
+      this.summarizing = null
+    }
+  }
+
+  /** The answer to "would you rather not see sponsored posts?". */
+  answerSponsored(skip: boolean) {
+    if (!skip) {
+      this.setPrefs({ sponsoredAsked: true })
+      return
+    }
+    // The server marks the waiting ones read when it sees the setting.
+    this.setPrefs({ skipSponsored: true, sponsoredAsked: true })
+    const e = this.article?.entry
+    if (e && !e.read) void this.setRead([e.id], true)
+    this.toast('Sponsored posts will arrive already read. Change this in Settings → Reading.')
+  }
 
   fetchingFull = $state(false)
 
