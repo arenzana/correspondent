@@ -203,6 +203,15 @@ public final class Client: Sendable {
     }
 
     /// Deletes a folder; its feeds are kept, outside any folder.
+    /// Subscribes to the feeds in an OPML file; returns how many were new.
+    public func importOPML(_ file: Data) async throws -> Int {
+        struct Out: Decodable { var added: Int }
+        return try JSONDecoder().decode(Out.self, from: try await data("POST", "/opml", raw: file)).added
+    }
+
+    /// Every subscription, with its folder, as an OPML file.
+    public func exportOPML() async throws -> Data { try await data("GET", "/opml") }
+
     public func createFolder(_ name: String) async throws {
         let _: Empty = try await call("POST", "/folders", body: ["name": name])
     }

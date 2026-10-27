@@ -26,7 +26,10 @@ final class Player: NSObject, AVAudioPlayerDelegate {
     private var ticker: Task<Void, Never>?
     weak var app: AppModel?
 
-    /// Kept audio, as the web's offline audio: the newest 25 articles' files.
+    /// How many articles' audio is kept on the device.
+    static let kept = 25
+
+    /// Kept audio, as the web's offline audio: the newest articles' files.
     static let folder: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("Audio", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -157,7 +160,7 @@ final class Player: NSObject, AVAudioPlayerDelegate {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: Self.folder, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
         let dated = files.map { ($0, (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
-        for (url, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(25) { try? fm.removeItem(at: url) }
+        for (url, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(Self.kept) { try? fm.removeItem(at: url) }
     }
 
     // MARK: Lock screen and headphones

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import CorrespondentKit
 
 /// Settings, as the web's page (ui/src/components/Settings.svelte) for what
@@ -11,14 +12,25 @@ struct SettingsView: View {
     var onBack: (() -> Void)? = nil
     @State private var saving = false
     @State private var confirmSignOut = false
-    @State private var search = ""
+    @State private var search: String = {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["CORR_SETTINGS_SEARCH"] ?? ""
+        #else
+        ""
+        #endif
+    }()
+    @State private var importing = false
+    @State private var exportFile: OPMLFile?
+    @State private var copied = false
 
     /// The sections, with the words each answers to (as the web's settings search).
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
         ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
-        ("Subscriptions", "feeds manage folders rename move pause delete failing address subscriptions"),
-        ("This device", "offline badge count icon dock notifications bell test save background"),
+        ("Feeds", "feeds subscriptions manage folders rename move pause delete failing address opml import export full pages"),
+        ("AI", "ai model anthropic openai claude key summaries parser read aloud speech voice tts elevenlabs deepgram"),
+        ("Apps & sync", "reeder apps freshrss google reader server username password sync api"),
+        ("This device", "offline badge count icon dock notifications bell test save background audio listen"),
         ("Account", "server sign out password passkey web token"),
         ("About", "version build source"),
     ]
@@ -52,7 +64,9 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 34) {
                         if shown.contains("Appearance") { appearance.id("Appearance") }
                         if shown.contains("Reading") { reading.id("Reading") }
-                        if shown.contains("Subscriptions") { subscriptions.id("Subscriptions") }
+                        if shown.contains("Feeds") { feeds.id("Feeds") }
+                        if shown.contains("AI"), app.me?.aiAvailable == true { ai.id("AI") }
+                        if shown.contains("Apps & sync") { apps.id("Apps & sync") }
                         if shown.contains("This device") { device.id("This device") }
                         if shown.contains("Account") { account.id("Account") }
                         if shown.contains("About") { about.id("About") }
@@ -180,15 +194,127 @@ struct SettingsView: View {
         }
     }
 
-    private var subscriptions: some View {
-        section("Subscriptions") {
-            VStack(alignment: .leading, spacing: 10) {
-                let failing = app.tree.feeds.filter { !$0.paused && $0.errorCount > 0 }.count
-                Text("\(app.tree.feeds.count) feeds in \(app.tree.folders.count) folders" + (failing > 0 ? ", \(failing) failing." : "."))
-                    .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
-                Button("Manage subscriptions") { NotificationCenter.default.post(name: .manage, object: nil) }.buttonStyle(QuietButton())
+    private var feeds: some View {
+        section("Feeds") {
+            VStack(alignment: .leading, spacing: 12) {
+                let f = app.tree.feeds
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                    stat(f.count, "feeds")
+                    stat(f.filter(\.fullText).count, "with full articles")
+                    stat(f.filter(\.page).count, "read from pages")
+                    stat(f.filter { !$0.paused && $0.errorCount > 0 }.count, "failing", warn: true)
+                }
+                HStack(spacing: 8) {
+                    Button("Manage subscriptions") { NotificationCenter.default.post(name: .manage, object: nil) }
+                    Button("Import OPML…") { importing = true }
+                    Button("Export OPML") { Task { await exportOPML() } }
+                }
+                .buttonStyle(QuietButton())
             }
         }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [UTType(filenameExtension: "opml") ?? .xml, .xml]) { result in
+            if case .success(let url) = result { Task { await importOPML(url) } }
+        }
+        .fileExporter(isPresented: Binding(get: { exportFile != nil }, set: { if !$0 { exportFile = nil } }),
+                      document: exportFile, contentType: UTType(filenameExtension: "opml") ?? .xml,
+                      defaultFilename: "Correspondent subscriptions.opml") { result in
+            if case .success = result { app.show("Exported your subscriptions.") }
+        }
+    }
+
+    private func stat(_ n: Int, _ label: String, warn: Bool = false) -> some View {
+        Button { NotificationCenter.default.post(name: .manage, object: nil) } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(n)").font(Typeface.read.font(24, weight: 560)).foregroundStyle(warn && n > 0 ? theme.danger : theme.ink)
+                Text(label).font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 8).fill(theme.fog))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func importOPML(_ url: URL) async {
+        guard let client = app.client else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let added = try await client.importOPML(try Data(contentsOf: url))
+            await app.refreshTree()
+            app.show(added == 0 ? "Nothing new: you follow all of those already." : "Subscribed to \(added) \(added == 1 ? "feed" : "feeds").")
+        } catch {
+            app.show("Couldn't import it. \(error.localizedDescription)")
+        }
+    }
+
+    private func exportOPML() async {
+        guard let client = app.client else { return }
+        do { exportFile = OPMLFile(data: try await client.exportOPML()) } catch { app.show("Couldn't export. \(error.localizedDescription)") }
+    }
+
+    /// The reader's own AI and read-aloud setups. Keys are set on the web:
+    /// the server lets only a signed-in browser change them, never a token
+    /// (which is how this app signs in).
+    private var ai: some View {
+        section("AI") {
+            VStack(alignment: .leading, spacing: 12) {
+                setup("AI model", app.me?.ai, uses: "Summaries, and parsers for sites without feeds.")
+                setup("Read aloud", app.me?.speech, uses: "Articles in a natural voice, shared with everyone here once made.")
+                webButton("Change on the web")
+            }
+        }
+    }
+
+    private func setup(_ title: String, _ s: Me.Setup?, uses: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+            Text(uses).font(Typeface.ui.font(13)).foregroundStyle(theme.slate).fixedSize(horizontal: false, vertical: true)
+            if let s, let provider = s.provider {
+                let name = ["anthropic": "Anthropic", "openai": "OpenAI or compatible", "elevenlabs": "ElevenLabs", "deepgram": "Deepgram"][provider] ?? provider
+                let detail = [name, s.model, s.voice.map { "voice \($0)" }, s.keyHint.map { "key ending \($0)" }]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+                Text(detail).font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
+            } else {
+                Text("Not set up.").font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
+            }
+        }
+    }
+
+    /// What Reeder and other FreshRSS-compatible apps need.
+    private var apps: some View {
+        section("Apps & sync") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add a FreshRSS account in Reeder or another app with these details. Your sign-in password never works for apps.")
+                    .font(Typeface.ui.font(14)).foregroundStyle(theme.slate).fixedSize(horizontal: false, vertical: true)
+                let server = (app.account?.server.absoluteString ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/greader.php"
+                HStack {
+                    row("Server", server)
+                    Button(copied ? "Copied" : "Copy") { copy(server); copied = true }
+                        .buttonStyle(.plain).font(Typeface.ui.font(13.5, weight: 560)).foregroundStyle(theme.accent)
+                }
+                row("Username", app.account?.username ?? "")
+                row("App password", app.me?.hasApiPassword == true ? "Set" : "Not set yet")
+                webButton(app.me?.hasApiPassword == true ? "Change the app password on the web" : "Choose an app password on the web")
+            }
+        }
+    }
+
+    /// Opens Settings on the web, where keys and the app password are changed.
+    private func webButton(_ title: String) -> some View {
+        Button(title) {
+            if let server = app.account?.server, let url = URL(string: server.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/#/settings") { openURL(url) }
+        }
+        .buttonStyle(QuietButton())
+    }
+
+    private func copy(_ s: String) {
+        #if os(iOS)
+        UIPasteboard.general.string = s
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(s, forType: .string)
+        #endif
     }
 
     private var device: some View {
@@ -197,6 +323,8 @@ struct SettingsView: View {
                 Text("Unread and starred articles are kept on this device, with their text, for reading offline, and refreshed in the background.")
                     .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
                 toggle(badgeLabel, "Kept up to date in the background.", isOn: app.showBadge) { v in Task { await app.enableBadge(v) } }
+                toggle("Keep audio for listening offline", "Read-aloud audio for the newest \(Player.kept) unread or starred articles that have it. Nothing is downloaded in Low Data Mode.",
+                       isOn: app.offlineAudio) { v in app.offlineAudio = v }
                 if app.notificationsAvailable {
                     toggle("Notifications on this device", "Only feeds you choose notify you: long-press a feed and turn on its bell.",
                            isOn: app.notificationsOn) { v in Task { await app.setNotifications(v) } }
@@ -406,4 +534,13 @@ struct QuietButton: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.rule))
             .opacity(enabled ? 1 : 0.5)
     }
+}
+
+/// An exported OPML file, for the system's save panel.
+struct OPMLFile: FileDocument {
+    static let readableContentTypes = [UTType(filenameExtension: "opml") ?? .xml]
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }

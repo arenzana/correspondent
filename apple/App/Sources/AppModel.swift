@@ -188,7 +188,7 @@ final class AppModel {
         watchSun()
         Task { await flushOutbox() }
         Task {
-            if let me = try? await client?.me() { speechConfigured = me.speech != nil }
+            if let me = try? await client?.me() { speechConfigured = me.speech != nil; self.me = me }
             notificationsAvailable = await client?.appleNotificationsAvailable() ?? false
             // Re-register each launch: tokens can change.
             if notificationsOn, notificationsAvailable { _ = await Notifications.shared.enable() }
@@ -797,6 +797,8 @@ final class AppModel {
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             let up = path.status == .satisfied
+            let constrained = path.isConstrained || path.isExpensive
+            Task { @MainActor in self?.constrained = constrained }
             Task { @MainActor in
                 guard let self else { return }
                 // Losing the network shows at once, not at the next failed request.
@@ -870,16 +872,48 @@ final class AppModel {
     /// Keeps unread and starred articles, with their text, for reading offline.
     func syncOffline() async {
         guard let client, let offline else { return }
+        var withAudio: [Entry] = []
         for (view, pages) in [("unread", 6), ("starred", 3)] {
             var cursor: String?
             for _ in 0..<pages {
                 guard let page = try? await client.entries(.init(view: view, limit: 100, cursor: cursor, content: true)) else { return }
                 await offline.save(entries: page.entries)
+                withAudio += page.entries.filter(\.audio)
                 if page.cursor.isEmpty { break }
                 cursor = page.cursor
             }
         }
         await offline.prune()
+        if offlineAudio, !constrained { await keepAudio(withAudio) }
+    }
+
+    // MARK: Offline audio
+
+    /// The reader's account details for Settings (setups, never keys).
+    var me: Me?
+
+    /// Keep read-aloud audio on this device for listening offline, as the
+    /// web's setting (here, per device).
+    var offlineAudio: Bool = UserDefaults.standard.bool(forKey: "offlineAudio") {
+        didSet {
+            UserDefaults.standard.set(offlineAudio, forKey: "offlineAudio")
+            if offlineAudio { Task { await syncOffline() } }
+        }
+    }
+    /// Low Data Mode or an expensive network: no audio downloads then.
+    private(set) var constrained = false
+
+    /// Downloads the audio of the newest articles that have it, up to what
+    /// the player keeps (Player.kept), skipping files already here.
+    private func keepAudio(_ entries: [Entry]) async {
+        guard let client else { return }
+        let newest = entries.sorted { $0.publishedAt > $1.publishedAt }.prefix(Player.kept)
+        for e in newest {
+            let file = Player.folder.appendingPathComponent("\(e.id).mp3")
+            if FileManager.default.fileExists(atPath: file.path) { continue }
+            guard let data = try? await client.audio(e.id) else { continue }
+            try? data.write(to: file, options: .atomic)
+        }
     }
 
     /// Article IDs are numbers (crawl time in µs) sent as strings.

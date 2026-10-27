@@ -72,7 +72,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: YES
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
-        ENABLE_USER_SELECTED_FILES: readonly
+        # Read and write: importing and exporting OPML.
+        ENABLE_USER_SELECTED_FILES: readwrite
   Share:
     type: app-extension
     platform: iOS

@@ -319,13 +319,18 @@ public struct Prefs: Codable, Hashable, Sendable {
 public struct Me: Codable, Sendable {
     public var username: String
     public var prefs: Prefs?
-    /// The reader's AI and text-to-speech setups (only whether they exist matters here).
+    /// The reader's AI and text-to-speech setups (never the keys themselves).
     public var ai: Setup?
     public var speech: Setup?
     public var aiAvailable: Bool?
+    /// An app password is set, for Reeder and other FreshRSS-compatible apps.
+    public var hasApiPassword: Bool?
 
     public struct Setup: Codable, Sendable {
         public var provider: String?
+        public var model: String?
+        public var baseUrl: String?
+        public var voice: String?
         public var keyHint: String?
     }
 }
