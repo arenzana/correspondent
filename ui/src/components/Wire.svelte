@@ -206,8 +206,8 @@
           <button aria-pressed={!app.prefs.unreadOnly} onclick={() => { app.setPrefs({ unreadOnly: false }); app.load() }}>All</button>
         </div>
       {/if}
-      {#if app.entries.some((e) => !e.read) && (app.speech || app.entries.some((e) => e.audio && !e.read))}
-        <button class="icon-btn" aria-label="Listen to the unread articles" title="Listen to the unread articles (Shift+L)" onclick={() => app.listenToList()}>
+      {#if app.entries.some((e) => e.audio && !e.read)}
+        <button class="icon-btn" aria-label="Listen to the unread articles that have audio" title="Listen to the unread articles that have audio (Shift+L)" onclick={() => app.listenToList()}>
           <Icon name="headphones" />
         </button>
       {/if}

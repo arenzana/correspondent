@@ -20,6 +20,7 @@ vi.mock('./api', async (importOriginal) => ({
     entries: vi.fn(),
     entry: vi.fn(),
     makeAudio: vi.fn(),
+    findAudio: vi.fn(),
   },
 }))
 
@@ -437,19 +438,20 @@ describe('live arrivals', () => {
 
 describe('listening to a list', () => {
   const audioURL = (id: string) => ({ url: `/api/v1/entries/${id}/audio` })
+  const noAudio = () => new ApiError(404, 'This article has no audio yet.')
 
   beforeEach(() => {
     app.stopListening()
-    app.speech = null
+    app.speech = { provider: 'openai', model: 'gpt-4o-mini-tts', voice: 'alloy', keyHint: '6789' }
     app.entries = [entry('1'), entry('2'), entry('3', { read: true }), entry('4')]
     vi.mocked(api.makeAudio).mockReset()
+    vi.mocked(api.findAudio).mockReset()
     vi.mocked(api.setState).mockResolvedValue({ changed: 1 })
   })
 
-  it('plays the unread articles in order, skipping any without audio', async () => {
-    // Without a key, an article no one has listened to has no audio (409).
-    vi.mocked(api.makeAudio).mockImplementation(async (id) => {
-      if (id === '1') throw new ApiError(409, 'Set up reading aloud in Settings first.')
+  it('plays the unread articles that have audio, in order, and never makes any', async () => {
+    vi.mocked(api.findAudio).mockImplementation(async (id) => {
+      if (id === '1') throw noAudio()
       return audioURL(id)
     })
     await app.listenToList()
@@ -461,19 +463,20 @@ describe('listening to a list', () => {
     expect(api.setState).toHaveBeenCalledWith('read', ['2'])
     expect(app.listening?.id).toBe('4')
     expect(app.upNext).toEqual([])
-    // The next article's audio was asked for once, while the last one played.
-    expect(vi.mocked(api.makeAudio).mock.calls.filter(([id]) => id === '4')).toHaveLength(1)
+    // Even with a key, nothing in a list is read aloud unasked.
+    expect(api.makeAudio).not.toHaveBeenCalled()
   })
 
-  it('says so when nothing in the list can be played', async () => {
-    vi.mocked(api.makeAudio).mockRejectedValue(new ApiError(409, 'Set up reading aloud in Settings first.'))
+  it('says so when nothing in the list has audio', async () => {
+    vi.mocked(api.findAudio).mockRejectedValue(noAudio())
     await app.listenToList()
     expect(app.listening).toBeNull()
-    expect(app.toasts.at(-1)?.message).toMatch(/Set up reading aloud/)
+    expect(app.toasts.at(-1)?.message).toMatch(/press l/)
+    expect(api.makeAudio).not.toHaveBeenCalled()
   })
 
   it('starts from the open article', async () => {
-    vi.mocked(api.makeAudio).mockImplementation(async (id) => audioURL(id))
+    vi.mocked(api.findAudio).mockImplementation(async (id) => audioURL(id))
     app.selectedId = '2'
     await app.listenToList()
     expect(app.listening?.id).toBe('2')
@@ -481,5 +484,13 @@ describe('listening to a list', () => {
     app.stopListening()
     expect(app.listening).toBeNull()
     expect(app.upNext).toEqual([])
+  })
+
+  it('makes audio only for the article the reader picks', async () => {
+    vi.mocked(api.makeAudio).mockImplementation(async (id) => audioURL(id))
+    app.article = { entry: entry('4'), enclosures: [] }
+    await app.readAloud()
+    expect(api.makeAudio).toHaveBeenCalledExactlyOnceWith('4')
+    expect(app.listening?.id).toBe('4')
   })
 })

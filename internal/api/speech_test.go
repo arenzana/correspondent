@@ -75,6 +75,11 @@ func TestReadAloud(t *testing.T) {
 	}
 	before := spoken.Load()
 
+	// Asking for existing audio only never makes any, even with a key.
+	if r := e.call(t, alice, "POST", "/api/v1/entries/"+aliceEntry+"/audio?make=0", nil); r.StatusCode != http.StatusNotFound || spoken.Load() != before {
+		t.Errorf("existing only: %d, %d requests", r.StatusCode, spoken.Load()-before)
+	}
+
 	// Alice's key makes it; asking again makes nothing new.
 	got := decodeInto[map[string]string](t, e.call(t, alice, "POST", "/api/v1/entries/"+aliceEntry+"/audio", nil))
 	if got["url"] != "/api/v1/entries/"+aliceEntry+"/audio" || spoken.Load() != before+1 {
@@ -94,6 +99,9 @@ func TestReadAloud(t *testing.T) {
 	}
 	if r := e.call(t, bob, "POST", "/api/v1/entries/"+bobEntry+"/audio", nil); r.StatusCode != 200 || spoken.Load() != before+1 {
 		t.Errorf("shared make: %d, %d requests", r.StatusCode, spoken.Load()-before)
+	}
+	if r := e.call(t, bob, "POST", "/api/v1/entries/"+bobEntry+"/audio?make=0", nil); r.StatusCode != 200 {
+		t.Errorf("shared, existing only: %d", r.StatusCode)
 	}
 	// But not Alice's entry itself.
 	if r := e.call(t, bob, "GET", "/api/v1/entries/"+aliceEntry+"/audio", nil); r.StatusCode != http.StatusNotFound {

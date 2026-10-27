@@ -562,8 +562,9 @@
             <h3>Read aloud</h3>
             <p class="hint">
               Listen to any article in a natural voice, with your own text-to-speech key. Press <kbd>l</kbd> or the
-              headphones in an article, or <kbd>Shift</kbd>+<kbd>L</kbd> to listen to the unread articles in a list, one after
-              another; each counts as read when it ends. Audio is shared: once anyone here has had an article read aloud, everyone who
+              headphones in an article, or <kbd>Shift</kbd>+<kbd>L</kbd> to listen, one after another, to the unread articles in a
+              list that already have audio; each counts as read when it ends. Audio is only ever made for an
+              article you choose. Audio is shared: once anyone here has had an article read aloud, everyone who
               follows it can listen without using their key. It also plays in Reeder, as the article’s audio.
             </p>
             <form class="ai" onsubmit={saveSpeech}>

@@ -301,6 +301,8 @@ export const api = {
   deleteSpeech: () => request<void>('DELETE', '/speech'),
   /** Makes (or finds) the article's audio; resolves when it's ready to play. */
   makeAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio`),
+  /** Finds audio that already exists, never making any (404 when there's none). */
+  findAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio?make=0`),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),

@@ -157,9 +157,12 @@ func (a *API) makeAudio(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		voice = cfg.VoiceKey()
 	}
+	// ?make=0 only finds audio that exists: new audio is made only for an
+	// article the reader picks, never for a whole list.
+	existing := r.URL.Query().Get("make") == "0"
 	// Audio already linked plays as is, unless the text changed and the
 	// reader can make new audio of it.
-	if e.Audio != "" && (!ok || strings.HasPrefix(e.Audio, hash+"-")) {
+	if e.Audio != "" && (!ok || existing || strings.HasPrefix(e.Audio, hash+"-")) {
 		if _, err := os.Stat(filepath.Join(a.audioDir(), e.Audio)); err == nil {
 			reply(w, map[string]any{"url": audioPath(id)})
 			return
@@ -173,6 +176,10 @@ func (a *API) makeAudio(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		reply(w, map[string]any{"url": audioPath(id)})
+		return
+	}
+	if existing {
+		fail(w, http.StatusNotFound, "This article has no audio yet.")
 		return
 	}
 	if a.Keyring == nil {

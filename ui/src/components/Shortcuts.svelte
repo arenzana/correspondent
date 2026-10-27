@@ -14,7 +14,7 @@
         [['⇧', 'Space'], 'Scroll up'],
         [['v'], 'Open original'],
         [['l'], 'Listen, or play and pause'],
-        [['⇧', 'L'], 'Listen to the unread list'],
+        [['⇧', 'L'], 'Listen to unread articles with audio'],
         [['f'], 'Focused reading'],
       ],
     },

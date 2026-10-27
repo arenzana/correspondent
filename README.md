@@ -202,7 +202,8 @@ Reeder plays it too, as the article's audio, through a private link (set
 Up to 60 new articles a day per reader.
 
 Press `Shift+L` (or the headphones above a list) to listen to its unread
-articles one after another; each counts as read when it ends. Audio for
+articles that already have audio, one after another; each counts as read
+when it ends. Audio is only ever made for an article you pick. Audio for
 what you're listening to and the newest unread and starred articles is kept
 on the device, so it plays offline (Settings → This device).
 

@@ -84,7 +84,7 @@
     <button class="icon-btn" aria-label="Ahead 30 seconds" title="Ahead 30 seconds" onclick={() => skip(30)}><Icon name="ahead15" /></button>
     <button class="what" onclick={() => app.select(now.id)} title="Go to the article">
       <span class="title">{now.title}</span>
-      <span class="meta">{now.feed}{#if app.speech && app.upNext.length}&ensp;·&ensp;{app.upNext.length} more{/if}{#if now.local}&ensp;·&ensp;saved{/if}</span>
+      <span class="meta">{now.feed}{#if now.local}&ensp;·&ensp;saved{/if}</span>
     </button>
     <input
       class="seek"

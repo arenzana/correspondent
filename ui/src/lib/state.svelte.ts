@@ -1018,8 +1018,6 @@ class AppState {
   /** Articles to play after it, in order. */
   upNext = $state<Entry[]>([])
   preparingAudio = $state<ID | null>(null)
-  /** Audio being made ahead of time, so the next article starts at once. */
-  private ready = new Map<ID, Promise<string>>()
 
   /** Reads the open article aloud: its existing audio, or new audio made with the reader's key. */
   async readAloud() {
@@ -1028,13 +1026,17 @@ class AppState {
     if (this.listening?.id === e.id) return
     this.upNext = []
     try {
-      await this.play(e)
+      await this.play(e, true)
     } catch (err) {
       this.toast(`Couldn't read this aloud. ${(err as Error).message}`)
     }
   }
 
-  /** Plays the list's unread articles in order, from the open one if it's in the list. */
+  /**
+   * Plays the list's unread articles that already have audio, in order, from
+   * the open one if it's in the list. It never makes audio: that happens only
+   * for an article the reader picks (readAloud).
+   */
   async listenToList() {
     const from = Math.max(0, this.selectedIndex)
     const queue = this.entries.slice(from).filter((e) => !e.read || e.id === this.selectedId)
@@ -1047,23 +1049,21 @@ class AppState {
     if (!this.listening || !queue.some((e) => e.id === this.listening?.id)) {
       this.toast(
         !this.online ? 'None of these are saved for listening offline.'
-        : this.speech ? 'None of these could be read aloud.'
-        : 'None of these have audio yet. Set up reading aloud in Settings to make it.',
+        : 'None of these have audio yet. Open an article and press l to have it read aloud.',
       )
     }
   }
 
-  /** Moves to the next article in the queue that can be played, skipping any that can't. */
+  /** Moves to the next article in the queue that has audio, skipping any that don't. */
   async playNext() {
     while (this.upNext.length) {
       const [next, ...rest] = this.upNext
       this.upNext = rest
       try {
-        await this.play(next)
+        await this.play(next, false)
         return
       } catch (err) {
-        // Without a key, an article no one has listened to has no audio: skip it.
-        if (!(err instanceof ApiError && err.status === 409) && !isNetworkError(err)) {
+        if (!(err instanceof ApiError && err.status === 404) && !isNetworkError(err)) {
           this.toast(`Skipped “${next.title}”. ${(err as Error).message}`)
         }
       }
@@ -1082,37 +1082,26 @@ class AppState {
     if (this.listening?.local) URL.revokeObjectURL(this.listening.url)
     this.listening = null
     this.upNext = []
-    this.ready.clear()
   }
 
-  private async play(e: Entry) {
+  /** Plays an article: a saved copy, else its audio on the server, made first only when make is set. */
+  private async play(e: Entry, make: boolean) {
     this.preparingAudio = e.id
     try {
       let url = await audio.savedURL(e.id).catch(() => null)
       const local = url !== null
-      url ??= await this.audioFor(e.id)
+      url ??= (await (make ? api.makeAudio(e.id) : api.findAudio(e.id))).url
       if (this.listening?.local) URL.revokeObjectURL(this.listening.url)
       this.listening = { id: e.id, url, local, title: e.title, feed: this.feedById.get(e.feedId)?.title ?? '' }
       this.patch([e.id], { audio: true })
       offline.patchEntries([e.id], { audio: true }).catch(() => {})
       if (this.article?.entry.id === e.id) this.article = { ...this.article, entry: { ...this.article.entry, audio: true } }
       if (!local && this.prefs.offlineAudio) void audio.save(e.id).catch(() => {})
-      // Make the next one while this one plays.
-      if (this.upNext[0]) void this.audioFor(this.upNext[0].id).catch(() => {})
     } finally {
       this.preparingAudio = null
     }
   }
 
-  private audioFor(id: ID): Promise<string> {
-    let p = this.ready.get(id)
-    if (!p) {
-      p = api.makeAudio(id).then((r) => r.url)
-      this.ready.set(id, p)
-      p.catch(() => this.ready.delete(id))
-    }
-    return p
-  }
 
   fetchingFull = $state(false)
 
