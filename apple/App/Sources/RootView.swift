@@ -66,6 +66,7 @@ struct WideLayout: View {
     #endif
     @State private var settings = Self.debugEnv("CORR_TAB") == "settings"
     @State private var showingKeys = false
+    @State private var managing = Self.debugEnv("CORR_MANAGE") != nil
     /// When g was pressed: the next key picks a list (g u, g t, g s, g a).
     @State private var gAt: Date?
     @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
@@ -98,6 +99,8 @@ struct WideLayout: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
         .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme) }
+        .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
+        .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
         .onKeyPress { press in keys(press) }
         #if os(macOS)
         .onAppear { keyMonitor = watchKeys() }
@@ -129,6 +132,7 @@ struct WideLayout: View {
         // g, then a letter: a list.
         if let at = gAt, Date().timeIntervalSince(at) < 1.5 {
             gAt = nil
+            if key == "m" { managing = true; return true }
             let to: Source? = ["u": .unread, "t": .today, "s": .starred, "a": .all][key]
             if let to { Task { await app.go(to) } }
             return to != nil
@@ -256,6 +260,7 @@ struct PhoneLayout: View {
         return .unread
     }()
     @State private var feedsPath: [Screen] = []
+    @State private var managing = false
     @State private var unreadPath: [Screen] = {
         #if DEBUG
         if ProcessInfo.processInfo.environment["CORR_OPEN_FIRST"] != nil { return [.article] }
@@ -296,6 +301,8 @@ struct PhoneLayout: View {
         }
         .modifier(MinimizeTabBarOnScroll())
         .modifier(PlayerAccessory())
+        .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
+        .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
         .onChange(of: tab) { _, now in
             switch now {
             case .unread: Task { await app.go(.unread) }

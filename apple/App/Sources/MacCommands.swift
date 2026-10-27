@@ -17,6 +17,8 @@ struct MacCommands: Commands {
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             Button("Refresh") { Task { await app.refreshTree(); await app.load() } }
                 .keyboardShortcut("r")
+            Button("Manage Subscriptions…") { NotificationCenter.default.post(name: .manage, object: nil) }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .sidebar) {
             Button("Show or Hide the Sidebar") { NotificationCenter.default.post(name: .sidebar, object: nil) }
@@ -100,6 +102,7 @@ extension Notification.Name {
     static let page = Notification.Name("org.arenzana.correspondent.page")
     static let shortcuts = Notification.Name("org.arenzana.correspondent.shortcuts")
     static let openSettings = Notification.Name("org.arenzana.correspondent.openSettings")
+    static let manage = Notification.Name("org.arenzana.correspondent.manage")
     /// Moves the article's spotlight: the object is 1 (down) or -1 (up).
     static let spotlightStep = Notification.Name("org.arenzana.correspondent.spotlightStep")
 }

@@ -102,6 +102,8 @@ struct SidebarView: View {
             HStack(spacing: 2) {
                 Button { adding = true } label: { Image(systemName: "plus") }.iconButton()
                     .accessibilityLabel("Add a feed")
+                Button { NotificationCenter.default.post(name: .manage, object: nil) } label: { Image(systemName: "list.bullet.rectangle") }.iconButton()
+                    .accessibilityLabel("Manage subscriptions")
                 Spacer()
                 Button(action: onSettings) { Image(systemName: "slider.horizontal.3") }.iconButton()
                     .accessibilityLabel("Settings")

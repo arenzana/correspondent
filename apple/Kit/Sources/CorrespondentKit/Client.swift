@@ -169,8 +169,11 @@ public final class Client: Sendable {
         public var paused: Bool?
         public var fullText: Bool?
         public var notify: Bool?
-        public init(title: String? = nil, folder: String? = nil, noFolder: Bool = false, paused: Bool? = nil, fullText: Bool? = nil, notify: Bool? = nil) {
+        /// A new address for the feed.
+        public var url: String?
+        public init(title: String? = nil, folder: String? = nil, noFolder: Bool = false, paused: Bool? = nil, fullText: Bool? = nil, notify: Bool? = nil, url: String? = nil) {
             self.notify = notify
+            self.url = url
             self.title = title
             self.folder = folder
             self.noFolder = noFolder
@@ -187,6 +190,7 @@ public final class Client: Sendable {
         if let p = change.paused { body["paused"] = p }
         if let f = change.fullText { body["fullText"] = f }
         if let n = change.notify { body["notify"] = n }
+        if let u = change.url { body["url"] = u }
         let _: Empty = try await call("PATCH", "/feeds/\(id)", body: body)
     }
 
@@ -199,6 +203,15 @@ public final class Client: Sendable {
     }
 
     /// Deletes a folder; its feeds are kept, outside any folder.
+    public func createFolder(_ name: String) async throws {
+        let _: Empty = try await call("POST", "/folders", body: ["name": name])
+    }
+
+    /// Writes a new parser for a page read without a feed, whose page changed.
+    public func rebuildFeed(_ id: Int64) async throws {
+        let _: Empty = try await call("POST", "/feeds/\(id)/rebuild")
+    }
+
     public func deleteFolder(_ id: Int64) async throws { let _: Empty = try await call("DELETE", "/folders/\(id)") }
 
     // MARK: Saved searches

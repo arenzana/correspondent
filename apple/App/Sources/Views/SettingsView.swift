@@ -17,6 +17,7 @@ struct SettingsView: View {
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
         ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
+        ("Subscriptions", "feeds manage folders rename move pause delete failing address subscriptions"),
         ("This device", "offline badge count icon dock notifications bell test save background"),
         ("Account", "server sign out password passkey web token"),
         ("About", "version build source"),
@@ -51,6 +52,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 34) {
                         if shown.contains("Appearance") { appearance.id("Appearance") }
                         if shown.contains("Reading") { reading.id("Reading") }
+                        if shown.contains("Subscriptions") { subscriptions.id("Subscriptions") }
                         if shown.contains("This device") { device.id("This device") }
                         if shown.contains("Account") { account.id("Account") }
                         if shown.contains("About") { about.id("About") }
@@ -174,6 +176,17 @@ struct SettingsView: View {
                        isOn: app.prefs.markOnOpen) { v in app.setPrefs({ $0.markOnOpen = v }, ["markOnOpen": v]) }
                 toggle("Skip sponsored posts", "Posts titled “Sponsor:” and the like arrive already read, here and in Reeder.",
                        isOn: app.prefs.skipSponsored) { v in app.setPrefs({ $0.skipSponsored = v }, ["skipSponsored": v]) }
+            }
+        }
+    }
+
+    private var subscriptions: some View {
+        section("Subscriptions") {
+            VStack(alignment: .leading, spacing: 10) {
+                let failing = app.tree.feeds.filter { !$0.paused && $0.errorCount > 0 }.count
+                Text("\(app.tree.feeds.count) feeds in \(app.tree.folders.count) folders" + (failing > 0 ? ", \(failing) failing." : "."))
+                    .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
+                Button("Manage subscriptions") { NotificationCenter.default.post(name: .manage, object: nil) }.buttonStyle(QuietButton())
             }
         }
     }

@@ -536,6 +536,66 @@ final class AppModel {
         }
     }
 
+    // Several feeds at once, from Manage subscriptions.
+
+    /// Moves feeds into a folder by name (made if new), or out of folders with nil.
+    func moveFeeds(_ ids: [Int64], to folder: String?) async {
+        let change = folder.map { Client.FeedChange(folder: $0) } ?? Client.FeedChange(noFolder: true)
+        let what = ids.count == 1 ? "the feed" : "\(ids.count) feeds"
+        _ = await manage("Moved \(what) \(folder.map { "to \($0)" } ?? "out of folders").", "Couldn't move the feeds.") { client in
+            for id in ids { try await client.updateFeed(id, change) }
+        }
+    }
+
+    func setPaused(_ ids: [Int64], _ paused: Bool) async {
+        let what = ids.count == 1 ? "the feed" : "\(ids.count) feeds"
+        _ = await manage("\(paused ? "Paused" : "Resumed") \(what).", "Couldn't \(paused ? "pause" : "resume") the feeds.") { client in
+            for id in ids { try await client.updateFeed(id, .init(paused: paused)) }
+            if !paused { for id in ids { try? await client.refreshFeed(id) } }
+        }
+    }
+
+    /// Unsubscribes; the feeds' articles go with them.
+    func deleteFeeds(_ ids: [Int64]) async {
+        let names = ids.map { feedsByID[$0]?.title ?? "the feed" }
+        let gone = await manage(ids.count == 1 ? "Deleted \(names[0])." : "Deleted \(ids.count) feeds.", "Couldn't delete.") { client in
+            for id in ids { try await client.unsubscribe(id) }
+        }
+        if gone, case .feed(let id) = source, ids.contains(id) { await go(.unread) }
+    }
+
+    /// A feed's new address; nil when it was saved, else why not.
+    func setFeedURL(_ id: Int64, _ url: String) async -> String? {
+        guard let client else { return "Not signed in." }
+        do {
+            try await client.updateFeed(id, .init(url: url.trimmingCharacters(in: .whitespaces)))
+            try? await client.refreshFeed(id)
+            await refreshTree()
+            let f = feedsByID[id]
+            show((f?.errorCount ?? 0) > 0 ? "Saved, but the new address failed too: \(f?.lastError ?? "")" : "Address saved and the feed updated.")
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func createFolder(_ name: String) async {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        _ = await manage(nil, "Couldn't create the folder.") { try await $0.createFolder(name) }
+    }
+
+    func rebuildFeed(_ feed: Feed) async {
+        _ = await manage("Rebuilding \(feed.title). New articles will follow.", "Couldn't rebuild it.") { try await $0.rebuildFeed(feed.id) }
+    }
+
+    /// Checks a feed now, then says whether it worked.
+    func updateNow(_ id: Int64) async {
+        guard await manage(nil, "Couldn't update the feed.", { try await $0.refreshFeed(id) }) else { return }
+        let f = feedsByID[id]
+        show((f?.errorCount ?? 0) > 0 ? "Still failing: \(f?.lastError ?? "")" : "Updated \(f?.title ?? "the feed").")
+    }
+
     func renameFolder(_ id: Int64, _ name: String) async {
         _ = await manage(nil, "Couldn't rename the folder.") { try await $0.renameFolder(id, name) }
     }

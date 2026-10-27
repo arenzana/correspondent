@@ -98,6 +98,12 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
     public var lastError: String
     /// Articles per day over the last fourteen days, oldest first.
     public var cadence: [Int] = []
+    /// When the feed was last checked, and its newest article (seconds since 1970; 0 if never).
+    public var lastFetchAt: Int64 = 0
+    public var latestAt: Int64 = 0
+    /// Its articles, and how many of them are starred (what deleting it loses).
+    public var total = 0
+    public var starred = 0
 
     public init(id: Int64, folderId: Int64? = nil, url: String = "", siteUrl: String = "", title: String,
                 iconUrl: String = "", unread: Int = 0, paused: Bool = false, errorCount: Int = 0,
@@ -133,6 +139,10 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify) ?? false
         lastError = try c.decodeIfPresent(String.self, forKey: .lastError) ?? ""
         cadence = (try? c.decodeIfPresent([Int].self, forKey: .cadence)) ?? []
+        lastFetchAt = (try? c.decodeIfPresent(Int64.self, forKey: .lastFetchAt)) ?? 0
+        latestAt = (try? c.decodeIfPresent(Int64.self, forKey: .latestAt)) ?? 0
+        total = (try? c.decodeIfPresent(Int.self, forKey: .total)) ?? 0
+        starred = (try? c.decodeIfPresent(Int.self, forKey: .starred)) ?? 0
     }
 }
 

@@ -140,6 +140,7 @@ struct SearchView: View {
         out.append(Item(id: "a-listen", label: "Listen to unread with audio in \(scope)", hint: "⇧L", symbol: "headphones", group: "Actions",
                         run: then { Task { await player.playList(app.entries, from: app.selectedID) } }))
         out.append(Item(id: "a-add", label: "Add feed…", hint: "a", symbol: "plus", group: "Actions", run: post(.addFeed)))
+        out.append(Item(id: "a-manage", label: "Manage subscriptions", hint: "g m", symbol: "list.bullet.rectangle", group: "Actions", run: post(.manage)))
         if case .feed(let id) = app.source, let feed = app.feedsByID[id] {
             out.append(Item(id: "a-full", label: feed.fullText ? "Stop fetching full articles for \(feed.title)" : "Fetch full articles for \(feed.title)",
                             symbol: "doc.text", group: "Actions", run: then { Task { await app.updateFeed(id, .init(fullText: !feed.fullText)) } }))
