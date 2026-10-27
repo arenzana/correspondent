@@ -51,7 +51,9 @@ struct RootView: View {
         .animation(reduceMotion ? nil : .spring(duration: 0.35), value: player.now?.id)
         .environment(\.theme, theme)
         .tint(theme.accent)
-        .preferredColorScheme(theme.dark ? .dark : .light)
+        // Matching the system leaves the appearance to it: forcing one here
+        // and reading it back above kept the app light in dark mode.
+        .preferredColorScheme(app.prefs.theme == "auto" ? nil : (theme.dark ? .dark : .light))
     }
 }
 
