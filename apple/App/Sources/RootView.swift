@@ -6,6 +6,7 @@ import CorrespondentKit
 /// web's tab bar (Feeds, Unread, Starred, Search, Settings).
 struct RootView: View {
     @Environment(AppModel.self) private var app
+    @Environment(Player.self) private var player
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var size
 
@@ -31,7 +32,10 @@ struct RootView: View {
             } else {
                 WideLayout()
             }
-            if let t = app.toast { Toast(message: t) }
+            if !isPhone {
+                PlayerBar().frame(maxWidth: 640).padding(.horizontal, 16).padding(.bottom, 16)
+            }
+            if let t = app.toast { Toast(message: t).padding(.bottom, player.now != nil && !isPhone ? 110 : 0) }
         }
         .animation(.easeOut(duration: 0.2), value: app.toast)
         .environment(\.theme, theme)
@@ -43,6 +47,7 @@ struct RootView: View {
 /// iPad and Mac.
 struct WideLayout: View {
     @Environment(AppModel.self) private var app
+    @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
     @State private var searching = false
     @State private var settings = false
@@ -78,6 +83,8 @@ struct WideLayout: View {
         case "s": if let id = app.selectedID { Task { await app.toggleStar(id) } }
         case "m": if let id = app.selectedID { Task { await app.toggleRead(id) } }
         case "S": Task { await app.summarize() }
+        case "l": if let e = app.article { if player.now?.id == e.id { player.toggle() } else { Task { await player.play(e) } } }
+        case "L": Task { await player.playList(app.entries, from: app.selectedID) }
         case "A": Task { await app.markAllRead() }
         case "r": Task { await app.refreshTree(); await app.load() }
         case "/": searching = true
@@ -146,6 +153,7 @@ struct PhoneLayout: View {
         }
         .tint(theme.accent)
         .modifier(MinimizeTabBarOnScroll())
+        .modifier(PlayerAccessory())
         .onChange(of: tab) { _, now in
             switch now {
             case .unread: Task { await app.go(.unread) }
@@ -177,6 +185,21 @@ struct PhoneLayout: View {
         }
     }
 }
+/// The player above the tab bar, as Music and Podcasts show theirs (iOS 26);
+/// before that, at the bottom of the screen.
+struct PlayerAccessory: ViewModifier {
+    @Environment(Player.self) private var player
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: player.now != nil) { PlayerBar(compact: true) }
+        } else {
+            content.safeAreaInset(edge: .bottom) {
+                PlayerBar().padding(.horizontal, 12).padding(.bottom, 60)
+            }
+        }
+    }
+}
+
 /// Scrolling down a list or an article shrinks the tab bar (iOS 26), as
 /// the web app tucks its bars away on phones.
 struct MinimizeTabBarOnScroll: ViewModifier {

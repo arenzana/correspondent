@@ -35,6 +35,8 @@ targets:
         # plain HTTP; everything else needs HTTPS.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Read-aloud keeps playing with the screen locked.
+        UIBackgroundModes: [audio]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.arenzana.correspondent

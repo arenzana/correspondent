@@ -255,4 +255,13 @@ public struct Prefs: Codable, Hashable, Sendable {
 public struct Me: Codable, Sendable {
     public var username: String
     public var prefs: Prefs?
+    /// The reader's AI and text-to-speech setups (only whether they exist matters here).
+    public var ai: Setup?
+    public var speech: Setup?
+    public var aiAvailable: Bool?
+
+    public struct Setup: Codable, Sendable {
+        public var provider: String?
+        public var keyHint: String?
+    }
 }

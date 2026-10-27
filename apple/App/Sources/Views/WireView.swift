@@ -7,6 +7,7 @@ import CorrespondentKit
 /// row and turns its stretch of spine accent.
 struct WireView: View {
     @Environment(AppModel.self) private var app
+    @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
     var onOpen: (EntryID) -> Void = { _ in }
     /// Pushed on iPhone: the navigation bar shows the title.
@@ -75,6 +76,10 @@ struct WireView: View {
                 .buttonStyle(.plain)
                 Button { Task { await app.search("") ; await app.go(.all) } } label: { Image(systemName: "xmark") }
                     .iconButton().accessibilityLabel("Clear search")
+            }
+            if app.entries.contains(where: { $0.audio && !$0.read }) {
+                Button { Task { await player.playList(app.entries, from: app.selectedID) } } label: { Image(systemName: "headphones") }
+                    .iconButton().accessibilityLabel("Listen to the unread articles that have audio")
             }
             if app.source != .starred {
                 Button { Task { await app.markAllRead() } } label: { Image(systemName: "checkmark.circle") }

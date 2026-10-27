@@ -217,6 +217,27 @@ public final class Client: Sendable {
         return try JSONDecoder().decode(Prefs.self, from: body)
     }
 
+    // MARK: Read aloud
+
+    /// The article's audio, made now with the reader's text-to-speech key if
+    /// there's none yet. Only for an article the reader picks.
+    public func makeAudio(_ id: EntryID) async throws {
+        struct Out: Decodable { var url: String }
+        let _: Out = try await call("POST", "/entries/\(id)/audio")
+    }
+
+    /// Whether the article already has audio, never making any (for a queue).
+    public func hasAudio(_ id: EntryID) async -> Bool {
+        struct Out: Decodable { var url: String }
+        let out: Out? = try? await call("POST", "/entries/\(id)/audio", query: [URLQueryItem(name: "make", value: "0")])
+        return out != nil
+    }
+
+    /// The article's audio (MP3), once it exists.
+    public func audio(_ id: EntryID) async throws -> Data {
+        try await data("GET", "/entries/\(id)/audio")
+    }
+
     /// Revokes this device's token.
     public func signOut() async throws {
         let _: Empty = try await call("DELETE", "/tokens/current")

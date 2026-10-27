@@ -13,6 +13,8 @@ final class AppModel {
     var client: Client?
     var booting = true
     var prefs = Prefs()
+    /// Whether the reader set up text-to-speech (on the web): articles can be read aloud.
+    var speechConfigured = false
     var online = true
 
     // Sidebar
@@ -153,6 +155,7 @@ final class AppModel {
         watchNetwork()
         Task { await flushOutbox() }
         Task {
+            if let me = try? await client?.me() { speechConfigured = me.speech != nil }
             if let me = try? await client?.me(), let p = me.prefs {
                 prefs = p
                 #if os(macOS)

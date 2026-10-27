@@ -6,6 +6,7 @@ import CorrespondentKit
 /// (ui/src/components/Article.svelte), rendered with the same styles.
 struct ArticleView: View {
     @Environment(AppModel.self) private var app
+    @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
     @Environment(\.openURL) private var openURL
     /// On iPhone, the way back to the list.
@@ -37,6 +38,18 @@ struct ArticleView: View {
         #endif
     }
 
+    /// Reads the article aloud (making its audio if needed: the reader asked).
+    private func listenButton(_ e: Entry) -> some View {
+        Button {
+            if player.now?.id == e.id { player.toggle() } else { Task { await player.play(e) } }
+        } label: {
+            Image(systemName: player.now?.id == e.id && player.playing ? "headphones.circle.fill" : "headphones")
+                .symbolEffect(.pulse, isActive: player.preparing == e.id)
+        }
+        .disabled(player.preparing != nil)
+        .accessibilityLabel(player.preparing == e.id ? "Preparing audio" : "Listen")
+    }
+
     /// Star, read, summary, full article, original.
     @ViewBuilder
     private func actions(_ e: Entry) -> some View {
@@ -44,6 +57,9 @@ struct ArticleView: View {
             .tint(e.starred ? theme.seal : theme.slate).accessibilityLabel(e.starred ? "Unstar" : "Star")
         Button { Task { await app.toggleRead(e.id) } } label: { Image(systemName: e.read ? "circle" : "largecircle.fill.circle") }
             .tint(theme.slate).accessibilityLabel(e.read ? "Mark unread" : "Mark read")
+        if app.speechConfigured || e.audio {
+            listenButton(e).tint(theme.slate)
+        }
         Menu {
             Button { Task { await app.summarize() } } label: { Label(app.summaryOpen ? "Hide summary" : "Summary", systemImage: "text.alignleft") }
             Button { Task { await app.loadFullArticle() } } label: { Label("Load the full article", systemImage: "doc.text") }
@@ -71,6 +87,9 @@ struct ArticleView: View {
                 .accessibilityLabel(e.starred ? "Unstar" : "Star")
             Button { Task { await app.toggleRead(e.id) } } label: { Image(systemName: e.read ? "circle" : "largecircle.fill.circle") }
                 .iconButton().accessibilityLabel(e.read ? "Mark unread" : "Mark read")
+            if app.speechConfigured || e.audio {
+                listenButton(e).iconButton()
+            }
             Button { Task { await app.summarize() } } label: {
                 Image(systemName: "text.alignleft").symbolEffect(.pulse, isActive: app.summarizing)
             }
