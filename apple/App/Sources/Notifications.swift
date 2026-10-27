@@ -59,18 +59,29 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    // The completion-handler forms, answered on the main thread: with the
+    // async forms iOS finishes the call on a background thread, and UIKit
+    // ends the app (a tap on a notification crashed it in TestFlight).
+
     // Shown even with the app open, as a banner.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async { done([.banner, .sound]) }
     }
 
     // A tap opens the article (or the unread list for several).
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
-        let entry = info["entry"] as? String
-        await MainActor.run {
-            let url = entry.flatMap { URL(string: "correspondent://entry/\($0)") } ?? URL(string: "correspondent://unread")!
-            IntentRouter.shared.pending = url
+        let entry = (info["entry"] as? String) ?? (info["entry"] as? NSNumber)?.stringValue
+        nonisolated(unsafe) let done = completionHandler
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                let url = entry.flatMap { URL(string: "correspondent://entry/\($0)") } ?? URL(string: "correspondent://unread")!
+                IntentRouter.shared.pending = url
+            }
+            done()
         }
     }
 }

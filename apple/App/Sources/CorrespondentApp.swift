@@ -18,6 +18,9 @@ struct CorrespondentApp: App {
     /// Links from widgets and Shortcuts: unread, an article, or listen.
     @MainActor
     private func handle(_ url: URL) async {
+        // A tap on a notification can start the app: wait until it's signed in.
+        while app.booting { try? await Task.sleep(for: .milliseconds(100)) }
+        guard app.account != nil else { return }
         if url.host() == "listen" {
             await app.go(.unread)
             await player.playList(app.entries, from: nil)
@@ -44,6 +47,13 @@ struct CorrespondentApp: App {
                 }
                 #endif
                 .task { await app.boot() }
+                // A link that arrived before the window did.
+                .task {
+                    if let url = IntentRouter.shared.pending {
+                        IntentRouter.shared.pending = nil
+                        await handle(url)
+                    }
+                }
                 .onOpenURL { url in Task { await handle(url) } }
                 .onChange(of: IntentRouter.shared.pending) { _, url in
                     guard let url else { return }
