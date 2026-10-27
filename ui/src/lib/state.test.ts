@@ -17,6 +17,7 @@ vi.mock('./api', async (importOriginal) => ({
     markAllRead: vi.fn(),
     tree: vi.fn(),
     savePrefs: vi.fn(),
+    patchPrefs: vi.fn(),
     entries: vi.fn(),
     entry: vi.fn(),
     makeAudio: vi.fn(),
@@ -43,6 +44,7 @@ beforeEach(async () => {
   app.online = true
   vi.mocked(api.tree).mockResolvedValue({ folders: [], feeds: [], counts: { unread: 0, starred: 0, today: 0, newest: '0' } })
   vi.mocked(api.savePrefs).mockResolvedValue(undefined)
+  vi.mocked(api.patchPrefs).mockResolvedValue(undefined)
   app.entries = [entry('1'), entry('2'), entry('3', { read: true })]
   app.feeds = [{ id: 1, folderId: null, url: '', siteUrl: '', title: 'F', description: '', iconUrl: '', lastFetchAt: 0,
     lastStatus: 0, errorCount: 0, lastError: '', paused: false, notify: false, fullText: false, page: false, unread: 2, total: 3, starred: 0, latestAt: 0, cadence: [] }]
@@ -659,5 +661,26 @@ describe('leaving Settings', () => {
     app.leavePage()
     expect(app.page).toBe('reader')
     expect(location.hash).toBe('#/unread')
+  })
+})
+
+describe('preferences', () => {
+  it('keeps sizes in this browser and sends only the other changes, together', () => {
+    vi.useFakeTimers()
+    vi.mocked(api.patchPrefs).mockClear()
+    app.setPrefs({ readSize: 22, uiScale: 1.1 })
+    vi.advanceTimersByTime(500)
+    expect(api.patchPrefs).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem('correspondent:sizes') ?? '{}')).toMatchObject({ readSize: 22, uiScale: 1.1 })
+
+    app.setPrefs({ theme: 'evening' })
+    app.setPrefs({ readFont: 'sans', measure: 60 })
+    vi.advanceTimersByTime(500)
+    expect(api.patchPrefs).toHaveBeenCalledTimes(1)
+    const sent = vi.mocked(api.patchPrefs).mock.calls[0][0] as Record<string, unknown>
+    expect(sent).toMatchObject({ theme: 'evening', readFont: 'sans' })
+    expect(Object.keys(sent)).not.toContain('measure')
+    expect(Object.keys(sent)).not.toContain('readSize')
+    vi.useRealTimers()
   })
 })

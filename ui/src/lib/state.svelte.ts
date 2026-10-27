@@ -95,6 +95,29 @@ interface Toast {
   action?: { label: string; run: () => void }
 }
 
+/**
+ * Sizes belong to the device, not the account: a phone, a laptop and the
+ * apps each want their own. They're kept in this browser and never sent.
+ */
+const DEVICE_KEYS = ['readSize', 'measure', 'uiScale'] as const
+
+function deviceSizes(): Partial<Prefs> | null {
+  try {
+    const raw = localStorage.getItem('correspondent:sizes')
+    return raw ? (JSON.parse(raw) as Partial<Prefs>) : null
+  } catch {
+    return null
+  }
+}
+
+function saveDeviceSizes(prefs: Prefs) {
+  try {
+    localStorage.setItem('correspondent:sizes', JSON.stringify(Object.fromEntries(DEVICE_KEYS.map((k) => [k, prefs[k]]))))
+  } catch {
+    // Private windows may refuse; sizes then last for the visit.
+  }
+}
+
 function loadLocalPrefs(): Prefs {
   try {
     return { ...defaultPrefs, ...JSON.parse(localStorage.getItem('correspondent:prefs') ?? '{}') }
@@ -219,7 +242,10 @@ class AppState {
       this.passkeysAvailable = !!me.passkeysAvailable
       this.version = me.version
       this.commit = me.commit
-      this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>) }
+      // This browser's own sizes win; the first time, it starts from the account's.
+      const sizes = deviceSizes()
+      this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>), ...(sizes ?? {}) }
+      if (!sizes) saveDeviceSizes(this.prefs)
       this.applyPrefs()
       this.readHash()
       await Promise.all([this.refreshTree(), this.load()])
@@ -479,10 +505,24 @@ class AppState {
   setPrefs(patch: Partial<Prefs>) {
     this.prefs = { ...this.prefs, ...patch }
     this.applyPrefs()
+    // Sizes stay in this browser; of the rest, only what changed is sent,
+    // so another device's newer settings stay.
+    const shared: Partial<Prefs> = { ...patch }
+    if (DEVICE_KEYS.some((k) => k in shared)) {
+      for (const k of DEVICE_KEYS) delete shared[k]
+      saveDeviceSizes(this.prefs)
+    }
+    if (Object.keys(shared).length === 0) return
+    this.prefsPatch = { ...this.prefsPatch, ...shared }
     clearTimeout(this.prefsTimer)
-    this.prefsTimer = setTimeout(() => api.savePrefs(this.prefs).catch(() => {}), 400)
+    this.prefsTimer = setTimeout(() => {
+      const changes = this.prefsPatch
+      this.prefsPatch = {}
+      api.patchPrefs(changes).catch(() => {})
+    }, 400)
   }
   private prefsTimer: ReturnType<typeof setTimeout> | undefined
+  private prefsPatch: Partial<Prefs> = {}
 
   /** When the Sun theme will next change, for the settings popover. */
   sunNext = $state<{ theme: 'day' | 'evening' | 'night'; at: Date } | null>(null)

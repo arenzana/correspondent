@@ -7,6 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-27
+
+### Changed
+
+- Text sizes are kept per device: article text size, line length and
+  interface text size live in each browser (and each app), so a phone and
+  a desk can differ. A device starts from the account's sizes the first
+  time.
+- Preferences save only what changed (`PATCH /api/v1/prefs`, a JSON merge
+  patch), so a tab left open no longer puts back another device's older
+  settings. `PUT` still replaces them all.
+
 ## [0.18.1] - 2026-10-27
 
 ### Added

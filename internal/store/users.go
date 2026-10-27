@@ -155,6 +155,17 @@ func (s *Store) SetPrefs(ctx context.Context, userID int64, prefs string) error 
 	return err
 }
 
+// MergePrefs applies a JSON merge patch (RFC 7396) to the stored
+// preferences in one statement, so devices changing different settings at
+// the same time don't undo each other: only the keys sent change, and a
+// null removes one.
+func (s *Store) MergePrefs(ctx context.Context, userID int64, patch string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE users SET prefs = json_patch(CASE WHEN json_valid(prefs) AND json_type(prefs) = 'object' THEN prefs ELSE '{}' END, ?) WHERE id = ?`,
+		patch, userID)
+	return err
+}
+
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

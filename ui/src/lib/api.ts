@@ -318,6 +318,8 @@ export const api = {
   /** Finds audio that already exists, never making any (404 when there's none). */
   findAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio?make=0`),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
+  /** Changes only the preferences given (a JSON merge patch). */
+  patchPrefs: (changes: object) => request<void>('PATCH', '/prefs', changes),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
   tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts; searches?: SavedSearch[] }>('GET', '/tree'),
   saveSearch: (query: string, name = '') => request<{ search: SavedSearch }>('POST', '/searches', { query, name }),

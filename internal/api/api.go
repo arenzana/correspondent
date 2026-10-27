@@ -103,6 +103,7 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/passkeys/{id}", a.session(a.renamePasskey))
 	mux.HandleFunc("DELETE /api/v1/passkeys/{id}", a.session(a.deletePasskey))
 	mux.HandleFunc("PUT /api/v1/prefs", a.auth(a.putPrefs))
+	mux.HandleFunc("PATCH /api/v1/prefs", a.auth(a.patchPrefs))
 	mux.HandleFunc("PUT /api/v1/api-password", a.session(a.putAPIPassword))
 	mux.HandleFunc("GET /api/v1/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/v1/entries", a.auth(a.entries))
@@ -290,12 +291,23 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) putPrefs(w http.ResponseWriter, r *http.Request) {
+	a.savePrefs(w, r, a.Store.SetPrefs)
+}
+
+// patchPrefs changes only the preferences sent (a JSON merge patch), so a
+// device saving one setting can't put back another device's old values.
+func (a *API) patchPrefs(w http.ResponseWriter, r *http.Request) {
+	a.savePrefs(w, r, a.Store.MergePrefs)
+}
+
+func (a *API) savePrefs(w http.ResponseWriter, r *http.Request, save func(context.Context, int64, string) error) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16<<10))
-	if err != nil || !json.Valid(body) {
-		fail(w, http.StatusBadRequest, "Preferences must be JSON.")
+	var obj map[string]json.RawMessage
+	if err != nil || json.Unmarshal(body, &obj) != nil {
+		fail(w, http.StatusBadRequest, "Preferences must be a JSON object.")
 		return
 	}
-	if err := a.Store.SetPrefs(r.Context(), userID(r), string(body)); err != nil {
+	if err := save(r.Context(), userID(r), string(body)); err != nil {
 		a.internal(w, err)
 		return
 	}

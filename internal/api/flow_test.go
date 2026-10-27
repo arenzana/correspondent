@@ -58,6 +58,15 @@ func TestReaderFlow(t *testing.T) {
 	expect(t, e.do(t, c, "PUT", "/api/v1/prefs", `{"theme":"evening"}`, true), 204)
 	expect(t, e.do(t, c, "PUT", "/api/v1/prefs", `{theme`, true), 400)
 
+	// A patch changes only the keys sent: another device's settings stay.
+	expect(t, e.do(t, c, "PATCH", "/api/v1/prefs", `{"readSize":22}`, true), 204)
+	expect(t, e.do(t, c, "PATCH", "/api/v1/prefs", `{"uiScale":1.1,"theme":null}`, true), 204)
+	expect(t, e.do(t, c, "PATCH", "/api/v1/prefs", `[1]`, true), 400)
+	got := decodeJSON[struct{ Prefs map[string]any }](t, expect(t, e.do(t, c, "GET", "/api/v1/me", "", false), 200))
+	if got.Prefs["readSize"] != 22.0 || got.Prefs["uiScale"] != 1.1 || got.Prefs["theme"] != nil {
+		t.Fatalf("patched prefs: %v", got.Prefs)
+	}
+
 	// API password: too short is refused, then set.
 	expect(t, e.do(t, c, "PUT", "/api/v1/api-password", `{"password":"short"}`, true), 400)
 	expect(t, e.do(t, c, "PUT", "/api/v1/api-password", `{"password":"long-enough-api-pw"}`, true), 204)
