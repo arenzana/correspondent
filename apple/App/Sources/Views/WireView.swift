@@ -119,7 +119,7 @@ struct WireView: View {
                 ForEach(groups, id: \.key) { group in
                     Section {
                         ForEach(group.entries) { e in
-                            WireRow(entry: e, feed: app.feedsByID[e.feedId], selected: e.id == app.selectedID)
+                            WireRow(entry: e, feed: app.feedsByID[e.feedId], selected: e.id == app.selectedID, arrivedFrom: app.selectionStep)
                                 .id(e.id)
                                 // Arrivals grow in where they land, as on the web.
                                 .transition(.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.97, anchor: .top)), removal: .opacity))
@@ -342,6 +342,12 @@ struct WireRow: View {
     var entry: Entry
     var feed: Feed?
     var selected: Bool
+    /// Which way the selection came (1 down, -1 up, 0 none): the spine's
+    /// wave runs that way.
+    var arrivedFrom = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Only a step from a neighbour plucks the string, never with Reduce Motion.
+    private var pluck: Bool { arrivedFrom != 0 && !reduceMotion }
 
     /// The web's list density: compact rows sit closer, one line of excerpt, smaller pictures.
     private var compact: Bool { app.prefs.density == "compact" }
@@ -371,7 +377,19 @@ struct WireRow: View {
 
             // The spine and this article's dot.
             ZStack(alignment: .top) {
-                Rectangle().fill(selected ? theme.accent : theme.rule).frame(width: selected ? 3 : 1.5)
+                // As the selection lands, its spine ripples like a plucked
+                // string, as on the web: a wave pinned at both ends that runs
+                // the way it moved, swells, then settles straight.
+                Color.clear
+                    .keyframeAnimator(initialValue: 1.0, trigger: selected) { _, t in
+                        WaveSpine(t: selected && pluck ? t : 1, way: arrivedFrom)
+                            .stroke(selected ? theme.accent : theme.rule,
+                                    style: StrokeStyle(lineWidth: selected ? 3 : 1.5, lineCap: .round, lineJoin: .round))
+                            .frame(width: 12)
+                    } keyframes: { _ in
+                        MoveKeyframe(0.0)
+                        LinearKeyframe(1.0, duration: 0.9)
+                    }
                 Circle()
                     .fill(entry.read ? theme.sheet : theme.accent)
                     .overlay(Circle().stroke(entry.read ? theme.ring : theme.accent, lineWidth: 1.5))
@@ -413,5 +431,30 @@ struct WireRow: View {
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : [.isButton])
         .accessibilityAction(named: entry.read ? "Mark as unread" : "Mark as read") { Task { await app.toggleRead(entry.id) } }
         .accessibilityAction(named: entry.starred ? "Unstar" : "Star") { Task { await app.toggleStar(entry.id) } }
+    }
+}
+
+/// The selected row's spine, drawn as a string: at `t` 0 to 1 through a
+/// pluck it bows into a sine wave pinned at both ends, whose crests travel
+/// `way` (1 down, -1 up), swelling fast and settling straight at 1. The
+/// web's spinePath in Wire.svelte.
+struct WaveSpine: Shape {
+    var t: Double
+    var way: Int
+
+    func path(in rect: CGRect) -> Path {
+        let amp = t < 1 ? 2.6 * sin(.pi * t) * (1 - t * t * 0.5) : 0
+        let phase = Double(-way) * t * 2.5 * .pi
+        var p = Path()
+        let steps = 40
+        for i in 0...steps {
+            let y = Double(i) / Double(steps)
+            let pin = sin(.pi * y) // 0 at both ends
+            // The wavelength is fixed in points, so tall rows carry more crests.
+            let x = rect.midX + amp * pin * sin(2 * .pi * y * rect.height / 60 + phase)
+            let point = CGPoint(x: x, y: rect.minY + y * rect.height)
+            if i == 0 { p.move(to: point) } else { p.addLine(to: point) }
+        }
+        return p
     }
 }

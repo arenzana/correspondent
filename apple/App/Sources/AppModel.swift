@@ -388,9 +388,16 @@ final class AppModel {
 
     // MARK: The article
 
+    /// Which way the last selection moved through the list: 1 down, -1 up,
+    /// 0 when it came from nowhere (the spine's wave runs that way).
+    var selectionStep = 0
+
     func select(_ id: EntryID) async {
         guard let client else { return }
         dwell?.cancel()
+        let from = selectedID.flatMap { old in entries.firstIndex { $0.id == old } }
+        let to = entries.firstIndex { $0.id == id }
+        selectionStep = from.flatMap { a in to.map { b in b == a ? 0 : (b > a ? 1 : -1) } } ?? 0
         selectedID = id
         summaryOpen = false
         articleError = ""

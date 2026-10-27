@@ -85,10 +85,12 @@ struct WideLayout: View {
             SidebarView(onSearch: { searching = true }, onSettings: { settings = true }, onCollapse: { toggleSidebar() })
                 .toolbar(removing: .sidebarToggle)
                 .frame(minWidth: 220)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
+                .navigationSplitViewColumnWidth(min: 220, ideal: PaneWidths.nav, max: 360)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { PaneWidths.saveSoon(nav: $0) }
         } content: {
             WireView(leading: collapsed ? AnyView(collapsedLeading) : nil, footer: collapsed ? AnyView(collapsedFooter) : nil)
-                .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 560)
+                .navigationSplitViewColumnWidth(min: 320, ideal: PaneWidths.list, max: 560)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { PaneWidths.saveSoon(list: $0) }
         } detail: {
             if settings {
                 SettingsView(onBack: { settings = false })
@@ -361,3 +363,35 @@ struct MinimizeTabBarOnScroll: ViewModifier {
     }
 }
 #endif
+
+/// The sidebar's and the list's widths as the reader dragged them, kept on
+/// this device (a column's width belongs to the screen, as the text sizes
+/// do) and used as the columns' starting widths.
+@MainActor
+enum PaneWidths {
+    private static let d = UserDefaults.standard
+    static var nav: CGFloat { saved("width.nav", 260, 220...360) }
+    static var list: CGFloat { saved("width.list", 400, 320...560) }
+
+    private static func saved(_ key: String, _ fallback: CGFloat, _ range: ClosedRange<CGFloat>) -> CGFloat {
+        let w = d.double(forKey: key)
+        return w > 0 ? min(max(CGFloat(w), range.lowerBound), range.upperBound) : fallback
+    }
+
+    private static var pending: [String: CGFloat] = [:]
+    private static var task: Task<Void, Never>?
+
+    /// Saves after the drag settles; a hidden column (narrower than its
+    /// minimum) is never saved.
+    static func saveSoon(nav: CGFloat? = nil, list: CGFloat? = nil) {
+        if let nav, nav >= 220 { pending["width.nav"] = nav }
+        if let list, list >= 320 { pending["width.list"] = list }
+        task?.cancel()
+        task = Task {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            for (k, w) in pending { d.set(Double(w.rounded()), forKey: k) }
+            pending = [:]
+        }
+    }
+}
