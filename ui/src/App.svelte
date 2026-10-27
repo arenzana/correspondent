@@ -73,9 +73,9 @@
 
     const actions: Record<string, () => void> = {
       j: () => app.move(1),
-      ArrowDown: () => app.move(1),
+      ArrowDown: () => (app.article && app.prefs.spotlight !== 'off' ? article?.spotlightStep(1) : app.move(1)),
       k: () => app.move(-1),
-      ArrowUp: () => app.move(-1),
+      ArrowUp: () => (app.article && app.prefs.spotlight !== 'off' ? article?.spotlightStep(-1) : app.move(-1)),
       n: () => app.move(1, true),
       p: () => app.move(-1, true),
       ' ': () => (app.article ? article?.pageDown(e.shiftKey) : app.move(1)),

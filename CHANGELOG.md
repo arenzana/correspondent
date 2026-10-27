@@ -7,6 +7,17 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-27
+
+### Added
+
+- Bionic reading: the start of each word in bold, for the eye to jump
+  from word to word (code is left alone). In the text controls and
+  Settings.
+- The spotlight: one paragraph, or one line, stays clear while the rest
+  of the article is dimmed. ↓ and ↑ move it a paragraph or a line at a
+  time; scrolling moves it too. In the web app and the Apple apps.
+
 ## [0.19.0] - 2026-10-27
 
 ### Changed

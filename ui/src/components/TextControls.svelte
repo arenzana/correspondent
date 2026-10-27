@@ -33,6 +33,24 @@
   </div>
 </fieldset>
 
+<fieldset>
+  <legend>Bionic reading</legend>
+  <div class="seg">
+    <button aria-pressed={!app.prefs.bionic} onclick={() => app.setPrefs({ bionic: false })}>Off</button>
+    <button aria-pressed={app.prefs.bionic} onclick={() => app.setPrefs({ bionic: true })}><b>Bi</b>onic</button>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Spotlight</legend>
+  <div class="seg">
+    <button aria-pressed={app.prefs.spotlight === 'off'} onclick={() => app.setPrefs({ spotlight: 'off' })}>Off</button>
+    <button aria-pressed={app.prefs.spotlight === 'paragraph'} onclick={() => app.setPrefs({ spotlight: 'paragraph' })}>Paragraph</button>
+    <button aria-pressed={app.prefs.spotlight === 'line'} onclick={() => app.setPrefs({ spotlight: 'line' })}>Line</button>
+  </div>
+  {#if app.prefs.spotlight !== 'off'}<p class="hint">↓ and ↑ move it; scrolling moves it too.</p>{/if}
+</fieldset>
+
 <label class="slider">
   <span>{interfaceText ? 'Article text size' : 'Text size'} <output>{app.prefs.readSize}px</output></span>
   <input type="range" min="15" max="24" step="1" value={app.prefs.readSize}
@@ -63,6 +81,11 @@
   }
   .slider {
     display: block;
+  }
+  .hint {
+    margin: 6px 0 0;
+    font-size: calc(12px * var(--ui-scale));
+    color: var(--slate);
   }
   output {
     font-weight: 400;

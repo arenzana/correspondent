@@ -4,6 +4,7 @@
 // (lib/offline) and queues changes until the connection returns.
 
 import { api, ApiError, type SavedSearch, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import type { Spotlight } from './reading'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
@@ -40,6 +41,10 @@ export interface Prefs {
   measure: number
   density: 'comfortable' | 'compact'
   readFont: 'serif' | 'sans'
+  /** Bold the start of each word, for the eye to jump from word to word. */
+  bionic: boolean
+  /** One paragraph or one line clear, the rest dimmed. */
+  spotlight: Spotlight
   /** Interface text: a scale on every size, and the typeface. */
   uiScale: number
   uiFont: 'grotesk' | 'system'
@@ -66,6 +71,8 @@ const defaultPrefs: Prefs = {
   measure: 68,
   density: 'comfortable',
   readFont: 'serif',
+  bionic: false,
+  spotlight: 'off',
   uiScale: 1,
   uiFont: 'grotesk',
   unreadOnly: true,

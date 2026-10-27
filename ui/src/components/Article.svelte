@@ -6,6 +6,7 @@
   import Icon from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import ReadingSettings from './ReadingSettings.svelte'
+  import { bionicHTML, paragraphSpotlight, READING_LINE } from '../lib/reading'
 
   let scroller: HTMLElement | undefined = $state()
   let progress = $state(0)
@@ -19,6 +20,29 @@
   const position = $derived(app.selectedIndex >= 0 ? `${app.selectedIndex + 1} of ${app.entries.length}${app.cursor ? '+' : ''}` : '')
   const audio = $derived(a?.enclosures.filter((e) => e.type.startsWith('audio/')) ?? [])
   const video = $derived(a?.enclosures.filter((e) => e.type.startsWith('video/')) ?? [])
+
+  // Reading aids: bionic text, and a spotlight on one paragraph or line.
+  const content = $derived(a?.entry.content ? (app.prefs.bionic ? bionicHTML(a.entry.content) : a.entry.content) : '')
+  let prose: HTMLElement | undefined = $state()
+  let viewH = $state(0)
+  const lineH = $derived(app.prefs.readSize * 1.66)
+  let paragraphs: ReturnType<typeof paragraphSpotlight> | undefined
+  $effect(() => {
+    void content
+    if (app.prefs.spotlight !== 'paragraph' || !scroller || !prose) return
+    const s = paragraphSpotlight(scroller, prose)
+    paragraphs = s
+    return () => {
+      s.stop()
+      paragraphs = undefined
+    }
+  })
+
+  /** ↓/↑ with the spotlight on: the next paragraph, or the next line. */
+  export function spotlightStep(by: number) {
+    if (app.prefs.spotlight === 'paragraph') paragraphs?.step(by)
+    else scroller?.scrollBy({ top: by * lineH, behavior: 'smooth' })
+  }
 
   // Start each article at the top.
   $effect(() => {
@@ -138,7 +162,13 @@
     </div>
     <div class="progress" style:--p={progress} aria-hidden="true"></div>
 
-    <div class="scroll" bind:this={scroller} onscroll={onScroll} tabindex="-1">
+    <div class="scroll" class:spotlit={app.prefs.spotlight === 'paragraph'} bind:this={scroller} bind:clientHeight={viewH} onscroll={onScroll} tabindex="-1">
+      {#if app.prefs.spotlight === 'line'}
+        <!-- A band one line tall stays clear; above and below are veiled. -->
+        <div class="veil" aria-hidden="true" style:--top="{viewH * READING_LINE - lineH * 0.65}px" style:--band="{lineH * 1.3}px">
+          <span class="above"></span><span class="below"></span>
+        </div>
+      {/if}
       <div class="column">
         <header>
           <p class="byline">
@@ -200,7 +230,7 @@
           {/if}
           {#if a.entry.content}
             <!-- Content is sanitized server-side by an allowlist before storage. -->
-            <div class="prose">{@html a.entry.content}</div>
+            <div class="prose" class:bionic={app.prefs.bionic} bind:this={prose}>{@html content}</div>
           {/if}
           {#if looksPartial}
             <div class="partial">
@@ -331,6 +361,44 @@
     background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 0 / calc(var(--p) * 100%) 100%;
     position: relative;
     z-index: 1;
+  }
+
+  /* The spotlight: the lit paragraph clear, the rest translucent. */
+  .spotlit :global(.sl) {
+    opacity: 0.28;
+    transition: opacity 0.25s ease;
+  }
+  .spotlit :global(.sl.lit) {
+    opacity: 1;
+  }
+  .veil {
+    position: sticky;
+    top: 0;
+    height: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .veil span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: color-mix(in srgb, var(--sheet) 72%, transparent);
+  }
+  .veil .above {
+    top: 0;
+    height: max(0px, var(--top));
+  }
+  .veil .below {
+    top: calc(var(--top) + var(--band));
+    height: 100vh;
+  }
+  .prose.bionic :global(b.bionic) {
+    font-weight: 680;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spotlit :global(.sl) {
+      transition: none;
+    }
   }
 
   .scroll {
