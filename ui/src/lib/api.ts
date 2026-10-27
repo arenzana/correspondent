@@ -3,6 +3,14 @@
 
 export type ID = string
 
+/** A search kept in the sidebar, with how many unread articles match it. */
+export interface SavedSearch {
+  id: number
+  name: string
+  query: string
+  unread: number
+}
+
 export interface Folder {
   id: number
   name: string
@@ -311,18 +319,22 @@ export const api = {
   findAudio: (id: ID) => request<{ url: string }>('POST', `/entries/${id}/audio?make=0`),
   savePrefs: (prefs: object) => request<void>('PUT', '/prefs', prefs),
   setApiPassword: (password: string) => request<void>('PUT', '/api-password', { password }),
-  tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts }>('GET', '/tree'),
+  tree: () => request<{ folders: Folder[]; feeds: Feed[]; counts: Counts; searches?: SavedSearch[] }>('GET', '/tree'),
+  saveSearch: (query: string, name = '') => request<{ search: SavedSearch }>('POST', '/searches', { query, name }),
+  renameSearch: (id: number, name: string) => request<void>('PATCH', `/searches/${id}`, { name }),
+  deleteSearch: (id: number) => request<void>('DELETE', `/searches/${id}`),
   entries: (q: EntryQuery) => request<{ entries: Entry[]; cursor: string }>('GET', '/entries' + qs(q)),
   entry: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('GET', '/entries/' + id),
   fullArticle: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('POST', `/entries/${id}/full`),
   feedText: (id: ID) => request<{ entry: Entry; enclosures: Enclosure[] }>('DELETE', `/entries/${id}/full`),
   setState: (action: 'read' | 'unread' | 'star' | 'unstar', ids: ID[]) =>
     request<{ changed: number }>('POST', '/entries/state', { action, ids }),
-  markAllRead: (scope: { feed?: number; folder?: number; view?: string }, before: ID) =>
+  markAllRead: (scope: { feed?: number; folder?: number; view?: string; q?: string }, before: ID) =>
     request<{ ids: ID[] }>('POST', '/entries/mark-all-read', {
       feed: scope.feed ? String(scope.feed) : undefined,
       folder: scope.folder ? String(scope.folder) : undefined,
       view: scope.view,
+      q: scope.q || undefined, // only the articles matching a search
       before,
     }),
   discover: (url: string) => request<{ candidates: Candidate[] }>('POST', '/discover', { url }),

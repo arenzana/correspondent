@@ -3,7 +3,7 @@
 // server refuses. Without a network, the reader works from its offline copy
 // (lib/offline) and queues changes until the connection returns.
 
-import { api, ApiError, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type SavedSearch, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
 import { flush as flushOutbox } from './offline/outbox'
@@ -17,7 +17,11 @@ import { APP_ICONS, type AppIcon } from './icons'
 const isNetworkError = (e: unknown) => e instanceof TypeError && !(e instanceof ApiError)
 
 export type View = 'unread' | 'today' | 'starred' | 'all'
-export type Source = { kind: 'view'; view: View } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
+export type Source =
+  | { kind: 'view'; view: View }
+  | { kind: 'feed'; id: number }
+  | { kind: 'folder'; id: number }
+  | { kind: 'search'; id: number }
 export type Theme = 'auto' | 'sun' | 'day' | 'night' | 'evening'
 export type Pane = 'nav' | 'list' | 'article'
 export { APP_ICONS, type AppIcon }
@@ -125,6 +129,7 @@ class AppState {
   prefs = $state<Prefs>(loadLocalPrefs())
 
   folders = $state<Folder[]>([])
+  searches = $state<SavedSearch[]>([])
   feeds = $state<Feed[]>([])
   counts = $state<Counts>({ unread: 0, starred: 0, today: 0, newest: '0' })
 
@@ -168,6 +173,7 @@ class AppState {
     const s = this.source
     if (s.kind === 'feed') return this.feedById.get(s.id)?.title || 'Feed'
     if (s.kind === 'folder') return this.folders.find((f) => f.id === s.id)?.name ?? 'Folder'
+    if (s.kind === 'search') return this.searches.find((x) => x.id === s.id)?.name ?? 'Search'
     return { unread: 'Unread', today: 'Today', starred: 'Starred', all: 'All articles' }[s.view]
   })
 
@@ -332,7 +338,7 @@ class AppState {
         }
       }
       // A plain snapshot: IndexedDB cannot store Svelte's reactive proxies.
-      await offline.saveTree($state.snapshot({ folders: this.folders, feeds: this.feeds, counts: this.counts }))
+      await offline.saveTree($state.snapshot({ folders: this.folders, feeds: this.feeds, counts: this.counts, searches: this.searches }))
       await offline.prune()
       await this.syncAudio(withAudio)
       this.syncedAt = Date.now()
@@ -575,6 +581,7 @@ class AppState {
     this.folders = t.folders
     this.feeds = t.feeds
     this.counts = t.counts
+    this.searches = t.searches ?? []
     // However the counts were refreshed (a live event, coming back to the
     // app, a reconnect), articles newer than the list holds are brought in.
     if (BigInt(t.counts.newest || '0') > BigInt(this.boundary || '0')) void this.checkArrivals()
@@ -586,6 +593,7 @@ class AppState {
     if (s.kind === 'view') q.view = s.view === 'all' ? undefined : s.view
     if (s.kind === 'feed') q.feed = s.id
     if (s.kind === 'folder') q.folder = s.id
+    if (s.kind === 'search') q.q = this.searches.find((x) => x.id === s.id)?.query ?? this.query
     if (s.kind !== 'view' && this.prefs.unreadOnly) q.view = 'unread'
     return q
   }
@@ -679,6 +687,57 @@ class AppState {
     this.load()
   }
 
+  // ------------------------------------------------------ saved searches
+
+  /** Keeps the current search in the sidebar, and shows it from there. */
+  async saveSearch() {
+    const query = this.query.trim()
+    if (!query) return
+    try {
+      const { search } = await api.saveSearch(query)
+      await this.refreshTree()
+      this.query = ''
+      this.go({ kind: 'search', id: search.id })
+      this.toast(`Saved the search “${search.name}”. It's in the sidebar.`)
+    } catch (e) {
+      this.toast(`Couldn't save the search. ${(e as Error).message}`)
+    }
+  }
+
+  async renameSearch(id: number, name: string) {
+    name = name.trim()
+    const s = this.searches.find((x) => x.id === id)
+    if (!s || !name || name === s.name) return
+    const before = s.name
+    this.searches = this.searches.map((x) => (x.id === id ? { ...x, name } : x))
+    try {
+      await api.renameSearch(id, name)
+    } catch (e) {
+      this.searches = this.searches.map((x) => (x.id === id ? { ...x, name: before } : x))
+      this.toast(`Couldn't rename the search. ${(e as Error).message}`)
+    }
+  }
+
+  async deleteSearch(id: number) {
+    const s = this.searches.find((x) => x.id === id)
+    if (!s) return
+    try {
+      await api.deleteSearch(id)
+      this.searches = this.searches.filter((x) => x.id !== id)
+      if (this.source.kind === 'search' && this.source.id === id) this.go({ kind: 'view', view: 'unread' })
+      this.toast(`Removed the search “${s.name}”.`, {
+        label: 'Undo',
+        run: async () => {
+          const { search } = await api.saveSearch(s.query, s.name)
+          await this.refreshTree()
+          this.go({ kind: 'search', id: search.id })
+        },
+      })
+    } catch (e) {
+      this.toast(`Couldn't remove the search. ${(e as Error).message}`)
+    }
+  }
+
   /** Opens an article found by search, with the matching list behind it. */
   openFound(query: string, id: ID) {
     this.query = query
@@ -702,10 +761,10 @@ class AppState {
       return
     }
     this.page = 'reader'
-    const m = location.hash.match(/^#\/(unread|today|starred|all|feed\/\d+|folder\/\d+)(?:\/e\/(\d+))?$/)
+    const m = location.hash.match(/^#\/(unread|today|starred|all|feed\/\d+|folder\/\d+|search\/\d+)(?:\/e\/(\d+))?$/)
     if (!m) return
     const [kind, id] = m[1].split('/')
-    this.source = id ? { kind: kind as 'feed' | 'folder', id: Number(id) } : { kind: 'view', view: kind as View }
+    this.source = id ? { kind: kind as 'feed' | 'folder' | 'search', id: Number(id) } : { kind: 'view', view: kind as View }
     if (m[2]) {
       this.selectedId = m[2]
       this.pane = 'article'
@@ -889,8 +948,11 @@ class AppState {
   async markAllRead() {
     const s = this.source
     if (s.kind === 'view' && s.view === 'starred') return
+    // A search marks only its matches.
+    const q = this.query_().q
     const scope =
-      s.kind === 'feed' ? { feed: s.id } : s.kind === 'folder' ? { folder: s.id } : { view: s.view === 'today' ? 'today' : undefined }
+      s.kind === 'feed' ? { feed: s.id, q } : s.kind === 'folder' ? { folder: s.id, q }
+      : s.kind === 'search' ? { q } : { view: s.view === 'today' ? 'today' : undefined, q }
     try {
       const { ids } = await api.markAllRead(scope, this.boundary)
       if (!ids.length) {

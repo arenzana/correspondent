@@ -31,6 +31,8 @@ clients are concerned.
 - **Search everything you've read.** Search finds articles by their text,
   not only titles: results appear as you type in the search box (`⌘K`, `/`
   or the Search tab), and work offline for articles kept on the device.
+  Save a search to keep it in the sidebar like a folder, with its own
+  unread count.
 - **Summaries when you want one.** `Shift+S` (or the summary button) shows a
   two-or-three-sentence summary, written by your own AI only when you ask,
   and shared: once anyone has had an article summarized, everyone with it

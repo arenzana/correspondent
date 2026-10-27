@@ -21,6 +21,9 @@ vi.mock('./api', async (importOriginal) => ({
     entry: vi.fn(),
     makeAudio: vi.fn(),
     findAudio: vi.fn(),
+    saveSearch: vi.fn(),
+    renameSearch: vi.fn(),
+    deleteSearch: vi.fn(),
   },
 }))
 
@@ -588,5 +591,62 @@ describe('list rows', () => {
     vi.mocked(api.fullArticle).mockResolvedValue({ entry: { ...entry('5'), imageUrl: '/img/full', content: '<p>all</p>', fullText: true }, enclosures: [] })
     await app.loadFullArticle()
     expect(app.entries[0].imageUrl).toBe('/img/full')
+  })
+})
+
+describe('saved searches', () => {
+  const duo = { id: 7, name: 'duo', query: 'duo', unread: 2 }
+
+  beforeEach(() => {
+    vi.mocked(api.entries).mockReset()
+    vi.mocked(api.entries).mockResolvedValue({ entries: [], cursor: '' })
+    vi.mocked(api.tree).mockResolvedValue({ folders: [], feeds: app.feeds, counts: app.counts, searches: [duo] })
+    app.searches = []
+    app.page = 'reader'
+  })
+
+  it('keeps the current search, and opens it', async () => {
+    vi.mocked(api.saveSearch).mockResolvedValue({ search: duo })
+    app.query = 'duo'
+    await app.saveSearch()
+    expect(api.saveSearch).toHaveBeenCalledWith('duo')
+    expect(app.source).toEqual({ kind: 'search', id: 7 })
+    expect(app.query).toBe('')
+    expect(app.title).toBe('duo')
+    // Its list asks for its matches, unread only by default.
+    await vi.waitFor(() => expect(api.entries).toHaveBeenCalledWith(expect.objectContaining({ q: 'duo', view: 'unread' })))
+  })
+
+  it('marks only its matches read', async () => {
+    app.searches = [duo]
+    app.source = { kind: 'search', id: 7 }
+    app.boundary = '9'
+    vi.mocked(api.markAllRead).mockResolvedValue({ ids: [] })
+    await app.markAllRead()
+    expect(api.markAllRead).toHaveBeenCalledWith({ q: 'duo' }, '9')
+  })
+
+  it('and so does a search not saved yet', async () => {
+    app.searches = []
+    app.source = { kind: 'view', view: 'all' }
+    app.query = 'harbour'
+    app.boundary = '9'
+    vi.mocked(api.markAllRead).mockResolvedValue({ ids: [] })
+    await app.markAllRead()
+    expect(api.markAllRead).toHaveBeenCalledWith({ view: undefined, q: 'harbour' }, '9')
+    app.query = ''
+  })
+
+  it('can be removed, with undo', async () => {
+    app.searches = [duo]
+    app.source = { kind: 'search', id: 7 }
+    vi.mocked(api.deleteSearch).mockResolvedValue(undefined)
+    await app.deleteSearch(7)
+    expect(app.searches).toEqual([])
+    expect(app.source).toEqual({ kind: 'view', view: 'unread' })
+    vi.mocked(api.saveSearch).mockResolvedValue({ search: duo })
+    await app.toasts.at(-1)!.action!.run()
+    expect(api.saveSearch).toHaveBeenCalledWith('duo', 'duo')
+    expect(app.source).toEqual({ kind: 'search', id: 7 })
   })
 })

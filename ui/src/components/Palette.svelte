@@ -42,6 +42,10 @@
       { id: 'v-today', label: 'Today', icon: 'sun', group: 'Go to', hint: 'g t', run: go({ kind: 'view', view: 'today' }) },
       { id: 'v-starred', label: 'Starred', icon: 'star', group: 'Go to', hint: 'g s', run: go({ kind: 'view', view: 'starred' }) },
       { id: 'v-all', label: 'All articles', icon: 'layers', group: 'Go to', hint: 'g a', run: go({ kind: 'view', view: 'all' }) },
+      ...app.searches.map((x) => ({
+        id: 's' + x.id, label: x.name, icon: 'search' as IconName, group: 'Searches',
+        hint: x.unread ? `${x.unread} unread` : undefined, run: go({ kind: 'search', id: x.id }),
+      })),
       ...app.folders.map((f) => ({
         id: 'f' + f.id, label: f.name, icon: 'folder' as IconName, group: 'Folders',
         hint: f.unread ? `${f.unread} unread` : undefined, run: go({ kind: 'folder', id: f.id }),

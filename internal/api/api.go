@@ -126,6 +126,9 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/feeds/{id}", a.auth(a.deleteFeed))
 	mux.HandleFunc("POST /api/v1/feeds/{id}/refresh", a.auth(a.refreshFeed))
 	mux.HandleFunc("POST /api/v1/feeds/{id}/rebuild", a.auth(a.rebuildFeed))
+	mux.HandleFunc("POST /api/v1/searches", a.auth(a.saveSearch))
+	mux.HandleFunc("PATCH /api/v1/searches/{id}", a.auth(a.renameSearch))
+	mux.HandleFunc("DELETE /api/v1/searches/{id}", a.auth(a.deleteSearch))
 	mux.HandleFunc("POST /api/v1/folders", a.auth(a.createFolder))
 	mux.HandleFunc("PATCH /api/v1/folders/{id}", a.auth(a.renameFolder))
 	mux.HandleFunc("DELETE /api/v1/folders/{id}", a.auth(a.deleteFolder))
@@ -338,10 +341,18 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	searches, err := a.Store.Searches(r.Context(), uid)
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+	if searches == nil {
+		searches = []store.Search{}
+	}
 	for i := range feeds {
 		feeds[i].IconURL = a.image(feeds[i].IconURL, iconWidth)
 	}
-	reply(w, map[string]any{"folders": folders, "feeds": feeds, "counts": counts})
+	reply(w, map[string]any{"folders": folders, "feeds": feeds, "counts": counts, "searches": searches})
 }
 
 // filterFrom maps reader query parameters to a store filter.
@@ -451,6 +462,7 @@ func (a *API) markAllRead(w http.ResponseWriter, r *http.Request) {
 		Feed   int64  `json:"feed,string"`
 		Folder int64  `json:"folder,string"`
 		View   string `json:"view"`
+		Q      string `json:"q"`      // only the articles matching a search
 		Before string `json:"before"` // newest entry ID the user saw
 	}
 	if !decode(w, r, &in) {
@@ -461,7 +473,7 @@ func (a *API) markAllRead(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "Missing boundary.")
 		return
 	}
-	f := store.Filter{UserID: userID(r), FeedID: in.Feed, FolderID: in.Folder}
+	f := store.Filter{UserID: userID(r), FeedID: in.Feed, FolderID: in.Folder, Query: in.Q}
 	if in.View == "today" {
 		f.MinID = time.Now().Truncate(24 * time.Hour).UnixMicro()
 	}

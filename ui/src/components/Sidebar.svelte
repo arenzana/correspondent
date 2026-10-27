@@ -79,6 +79,24 @@
       {/each}
     </ul>
 
+    {#if app.searches.length}
+      <section class="folder searches" aria-label="Saved searches">
+        <h2 class="group">Searches</h2>
+        <ul>
+          {#each app.searches as search (search.id)}
+            {@const s: Source = { kind: 'search', id: search.id }}
+            <li>
+              <button class="row" aria-current={active(s) ? 'page' : undefined} onclick={() => app.go(s)} title="Articles matching “{search.query}”">
+                <span class="glyph"><Icon name="search" size={15} /></span>
+                <span class="name">{search.name}</span>
+                {#if search.unread}<span class="count">{search.unread}</span>{/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+
     {#each app.folders as folder (folder.id)}
       {@const feeds = grouped.get(folder.id) ?? []}
       {@const s: Source = { kind: 'folder', id: folder.id }}
@@ -238,6 +256,18 @@
 
   .folder {
     margin-top: 6px;
+  }
+  .group {
+    margin: 4px 0 2px;
+    padding: 4px 12px;
+    color: var(--slate);
+    font-family: inherit;
+    font-size: calc(12.5px * var(--ui-scale));
+    font-weight: 600;
+  }
+  .searches {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule-soft);
   }
   .folder-head {
     display: flex;

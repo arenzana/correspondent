@@ -33,6 +33,24 @@
   const canMarkAll = $derived(!(app.source.kind === 'view' && app.source.view === 'starred'))
   const showUnreadToggle = $derived(app.source.kind !== 'view')
 
+  // A search typed in the search box (not yet saved), and a saved one.
+  const adHoc = $derived(app.query.trim() && app.source.kind !== 'search' ? app.query.trim() : '')
+  const saved = $derived(app.source.kind === 'search' ? app.searches.find((x) => app.source.kind === 'search' && x.id === app.source.id) : undefined)
+  let renaming = $state(false)
+  let draft = $state('')
+  function startRename() {
+    draft = saved?.name ?? ''
+    renaming = true
+  }
+  function finishRename(keep: boolean) {
+    if (keep && saved) void app.renameSearch(saved.id, draft)
+    renaming = false
+  }
+  function focusSelect(el: HTMLInputElement) {
+    el.focus()
+    el.select()
+  }
+
   // Infinite scroll: load the next page as the sentinel nears the viewport.
   $effect(() => {
     if (!sentinel || !scroller) return
@@ -186,7 +204,19 @@
       <Icon name="menu" />
     </button>
     <div class="titles">
-      <h1>{app.title}</h1>
+      {#if renaming}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input class="rename" aria-label="Search name" bind:value={draft} use:focusSelect
+          onkeydown={(e) => {
+            if (e.key === 'Enter') finishRename(true)
+            else if (e.key === 'Escape') { e.stopPropagation(); finishRename(false) }
+          }}
+          onblur={() => finishRename(true)} />
+      {:else if adHoc}
+        <h1 title="Searching {app.title}">“{adHoc}”</h1>
+      {:else}
+        <h1>{app.title}</h1>
+      {/if}
       <p class="sub">
         {#if !app.online}
           <span class="chip" title={app.syncedAt ? `Offline copy from ${new Date(app.syncedAt).toLocaleString()}` : 'No offline copy yet'}>Offline</span>
@@ -204,6 +234,16 @@
       </p>
     </div>
     <div class="tools">
+      {#if adHoc}
+        <button class="btn small" onclick={() => app.saveSearch()} title="Keep this search in the sidebar">Save search</button>
+        <button class="icon-btn" aria-label="Clear search" title="Clear search" onclick={() => { app.query = ''; app.load() }}>
+          <Icon name="x" />
+        </button>
+      {/if}
+      {#if saved && !renaming}
+        <button class="icon-btn" aria-label="Rename search" title="Rename search" onclick={startRename}><Icon name="pencil" /></button>
+        <button class="icon-btn" aria-label="Remove search" title="Remove search" onclick={() => app.deleteSearch(saved.id)}><Icon name="trash" /></button>
+      {/if}
       {#if currentFeed}
         <button
           class="icon-btn"
@@ -389,6 +429,24 @@
     line-height: 1.15;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rename {
+    width: 100%;
+    margin: 0;
+    padding: 0 6px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-s);
+    background: var(--sheet);
+    color: var(--ink);
+    font-family: var(--font-read);
+    font-size: calc(21px * var(--ui-scale));
+    font-weight: 560;
+  }
+  .btn.small {
+    height: 30px;
+    padding: 0 10px;
+    font-size: calc(13px * var(--ui-scale));
     white-space: nowrap;
   }
   .sub {

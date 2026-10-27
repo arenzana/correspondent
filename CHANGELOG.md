@@ -7,6 +7,22 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-27
+
+### Added
+
+- Saved searches. After a search, Save search keeps it in the sidebar under
+  Searches, with its unread count, like a folder; it follows new articles
+  as they arrive, on every device. Rename or remove it from its list
+  (removing can be undone). They're in the command palette too.
+- A search shows what you searched for in the list header, with Save
+  search and a button to clear it.
+
+### Fixed
+
+- Mark all read while searching marked the whole list read, not only the
+  articles matching the search.
+
 ## [0.15.2] - 2026-10-27
 
 ### Changed

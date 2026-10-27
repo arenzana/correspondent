@@ -4,18 +4,19 @@
 // Shared by the app and the service worker.
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Counts, Entry, Feed, Folder } from '../api'
+import type { Counts, Entry, Feed, Folder, SavedSearch } from '../api'
 
 export interface Tree {
   folders: Folder[]
   feeds: Feed[]
   counts: Counts
+  searches?: SavedSearch[]
 }
 
 /** A change waiting to reach the server. */
 export type OutboxOp =
   | { kind: 'state'; action: 'read' | 'unread' | 'star' | 'unstar'; ids: string[]; at: number }
-  | { kind: 'markAll'; scope: { feed?: number; folder?: number; view?: string }; before: string; at: number }
+  | { kind: 'markAll'; scope: { feed?: number; folder?: number; view?: string; q?: string }; before: string; at: number }
 
 interface Schema extends DBSchema {
   entries: { key: string; value: Entry & { savedAt: number }; indexes: { feedId: number; publishedAt: number } }
