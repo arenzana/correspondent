@@ -152,3 +152,25 @@ struct ShortcutsView: View {
         #endif
     }
 }
+
+/// A feed's fourteen-day publishing cadence, oldest first, as the web's
+/// Pulse: a quiet texture that says which feeds are alive.
+struct Pulse: View {
+    @Environment(\.theme) private var theme
+    var days: [Int]
+
+    var body: some View {
+        let peak = max(1, days.max() ?? 1)
+        HStack(alignment: .bottom, spacing: 1.5) {
+            ForEach(Array(days.enumerated()), id: \.offset) { _, n in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(n == 0 ? theme.ring : theme.accent)
+                    .opacity(n == 0 ? 0.6 : 0.55)
+                    .frame(width: 2.5, height: 2 + CGFloat(n) / CGFloat(peak) * 8)
+            }
+        }
+        .frame(height: 10, alignment: .bottom)
+        .accessibilityElement()
+        .accessibilityLabel("\(days.reduce(0, +)) articles in the last 14 days")
+    }
+}

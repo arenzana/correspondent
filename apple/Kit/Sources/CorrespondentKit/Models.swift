@@ -96,6 +96,8 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
     /// New articles notify the reader's devices.
     public var notify: Bool
     public var lastError: String
+    /// Articles per day over the last fourteen days, oldest first.
+    public var cadence: [Int] = []
 
     public init(id: Int64, folderId: Int64? = nil, url: String = "", siteUrl: String = "", title: String,
                 iconUrl: String = "", unread: Int = 0, paused: Bool = false, errorCount: Int = 0,
@@ -130,6 +132,7 @@ public struct Feed: Codable, Identifiable, Hashable, Sendable {
         page = try c.decodeIfPresent(Bool.self, forKey: .page) ?? false
         notify = try c.decodeIfPresent(Bool.self, forKey: .notify) ?? false
         lastError = try c.decodeIfPresent(String.self, forKey: .lastError) ?? ""
+        cadence = (try? c.decodeIfPresent([Int].self, forKey: .cadence)) ?? []
     }
 }
 

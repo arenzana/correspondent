@@ -19,6 +19,7 @@ struct SidebarView: View {
     @State private var renaming: Renaming?
     @State private var newName = ""
     @State private var leaving: Feed?
+    @State private var hovered: Int64?
     enum Renaming { case feed(Feed), folder(Folder), search(SavedSearch) }
 
     var body: some View {
@@ -85,6 +86,15 @@ struct SidebarView: View {
                         }
                     }
                     ForEach(feeds(in: nil)) { f in feedRow(f).contextMenu { feedMenu(f) } }
+                    if app.tree.feeds.isEmpty, !app.booting {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Subscribe to a site, a blog or a newsletter, and its new articles arrive here.")
+                                .font(Typeface.ui.font(14)).foregroundStyle(theme.slate)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("Add a feed") { adding = true }.buttonStyle(QuietButton())
+                        }
+                        .padding(.horizontal, 12).padding(.top, 6)
+                    }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 12)
             }
@@ -253,7 +263,13 @@ struct SidebarView: View {
                         .accessibilityLabel("Notifications on")
                 }
                 Spacer()
-                if feed.errorCount > 0 { Image(systemName: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(theme.slate) }
+                if feed.paused {
+                    Image(systemName: "pause.fill").font(.system(size: 9)).foregroundStyle(theme.slate).accessibilityLabel("Updates paused")
+                } else if feed.errorCount > 0 {
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(theme.slate).accessibilityLabel("Last update failed")
+                }
+                // The pulse shows for the chosen feed, or the one under the pointer.
+                if (app.source == s || hovered == feed.id), !feed.cadence.isEmpty { Pulse(days: feed.cadence) }
                 Count(n: feed.unread)
             }
             .padding(.leading, 30).padding(.trailing, 12).frame(height: 32)
@@ -261,5 +277,6 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { inside in hovered = inside ? feed.id : (hovered == feed.id ? nil : hovered) }
     }
 }
