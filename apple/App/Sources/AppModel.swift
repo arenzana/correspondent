@@ -154,6 +154,26 @@ final class AppModel {
         #endif
     }
 
+    // MARK: Preferences
+
+    /// Changes preferences at once, and saves them with the web app's (only
+    /// these keys change). If the server refuses, they go back.
+    func setPrefs(_ change: (inout Prefs) -> Void, _ keys: [String: any Sendable]) {
+        let before = prefs
+        change(&prefs)
+        let reload = before.unreadOnly != prefs.unreadOnly
+        Task {
+            do {
+                try await client?.savePrefs(keys)
+                if keys["skipSponsored"] as? Bool == true { await refreshTree(); await load() }
+            } catch {
+                prefs = before
+                show("Couldn't save the setting. \(error.localizedDescription)")
+            }
+        }
+        if reload { Task { await load() } }
+    }
+
     // MARK: Loading
 
     func refreshTree() async {

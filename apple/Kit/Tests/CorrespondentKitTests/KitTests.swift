@@ -75,7 +75,21 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
         }
     }
 
-    @Test func normalizesTheServerAddress() {
+    @Test func savesPrefsWithoutLosingTheWebsOwn() async throws {
+        FakeServer.routes = [
+            "GET /api/v1/me": (200, #"{"username":"isma","prefs":{"theme":"night","navWidth":280,"place":{"lat":40.4,"lon":-3.7}}}"#),
+            "PUT /api/v1/prefs": (204, ""),
+        ]
+        FakeServer.seen = []
+        let c = Client(server: server, token: "t", session: FakeServer.session())
+        let p = try await c.savePrefs(["readSize": 21, "theme": "evening"])
+        #expect(p.theme == "evening" && p.readSize == 21 && p.unreadOnly)
+        let put = try #require(FakeServer.seen.last)
+        let sent = try JSONSerialization.jsonObject(with: put.httpBody ?? Data()) as? [String: Any]
+        #expect(sent?["navWidth"] as? Int == 280 && sent?["place"] != nil && sent?["theme"] as? String == "evening")
+    }
+
+        @Test func normalizesTheServerAddress() {
         #expect(Client.serverURL("rss.arenzana.org/")?.absoluteString == "https://rss.arenzana.org")
         #expect(Client.serverURL("http://localhost:8080")?.absoluteString == "http://localhost:8080")
         #expect(Client.serverURL("ftp://x") == nil && Client.serverURL("  ") == nil)

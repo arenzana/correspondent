@@ -131,6 +131,20 @@ public final class Client: Sendable {
         return out.summary
     }
 
+    /// Changes some preferences. The server keeps them as one document the
+    /// web app also writes (pane widths, the Sun theme's place…), so this
+    /// reads the current one, changes only these keys, and writes it back.
+    @discardableResult
+    public func savePrefs(_ changes: [String: any Sendable]) async throws -> Prefs {
+        let me = try await data("GET", "/me")
+        let root = (try JSONSerialization.jsonObject(with: me)) as? [String: Any]
+        var prefs = root?["prefs"] as? [String: Any] ?? [:]
+        for (k, v) in changes { prefs[k] = v }
+        let body = try JSONSerialization.data(withJSONObject: prefs)
+        _ = try await data("PUT", "/prefs", raw: body)
+        return try JSONDecoder().decode(Prefs.self, from: body)
+    }
+
     /// Revokes this device's token.
     public func signOut() async throws {
         let _: Empty = try await call("DELETE", "/tokens/current")
@@ -161,6 +175,22 @@ public final class Client: Sendable {
         }
         req.timeoutInterval = 60
         return req
+    }
+
+    /// A call whose body is sent and returned as is.
+    func data(_ method: String, _ path: String, raw: Data? = nil) async throws -> Data {
+        var req = try request(method, path)
+        if let raw {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = raw
+        }
+        let (data, resp) = try await session.data(for: req)
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            let message = (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "The server answered \(status)."
+            throw APIError(status: status, message: message)
+        }
+        return data
     }
 
     func call<T: Decodable>(_ method: String, _ path: String, query: [URLQueryItem] = [], body: (any Sendable)? = nil) async throws -> T {

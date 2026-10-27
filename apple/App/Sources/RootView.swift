@@ -107,7 +107,12 @@ struct PhoneLayout: View {
     @Environment(\.theme) private var theme
     enum TabID: Hashable { case feeds, unread, starred, settings, search }
     enum Screen: Hashable { case list, article }
-    @State private var tab: TabID = .unread
+    @State private var tab: TabID = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["CORR_TAB"] == "settings" { return .settings }
+        #endif
+        return .unread
+    }()
     @State private var feedsPath: [Screen] = []
     @State private var unreadPath: [Screen] = {
         #if DEBUG

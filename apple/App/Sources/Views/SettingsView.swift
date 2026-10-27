@@ -1,12 +1,16 @@
 import SwiftUI
 import CorrespondentKit
 
-/// Settings for now: the account, the theme (set on the web, followed
-/// here), the offline copy, and signing out. More follows the web's page.
+/// Settings, as the web's page (ui/src/components/Settings.svelte) for what
+/// an app on this device can change. Preferences are shared with the web
+/// app: changing one here changes it there, and the other way round.
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
+    @Environment(\.openURL) private var openURL
     var onBack: (() -> Void)? = nil
+    @State private var saving = false
+    @State private var confirmSignOut = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,43 +28,203 @@ struct SettingsView: View {
             .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    card("Account") {
-                        row("Server", app.account?.server.host() ?? "")
-                        row("Username", app.account?.username ?? "")
-                    }
-                    card("Appearance") {
-                        row("Theme", app.prefs.theme.capitalized)
-                        Text("The theme, reading options and AI keys are set in Correspondent on the web, and followed here.")
-                            .font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
-                    }
-                    card("This device") {
-                        Text("Unread and starred articles are kept on this device for reading offline.")
-                            .font(Typeface.ui.font(14)).foregroundStyle(theme.slate)
-                        Button("Save for offline now") { Task { await app.syncOffline(); app.show("Saved for offline reading.") } }
-                            .buttonStyle(.bordered).tint(theme.ink)
-                    }
-                    Button("Sign out") { Task { await app.signOut() } }
-                        .buttonStyle(.bordered).tint(theme.danger)
-                    Text("Correspondent \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
-                        .font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
+                VStack(alignment: .leading, spacing: 34) {
+                    appearance
+                    reading
+                    device
+                    account
+                    about
                 }
-                .padding(20)
-                .frame(maxWidth: 640, alignment: .leading)
+                .padding(.horizontal, 20).padding(.vertical, 24)
+                .frame(maxWidth: 680, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
         }
         .background(theme.sheet)
+        .confirmationDialog("Sign out of \(app.account?.server.host() ?? "this server")?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { Task { await app.signOut() } }
+        } message: {
+            Text("This device's token is revoked and its offline copy deleted.")
+        }
     }
 
-    private func card<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(Typeface.read.font(19, weight: 560)).foregroundStyle(theme.ink)
+    // MARK: Sections
+
+    private var appearance: some View {
+        section("Appearance") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Theme").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                    themeTile("auto", "Match system", [Theme.day, Theme.night])
+                    themeTile("sun", "Sunrise and sunset", [Theme.day, Theme.evening])
+                    themeTile("day", "Day", [Theme.day])
+                    themeTile("evening", "Evening", [Theme.evening])
+                    themeTile("night", "Night desk", [Theme.night])
+                }
+            }
+        }
+    }
+
+    private var reading: some View {
+        section("Reading") {
+            VStack(alignment: .leading, spacing: 18) {
+                // A live preview of the article text.
+                Text("Most of the craft is restraint: deciding which of a thousand small events deserve a second look.")
+                    .font(previewFont)
+                    .foregroundStyle(theme.ink)
+                    .lineSpacing(app.prefs.readSize * 0.4)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(theme.fog))
+
+                labeled("Text size", "\(Int(app.prefs.readSize)) pt") {
+                    Stepper("", value: Binding(get: { app.prefs.readSize }, set: { v in
+                        app.setPrefs({ $0.readSize = v }, ["readSize": v])
+                    }), in: 14...30, step: 1).labelsHidden()
+                }
+                labeled("Typeface", nil) {
+                    Picker("", selection: Binding(get: { app.prefs.readFont }, set: { v in
+                        app.setPrefs({ $0.readFont = v }, ["readFont": v])
+                    })) {
+                        Text("Serif").tag("serif")
+                        Text("Sans").tag("sans")
+                    }
+                    .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 200)
+                }
+                labeled("Line length", "\(Int(app.prefs.measure)) characters") {
+                    Slider(value: Binding(get: { app.prefs.measure }, set: { v in
+                        let r = v.rounded()
+                        if r != app.prefs.measure { app.setPrefs({ $0.measure = r }, ["measure": r]) }
+                    }), in: 52...84, step: 2).frame(maxWidth: 220)
+                }
+
+                toggle("Show unread only in feeds and folders", "Today, Starred and All articles always show everything.",
+                       isOn: app.prefs.unreadOnly) { v in app.setPrefs({ $0.unreadOnly = v }, ["unreadOnly": v]) }
+                toggle("Mark as read when opened", "After a moment, so skimming past doesn't read them.",
+                       isOn: app.prefs.markOnOpen) { v in app.setPrefs({ $0.markOnOpen = v }, ["markOnOpen": v]) }
+                toggle("Skip sponsored posts", "Posts titled “Sponsor:” and the like arrive already read, here and in Reeder.",
+                       isOn: app.prefs.skipSponsored) { v in app.setPrefs({ $0.skipSponsored = v }, ["skipSponsored": v]) }
+            }
+        }
+    }
+
+    private var device: some View {
+        section("This device") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Unread and starred articles are kept on this device, with their text, for reading offline.")
+                    .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
+                Button {
+                    saving = true
+                    Task {
+                        await app.syncOffline()
+                        saving = false
+                        app.show("Saved for offline reading.")
+                    }
+                } label: {
+                    Text(saving ? "Saving…" : "Save for offline now")
+                }
+                .buttonStyle(QuietButton()).disabled(saving || !app.online)
+            }
+        }
+    }
+
+    private var account: some View {
+        section("Account") {
+            VStack(alignment: .leading, spacing: 12) {
+                row("Server", app.account?.server.host() ?? "")
+                row("Signed in as", app.account?.username ?? "")
+                Text("Passkeys, passwords, AI keys, notifications and subscriptions are managed in Correspondent on the web.")
+                    .font(Typeface.ui.font(13.5)).foregroundStyle(theme.slate)
+                HStack(spacing: 10) {
+                    if let server = app.account?.server, let web = URL(string: server.absoluteString + "/#/settings") {
+                        Button("Open on the web") { openURL(web) }
+                            .buttonStyle(QuietButton())
+                    }
+                    Button("Sign out") { confirmSignOut = true }.buttonStyle(QuietButton(danger: true))
+                }
+            }
+        }
+    }
+
+    private var about: some View {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        return section("About") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Correspondent \(version) (\(build))").font(Typeface.ui.font(14.5)).foregroundStyle(theme.ink)
+                Button("Source") { openURL(URL(string: "https://github.com/arenzana/correspondent")!) }
+                    .font(Typeface.ui.font(14.5)).tint(theme.accent).buttonStyle(.plain).foregroundStyle(theme.accent)
+            }
+        }
+    }
+
+    // MARK: Pieces
+
+    private var previewFont: Font {
+        app.prefs.readFont == "sans"
+            ? Typeface.ui.font(app.prefs.readSize)
+            : Typeface.read.font(app.prefs.readSize, opsz: 16)
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(Typeface.read.font(21, weight: 560, opsz: 36)).foregroundStyle(theme.ink)
             content()
         }
-        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).stroke(theme.rule))
+    }
+
+    private func themeTile(_ id: String, _ label: String, _ swatches: [Theme]) -> some View {
+        let on = app.prefs.theme == id
+        return Button {
+            app.setPrefs({ $0.theme = id }, ["theme": id])
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 0) {
+                    ForEach(Array(swatches.enumerated()), id: \.offset) { _, t in
+                        ZStack(alignment: .topLeading) {
+                            t.sheet
+                            VStack(alignment: .leading, spacing: 4) {
+                                Circle().fill(t.accent).frame(width: 7, height: 7)
+                                RoundedRectangle(cornerRadius: 1).fill(t.ink).frame(width: 26, height: 3)
+                                RoundedRectangle(cornerRadius: 1).fill(t.slate).frame(width: 18, height: 3)
+                            }
+                            .padding(8)
+                        }
+                    }
+                }
+                .frame(height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.rule))
+                Text(label).font(Typeface.ui.font(13, weight: on ? 600 : 450)).foregroundStyle(on ? theme.accent : theme.ink)
+                    .lineLimit(1).minimumScaleFactor(0.85)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 10).stroke(on ? theme.accent : theme.rule, lineWidth: on ? 2 : 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func labeled<Control: View>(_ label: String, _ value: String?, @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                if let value { Text(value).font(Typeface.ui.font(13)).foregroundStyle(theme.slate) }
+            }
+            Spacer()
+            control()
+        }
+    }
+
+    private func toggle(_ title: String, _ note: String, isOn: Bool, set: @escaping (Bool) -> Void) -> some View {
+        Toggle(isOn: Binding(get: { isOn }, set: set)) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                Text(note).font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
+            }
+        }
+        .tint(theme.accent)
     }
 
     private func row(_ label: String, _ value: String) -> some View {
@@ -69,5 +233,21 @@ struct SettingsView: View {
             Spacer()
             Text(value).font(Typeface.ui.font(15, weight: 520)).foregroundStyle(theme.ink)
         }
+    }
+}
+
+/// The web's .btn: a quiet outlined button.
+struct QuietButton: ButtonStyle {
+    @Environment(\.theme) private var theme
+    @Environment(\.isEnabled) private var enabled
+    var danger = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Typeface.ui.font(14.5, weight: 520))
+            .foregroundStyle(danger ? theme.danger : theme.ink)
+            .padding(.horizontal, 14).frame(height: 36)
+            .background(RoundedRectangle(cornerRadius: 6).fill(configuration.isPressed ? theme.hover : theme.sheet))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.rule))
+            .opacity(enabled ? 1 : 0.5)
     }
 }

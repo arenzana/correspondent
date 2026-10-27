@@ -38,15 +38,11 @@ struct FeedIcon: View {
 
     var body: some View {
         let url = feed.flatMap { app.client?.absolute($0.iconUrl) }
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
-            } else {
-                let letter = (feed?.title ?? "?").first.map(String.init) ?? "?"
-                ZStack {
-                    RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(theme.slate.opacity(0.85))
-                    Text(letter.uppercased()).font(Typeface.read.font(size * 0.62, weight: 700)).foregroundStyle(.white)
-                }
+        RemoteImage(url: url, size: CGSize(width: size, height: size)) {
+            let letter = (feed?.title ?? "?").first.map(String.init) ?? "?"
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(theme.slate.opacity(0.85))
+                Text(letter.uppercased()).font(Typeface.read.font(size * 0.62, weight: 700)).foregroundStyle(.white)
             }
         }
         .frame(width: size, height: size)

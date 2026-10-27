@@ -245,7 +245,7 @@ struct WireRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let url = app.client?.absolute(entry.imageUrl) {
-                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { theme.fog }
+                RemoteImage(url: url, size: CGSize(width: 76, height: 76)) { theme.fog }
                     .frame(width: 76, height: 76)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .padding(.leading, 10)

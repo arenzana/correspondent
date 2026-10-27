@@ -18,7 +18,7 @@ struct ArticleView: View {
             if let e = app.article {
                 if !native { toolbar(e) }
                 ArticlePage(entry: e, feed: app.feedsByID[e.feedId], summary: app.summaryOpen ? e.summary : nil,
-                            theme: theme, base: app.client?.server)
+                            theme: theme, prefs: app.prefs, base: app.client?.server)
                     .id(e.id)
             } else if !app.articleError.isEmpty {
                 Text("Couldn't load this article. \(app.articleError)").font(Typeface.ui.font(15)).foregroundStyle(theme.slate).padding()
@@ -108,10 +108,11 @@ struct ArticlePage: View {
     var feed: Feed?
     var summary: String?
     var theme: Theme
+    var prefs: Prefs
     var base: URL?
 
     var body: some View {
-        WebPage(html: ArticleHTML.page(entry: entry, feed: feed, summary: summary, theme: theme), base: base)
+        WebPage(html: ArticleHTML.page(entry: entry, feed: feed, summary: summary, theme: theme, prefs: prefs), base: base)
     }
 }
 
@@ -132,7 +133,11 @@ enum ArticleHTML {
                 face("Schibsted Grotesk", "SchibstedGrotesk", italic: false, weights: "400 900")].joined(separator: "\n")
     }()
 
-    static func page(entry e: Entry, feed: Feed?, summary: String?, theme: Theme) -> String {
+    static func page(entry e: Entry, feed: Feed?, summary: String?, theme: Theme, prefs: Prefs = Prefs()) -> String {
+        // The reader's text size, line length and typeface, as on the web.
+        let size = min(max(prefs.readSize, 14), 30)
+        let measure = min(max(prefs.measure, 40), 90)
+        let family = prefs.readFont == "sans" ? "var(--font-ui)" : "var(--font-read)"
         let vars = theme.css.map { "--\($0.key): \($0.value);" }.joined(separator: " ")
         let date = e.published.formatted(.dateTime.weekday(.wide).month(.wide).day().year())
         let words = (e.content ?? "").split { $0 == " " || $0 == "\n" }.count
@@ -147,7 +152,7 @@ enum ArticleHTML {
         \(fonts)
         :root { \(vars) --font-read: 'Newsreader', 'Iowan Old Style', Georgia, serif; --font-ui: 'Schibsted Grotesk', -apple-system, sans-serif; color-scheme: \(theme.dark ? "dark" : "light"); }
         html, body { margin: 0; background: var(--sheet); color: var(--ink); -webkit-text-size-adjust: 100%; }
-        .column { max-width: 68ch; margin: 0 auto; padding: 36px 24px 96px; }
+        .column { max-width: \(Int(measure))ch; margin: 0 auto; padding: 36px 24px 96px; }
         .byline { margin: 0 0 10px; font-family: var(--font-ui); font-size: 14px; color: var(--slate); }
         .byline strong { color: var(--ink); font-weight: 600; }
         h1.title { margin: 0 0 12px; font-family: var(--font-read); font-weight: 560; font-size: 34px; line-height: 1.12; letter-spacing: -0.015em; font-variation-settings: 'opsz' 72; text-wrap: balance; }
@@ -157,7 +162,7 @@ enum ArticleHTML {
         .summary { margin: 0 0 28px; padding: 2px 0 2px 16px; border-left: 2px solid var(--accent); font-family: var(--font-ui); font-size: 15.5px; line-height: 1.55; }
         .summary p { margin: 0 0 6px; }
         .summary small { color: var(--slate); font-size: 12px; }
-        .prose { font-family: var(--font-read); font-size: 19px; line-height: 1.66; font-variation-settings: 'opsz' 16; overflow-wrap: break-word; hanging-punctuation: first; }
+        .prose { font-family: \(family); font-size: \(Int(size))px; line-height: 1.66; font-variation-settings: 'opsz' 16; overflow-wrap: break-word; hanging-punctuation: first; }
         .prose p, .prose ul, .prose ol, .prose pre, .prose table, .prose figure, .prose blockquote { margin: 0 0 1.05em; }
         .prose h1, .prose h2, .prose h3, .prose h4 { font-family: var(--font-read); font-weight: 560; line-height: 1.2; letter-spacing: -0.01em; margin: 1.7em 0 0.55em; text-wrap: balance; }
         .prose h1, .prose h2 { font-size: 1.32em; }

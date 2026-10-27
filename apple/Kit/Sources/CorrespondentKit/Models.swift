@@ -178,11 +178,24 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var theme: String
     public var unreadOnly: Bool
     public var markOnOpen: Bool
+    /// Paid posts arrive already read (the server reads this too).
+    public var skipSponsored: Bool
+    /// Article text size in points, as the web's pixels.
+    public var readSize: Double
+    /// Line length in characters.
+    public var measure: Double
+    /// serif (Newsreader) or sans (Schibsted Grotesk).
+    public var readFont: String
 
-    public init(theme: String = "auto", unreadOnly: Bool = true, markOnOpen: Bool = true) {
+    public init(theme: String = "auto", unreadOnly: Bool = true, markOnOpen: Bool = true, skipSponsored: Bool = false,
+                readSize: Double = 19, measure: Double = 68, readFont: String = "serif") {
         self.theme = theme
         self.unreadOnly = unreadOnly
         self.markOnOpen = markOnOpen
+        self.skipSponsored = skipSponsored
+        self.readSize = readSize
+        self.measure = measure
+        self.readFont = readFont
     }
 
     public init(from decoder: Decoder) throws {
@@ -190,6 +203,10 @@ public struct Prefs: Codable, Hashable, Sendable {
         theme = try c.decodeIfPresent(String.self, forKey: .theme) ?? "auto"
         unreadOnly = try c.decodeIfPresent(Bool.self, forKey: .unreadOnly) ?? true
         markOnOpen = try c.decodeIfPresent(Bool.self, forKey: .markOnOpen) ?? true
+        skipSponsored = try c.decodeIfPresent(Bool.self, forKey: .skipSponsored) ?? false
+        readSize = try c.decodeIfPresent(Double.self, forKey: .readSize) ?? 19
+        measure = try c.decodeIfPresent(Double.self, forKey: .measure) ?? 68
+        readFont = try c.decodeIfPresent(String.self, forKey: .readFont) ?? "serif"
     }
 }
 
