@@ -36,7 +36,8 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         # Read-aloud keeps playing with the screen locked.
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [org.arenzana.correspondent.refresh]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.arenzana.correspondent

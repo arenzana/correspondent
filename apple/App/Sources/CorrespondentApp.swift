@@ -27,11 +27,15 @@ struct CorrespondentApp: App {
                 .task { await app.boot() }
                 .onChange(of: phase) { _, now in
                     if now == .active, app.account != nil { Task { await app.resumed() } }
+                    if now == .background { app.scheduleRefresh() }
                 }
                 #if os(macOS)
                 .frame(minWidth: 980, minHeight: 620)
                 #endif
         }
+        #if os(iOS)
+        .backgroundTask(.appRefresh(AppModel.refreshTask)) { await app.backgroundRefresh() }
+        #endif
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
         .windowToolbarStyle(.unifiedCompact)

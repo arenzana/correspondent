@@ -132,8 +132,9 @@ struct SettingsView: View {
     private var device: some View {
         section("This device") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Unread and starred articles are kept on this device, with their text, for reading offline.")
+                Text("Unread and starred articles are kept on this device, with their text, for reading offline, and refreshed in the background.")
                     .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
+                toggle(badgeLabel, "Kept up to date in the background.", isOn: app.showBadge) { v in Task { await app.enableBadge(v) } }
                 Button {
                     saving = true
                     Task {
@@ -180,6 +181,14 @@ struct SettingsView: View {
     }
 
     // MARK: Pieces
+
+    private var badgeLabel: String {
+        #if os(iOS)
+        "Show the unread count on the app icon"
+        #else
+        "Show the unread count on the Dock icon"
+        #endif
+    }
 
     private var previewFont: Font {
         app.prefs.readFont == "sans"

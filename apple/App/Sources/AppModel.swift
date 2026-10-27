@@ -1,5 +1,9 @@
 import SwiftUI
 import Network
+import UserNotifications
+#if os(iOS)
+import BackgroundTasks
+#endif
 import CorrespondentKit
 
 /// The app's state, as the web app's (ui/src/lib/state.svelte.ts): the
@@ -201,6 +205,7 @@ final class AppModel {
             tree = try await client.tree()
             online = true
             await offline?.save(tree: tree, entries: [])
+            await updateBadge()
         } catch {
             if isOffline(error), let saved = await offline?.tree() {
                 tree = saved
@@ -637,6 +642,58 @@ final class AppModel {
 
     /// Article IDs are numbers (crawl time in µs) sent as strings.
     static func n(_ id: String) -> Int64 { Int64(id) ?? 0 }
+
+    // MARK: Background refresh and the badge
+
+    static let refreshTask = "org.arenzana.correspondent.refresh"
+
+    /// The unread count on the app icon (iOS asks first) or the Dock.
+    var showBadge: Bool = UserDefaults.standard.bool(forKey: "showBadge") {
+        didSet {
+            UserDefaults.standard.set(showBadge, forKey: "showBadge")
+            Task { await updateBadge() }
+        }
+    }
+
+    func enableBadge(_ on: Bool) async {
+        #if os(iOS)
+        if on {
+            let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.badge])) ?? false
+            if !granted { show("Allow badges for Correspondent in the Settings app to show the unread count."); return }
+        }
+        #endif
+        showBadge = on
+    }
+
+    func updateBadge() async {
+        let n = showBadge ? tree.counts.unread : 0
+        #if os(iOS)
+        try? await UNUserNotificationCenter.current().setBadgeCount(n)
+        #else
+        NSApplication.shared.dockTile.badgeLabel = n > 0 ? "\(n)" : nil
+        #endif
+    }
+
+    /// iOS's few seconds in the background: send what waited, refresh the
+    /// counts and the badge, and keep the offline copy fresh.
+    func backgroundRefresh() async {
+        if client == nil, let (account, token) = Account.load() {
+            start(account: account, token: token)
+        }
+        await flushOutbox()
+        await refreshTree()
+        await syncOffline()
+        scheduleRefresh()
+    }
+
+    /// Asks iOS to wake the app again in a while.
+    func scheduleRefresh() {
+        #if os(iOS)
+        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTask)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 20 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+        #endif
+    }
 
     // MARK: Errors
 
