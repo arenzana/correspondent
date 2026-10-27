@@ -158,6 +158,7 @@
     >
       <FeedIcon url={feed.iconUrl} title={feed.title || feed.url} />
       <span class="name">{feed.title || feed.url}</span>
+      {#if feed.notify}<span class="bell" role="img" aria-label="Notifications on"><Icon name="bell" size={11} /></span>{/if}
       {#if feed.paused}
         <span class="warn" aria-label="Updates paused"><Icon name="pause" size={12} /></span>
       {:else if feed.errorCount > 0}
@@ -305,6 +306,11 @@
   .warn {
     display: grid;
     color: var(--slate);
+  }
+  .bell {
+    display: grid;
+    color: var(--slate);
+    opacity: 0.75;
   }
   /* The pulse appears for the hovered or selected feed only. */
   .pulse-slot {

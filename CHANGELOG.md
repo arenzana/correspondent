@@ -7,6 +7,10 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- A small bell next to feeds that notify you, in the sidebar.
+
 ## [0.18.0] - 2026-10-27
 
 ### Added
