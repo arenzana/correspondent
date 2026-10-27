@@ -193,6 +193,8 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(count > 0 ? "\(label), \(count) unread" : label)
+        .accessibilityAddTraits(app.source == s ? .isSelected : [])
     }
 
     private func folderRow(_ folder: Folder) -> some View {

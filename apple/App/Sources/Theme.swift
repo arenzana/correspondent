@@ -82,9 +82,23 @@ enum Typeface {
 
     var postScriptName: String { self == .read ? "Newsreader16pt-Regular" : "SchibstedGrotesk-Regular" }
 
-    /// A font at a size and weight (100–900), and for Newsreader an optical size.
+    /// A font at a size and weight (100–900), and for Newsreader an optical
+    /// size. On iPhone and iPad the size follows the reader's text size
+    /// (Dynamic Type), up to the first accessibility size.
     func font(_ size: CGFloat, weight: CGFloat = 400, opsz: CGFloat? = nil, italic: Bool = false) -> Font {
-        Font(ctFont(size, weight: weight, opsz: opsz, italic: italic))
+        Font(ctFont(Self.scaled(size), weight: weight, opsz: opsz, italic: italic))
+    }
+
+    /// The Dynamic Type scale for a size (1 on the Mac, and at the default text size).
+    static func scaled(_ size: CGFloat) -> CGFloat {
+        #if os(iOS)
+        var category = UITraitCollection.current.preferredContentSizeCategory
+        if category == .unspecified { category = .large } // outside any view: the default
+        let capped = min(category, .accessibilityMedium)
+        return UIFontMetrics.default.scaledValue(for: size, compatibleWith: UITraitCollection(preferredContentSizeCategory: capped))
+        #else
+        return size
+        #endif
     }
 
     func ctFont(_ size: CGFloat, weight: CGFloat = 400, opsz: CGFloat? = nil, italic: Bool = false) -> CTFont {

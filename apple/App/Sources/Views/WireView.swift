@@ -14,8 +14,9 @@ struct WireView: View {
     var pushed = false
     var leading: AnyView? = nil
 
-    static let gutter: CGFloat = 52
-    static let spineX: CGFloat = gutter + 9
+    /// The time's column, wider with larger text (Dynamic Type).
+    static var gutter: CGFloat { Typeface.scaled(52) }
+    static var spineX: CGFloat { gutter + 9 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -249,6 +250,8 @@ struct DayLabel: View {
         }
         .padding(.leading, WireView.spineX - 5)
         .padding(.top, 14).padding(.bottom, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
         .background(alignment: .leading) {
             Rectangle().fill(theme.rule).frame(width: 1.5).padding(.leading, WireView.spineX)
         }
@@ -264,12 +267,19 @@ struct WireRow: View {
     var feed: Feed?
     var selected: Bool
 
+    private var spoken: String {
+        let state = [entry.read ? nil : "Unread", entry.starred ? "starred" : nil].compactMap { $0 }.joined(separator: ", ")
+        let when = entry.published.formatted(.relative(presentation: .named))
+        return [state, entry.title, "\(feed?.title ?? ""), \(when)"].filter { !$0.isEmpty }.joined(separator: ". ")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             // Gutter: the time, and the seal for a starred article.
             ZStack(alignment: .topTrailing) {
                 Text(entry.published.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))
                     .font(Typeface.ui.font(11.5)).monospacedDigit().foregroundStyle(theme.slate)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                     .padding(.top, 3).padding(.trailing, 10)
                 if entry.starred {
                     Rectangle().fill(theme.seal).frame(width: 7, height: 7).rotationEffect(.degrees(45))
@@ -317,7 +327,11 @@ struct WireRow: View {
         }
         .padding(.trailing, 16)
         .background(selected ? theme.accent.opacity(0.08) : .clear)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        // One sentence for VoiceOver, with the swipe actions as actions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
+        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : [.isButton])
+        .accessibilityAction(named: entry.read ? "Mark as unread" : "Mark as read") { Task { await app.toggleRead(entry.id) } }
+        .accessibilityAction(named: entry.starred ? "Unstar" : "Star") { Task { await app.toggleStar(entry.id) } }
     }
 }

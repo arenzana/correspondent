@@ -9,6 +9,8 @@ struct RootView: View {
     @Environment(Player.self) private var player
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isPhone: Bool {
         #if os(iOS)
@@ -37,7 +39,9 @@ struct RootView: View {
             }
             if let t = app.toast { Toast(message: t).padding(.bottom, player.now != nil && !isPhone ? 110 : 0) }
         }
-        .animation(.easeOut(duration: 0.2), value: app.toast)
+        // Fonts are sized when built: a new text size rebuilds the views.
+        .id(textSize)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.toast)
         .environment(\.theme, theme)
         .tint(theme.accent)
         .preferredColorScheme(theme.dark ? .dark : .light)

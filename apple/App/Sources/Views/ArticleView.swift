@@ -190,7 +190,8 @@ enum ArticleHTML {
         </nav>
         """
         // The reader's text size, line length and typeface, as on the web.
-        let size = min(max(prefs.readSize, 14), 30)
+        // The reader's size, scaled with the device's text size (Dynamic Type).
+        let size = Typeface.scaled(min(max(prefs.readSize, 14), 30))
         let measure = min(max(prefs.measure, 40), 90)
         let family = prefs.readFont == "sans" ? "var(--font-ui)" : "var(--font-read)"
         let vars = theme.css.map { "--\($0.key): \($0.value);" }.joined(separator: " ")
