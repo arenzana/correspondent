@@ -52,7 +52,9 @@ final class AppModel {
     var summaryOpen = false
     var summarizing = false
 
-    var toast: String?
+    /// Messages at the bottom, newest last, as the web's toasts; some offer an action (Undo).
+    var notices: [Notice] = []
+    private var noticeActions: [UUID: () async -> Void] = [:]
     /// Changes made offline, waiting to be sent.
     var outboxCount = 0
 
@@ -406,10 +408,15 @@ final class AppModel {
     }
 
     /// Moves to the next or previous article in the list (j / k).
-    func move(_ step: Int) async {
+    /// The next or previous article; with `unread`, the next or previous unread one (n and p).
+    func move(_ step: Int, unread: Bool = false) async {
         guard !entries.isEmpty else { return }
-        let i = entries.firstIndex { $0.id == selectedID }.map { $0 + step } ?? (step > 0 ? 0 : entries.count - 1)
-        guard entries.indices.contains(i) else { return }
+        var i = entries.firstIndex { $0.id == selectedID } ?? (step > 0 ? -1 : entries.count)
+        repeat { i += step } while unread && entries.indices.contains(i) && entries[i].read
+        guard entries.indices.contains(i) else {
+            if step > 0 { await loadMore() }
+            return
+        }
         await select(entries[i].id)
         if i >= entries.count - 5 { await loadMore() }
     }
@@ -512,9 +519,17 @@ final class AppModel {
     }
 
     func deleteSearch(_ s: SavedSearch) async {
-        if await manage("Removed the search “\(s.name)”.", "Couldn't remove the search.", { try await $0.deleteSearch(s.id) }),
-           source == .search(s.id) {
-            await go(.unread)
+        guard await manage(nil, "Couldn't remove the search.", { try await $0.deleteSearch(s.id) }) else { return }
+        if source == .search(s.id) { await go(.unread) }
+        show("Removed the search “\(s.name)”.", action: "Undo") { [weak self] in
+            guard let self, let client = self.client else { return }
+            do {
+                let again = try await client.saveSearch(s.query, name: s.name)
+                await self.refreshTree()
+                await self.go(.search(again.id))
+            } catch {
+                self.show("Couldn't bring the search back. \(error.localizedDescription)")
+            }
         }
     }
 
@@ -571,7 +586,19 @@ final class AppModel {
             if ids.isEmpty { show("Nothing to mark as read."); return }
             patch(ids) { $0.read = true }
             await refreshTree()
-            show("Marked \(ids.count) \(ids.count == 1 ? "article" : "articles") as read.")
+            show("Marked \(ids.count) \(ids.count == 1 ? "article" : "articles") as read.", action: "Undo") { [weak self] in
+                guard let self, let client = self.client else { return }
+                do {
+                    for start in stride(from: 0, to: ids.count, by: 1000) {
+                        _ = try await client.setState("unread", Array(ids[start..<min(start + 1000, ids.count)]))
+                    }
+                    self.patch(ids) { $0.read = false }
+                    await self.refreshTree()
+                    self.show("Restored as unread.")
+                } catch {
+                    self.show("Couldn't restore them. \(error.localizedDescription)")
+                }
+            }
         } catch {
             if isOffline(error) {
                 // Mark what's here now; the server applies the same boundary when it's sent.
@@ -838,12 +865,34 @@ final class AppModel {
         }
     }
 
-    func show(_ message: String) {
-        toast = message
-        let shown = message
+    /// Shows a message for a few seconds; with an action (Undo), a little longer.
+    func show(_ message: String, action: String? = nil, run: (() async -> Void)? = nil) {
+        let n = Notice(message: message, action: run == nil ? nil : action)
+        notices.append(n)
+        if notices.count > 3 { dismiss(notices[0].id) }
+        if let run { noticeActions[n.id] = run }
         Task {
-            try? await Task.sleep(for: .seconds(4))
-            if toast == shown { toast = nil }
+            try? await Task.sleep(for: .seconds(n.action == nil ? 4 : 7))
+            dismiss(n.id)
         }
     }
+
+    func dismiss(_ id: UUID) {
+        notices.removeAll { $0.id == id }
+        noticeActions[id] = nil
+    }
+
+    /// The notice's button: runs its action once.
+    func act(_ n: Notice) {
+        guard let run = noticeActions[n.id] else { return }
+        dismiss(n.id)
+        Task { await run() }
+    }
+}
+
+/// A message at the bottom of the window, maybe with an action.
+struct Notice: Identifiable, Equatable {
+    let id = UUID()
+    var message: String
+    var action: String?
 }

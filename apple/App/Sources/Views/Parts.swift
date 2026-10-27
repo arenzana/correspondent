@@ -62,18 +62,26 @@ struct Count: View {
     }
 }
 
-/// A brief message at the bottom, as the web's toasts.
+/// A brief message at the bottom, as the web's toasts, with its action (Undo).
 struct Toast: View {
+    @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
-    var message: String
+    var notice: Notice
     var body: some View {
-        Text(message)
-            .font(Typeface.ui.font(14))
-            .foregroundStyle(theme.dark ? theme.fog : theme.sheet)
+        HStack(spacing: 14) {
+            Text(notice.message)
+                .font(Typeface.ui.font(14))
+                .foregroundStyle(theme.dark ? theme.fog : theme.sheet)
+            if let action = notice.action {
+                Button(action) { app.act(notice) }
+                    .buttonStyle(.plain)
+                    .font(Typeface.ui.font(14, weight: 600))
+                    .foregroundStyle(theme.dark ? theme.accent : Color(hex: "#8a9cf0"))
+            }
+        }
             .padding(.horizontal, 16).padding(.vertical, 11)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(theme.dark ? theme.ink : Color(hex: "#2a3349")))
             .shadow(color: .black.opacity(0.16), radius: 20, y: 8)
-            .padding(.bottom, 24)
             .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 }
@@ -94,5 +102,53 @@ struct IconButtonStyle: ButtonStyle {
             .frame(width: 36, height: 36)
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(configuration.isPressed ? theme.hover : .clear))
             .contentShape(Rectangle())
+    }
+}
+
+/// The keyboard shortcuts, as the web's sheet (?).
+struct ShortcutsView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.dismiss) private var dismiss
+
+    private let groups: [(String, [(String, String)])] = [
+        ("Reading", [("j  k", "Next, previous article"), ("n  p", "Next, previous unread"), ("Space", "Page down; at the end, the next article"),
+                     ("↓  ↑", "Move the spotlight, when it's on"), ("v", "Open the original"), ("f", "Focused reading"), ("Esc", "Close")]),
+        ("Article", [("s", "Star"), ("m", "Mark read or unread"), ("S", "Summary"), ("l", "Read aloud"), ("L", "Listen to the list")]),
+        ("Lists", [("g u", "Unread"), ("g t", "Today"), ("g s", "Starred"), ("g a", "All articles"), ("A", "Mark all read"), ("r", "Refresh")]),
+        ("App", [("/  ⌘K", "Search or jump to"), ("a", "Add a feed"), ("[", "Show or hide the sidebar"), (",", "Settings"), ("?", "These shortcuts")]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Keyboard shortcuts").font(Typeface.read.font(21, weight: 560, opsz: 36)).foregroundStyle(theme.ink)
+                Spacer()
+                Button("Done") { dismiss() }.buttonStyle(QuietButton()).keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), alignment: .top)], alignment: .leading, spacing: 22) {
+                    ForEach(groups, id: \.0) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.0).font(Typeface.ui.font(13, weight: 600)).foregroundStyle(theme.slate)
+                            ForEach(group.1, id: \.0) { key, what in
+                                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                    Text(key).font(.system(size: 12.5, weight: .medium, design: .monospaced)).foregroundStyle(theme.ink)
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(RoundedRectangle(cornerRadius: 4).fill(theme.fog))
+                                        .frame(minWidth: 64, alignment: .leading)
+                                    Text(what).font(Typeface.ui.font(14)).foregroundStyle(theme.ink)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding([.horizontal, .bottom], 20)
+            }
+        }
+        .background(theme.sheet)
+        #if os(macOS)
+        .frame(minWidth: 560, minHeight: 440)
+        #endif
     }
 }

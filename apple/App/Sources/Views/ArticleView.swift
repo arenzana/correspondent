@@ -272,11 +272,13 @@ struct WebPage: UIViewRepresentable {
         v.isOpaque = false
         v.backgroundColor = .clear
         v.scrollView.backgroundColor = .clear
+        context.coordinator.watchKeys(v)
         return v
     }
     func updateUIView(_ v: WKWebView, context: Context) {
         context.coordinator.onNavigate = onNavigate
         context.coordinator.onImage = onImage
+        context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -294,12 +296,13 @@ struct WebPage: NSViewRepresentable {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
         v.navigationDelegate = context.coordinator
         v.setValue(false, forKey: "drawsBackground")
-        context.coordinator.watchSpotlight(v)
+        context.coordinator.watchKeys(v)
         return v
     }
     func updateNSView(_ v: WKWebView, context: Context) {
         context.coordinator.onNavigate = onNavigate
         context.coordinator.onImage = onImage
+        context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -312,16 +315,36 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     var loaded = ""
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
-    private var spotlight: NSObjectProtocol?
+    /// Space at the end of the article: on to the next.
+    var onEnd: () -> Void = {}
+    private var observers: [NSObjectProtocol] = []
 
-    /// ↓ and ↑ from the Mac's keys move the page's spotlight (reading.js).
-    func watchSpotlight(_ web: WKWebView) {
-        spotlight = NotificationCenter.default.addObserver(forName: .spotlightStep, object: nil, queue: .main) { [weak web] note in
+    /// Keys the window handles for the page: ↓ and ↑ move the spotlight
+    /// (reading.js); Space pages, and from the end goes on to the next article.
+    func watchKeys(_ web: WKWebView) {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: .spotlightStep, object: nil, queue: .main) { [weak web] note in
             let by = note.object as? Int ?? 1
             MainActor.assumeIsolated {
                 web?.evaluateJavaScript("window.correspondentSpotlight && window.correspondentSpotlight(\(by))", in: nil, in: .defaultClient) { _ in }
             }
-        }
+        })
+        observers.append(center.addObserver(forName: .page, object: nil, queue: .main) { [weak self, weak web] note in
+            let by = note.object as? Int ?? 1
+            let js = """
+            (function (by) {
+              var max = document.documentElement.scrollHeight - window.innerHeight;
+              if (by > 0 && window.scrollY >= max - 4) return 'end';
+              window.scrollBy({ top: by * window.innerHeight * 0.85, behavior: 'smooth' });
+              return 'ok';
+            })(\(by))
+            """
+            MainActor.assumeIsolated {
+                web?.evaluateJavaScript(js, in: nil, in: .defaultClient) { result in
+                    if case .success(let r) = result, r as? String == "end" { self?.onEnd() }
+                }
+            }
+        })
     }
 
     static func configuration(_ delegate: WebDelegate) -> WKWebViewConfiguration {

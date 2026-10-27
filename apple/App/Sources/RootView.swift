@@ -37,11 +37,14 @@ struct RootView: View {
             if !isPhone {
                 PlayerBar().frame(maxWidth: 640).padding(.horizontal, 16).padding(.bottom, 16)
             }
-            if let t = app.toast { Toast(message: t).padding(.bottom, player.now != nil && !isPhone ? 110 : 0) }
+            VStack(spacing: 8) {
+                ForEach(app.notices) { n in Toast(notice: n) }
+            }
+            .padding(.bottom, 24 + (player.now != nil && !isPhone ? 110 : 0))
         }
         // Fonts are sized when built: a new text size rebuilds the views.
         .id("\(textSize)-\(app.prefs.uiScale)")
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.toast)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.notices)
         .environment(\.theme, theme)
         .tint(theme.accent)
         .preferredColorScheme(theme.dark ? .dark : .light)
@@ -58,6 +61,9 @@ struct WideLayout: View {
     @State private var keyMonitor: Any?
     #endif
     @State private var settings = Self.debugEnv("CORR_TAB") == "settings"
+    @State private var showingKeys = false
+    /// When g was pressed: the next key picks a list (g u, g t, g s, g a).
+    @State private var gAt: Date?
     @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
 
     /// Screenshots start where they need to (debug builds only).
@@ -87,6 +93,7 @@ struct WideLayout: View {
         }
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
+        .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme) }
         .onKeyPress { press in keys(press) }
         #if os(macOS)
         .onAppear { keyMonitor = watchKeys() }
@@ -95,6 +102,7 @@ struct WideLayout: View {
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
         .onReceive(NotificationCenter.default.publisher(for: .sidebar)) { _ in toggleSidebar() }
+        .onReceive(NotificationCenter.default.publisher(for: .shortcuts)) { _ in showingKeys = true }
         #if os(macOS)
         .onReceive(NotificationCenter.default.publisher(for: .escape)) { _ in _ = escape() }
         #endif
@@ -109,9 +117,24 @@ struct WideLayout: View {
 
     /// One of the web's single-key shortcuts. False when the key isn't one.
     private func shortcut(_ key: String) -> Bool {
+        // g, then a letter: a list.
+        if let at = gAt, Date().timeIntervalSince(at) < 1.5 {
+            gAt = nil
+            let to: Source? = ["u": .unread, "t": .today, "s": .starred, "a": .all][key]
+            if let to { Task { await app.go(to) } }
+            return to != nil
+        }
         switch key {
+        case "g": gAt = Date()
         case "j": Task { await app.move(1) }
         case "k": Task { await app.move(-1) }
+        case "n": Task { await app.move(1, unread: true) }
+        case "p": Task { await app.move(-1, unread: true) }
+        case " ": page(1)
+        case "a": NotificationCenter.default.post(name: .addFeed, object: nil)
+        case ",": settings = true
+        case "[": toggleSidebar()
+        case "?": showingKeys = true
         case "s": if let id = app.selectedID { Task { await app.toggleStar(id) } }
         case "m": if let id = app.selectedID { Task { await app.toggleRead(id) } }
         case "S": Task { await app.summarize() }
@@ -125,6 +148,11 @@ struct WideLayout: View {
         default: return false
         }
         return true
+    }
+
+    /// Space: a page down the article, or the next article from its end.
+    private func page(_ by: Int) {
+        if app.article == nil { Task { await app.move(1) } } else { NotificationCenter.default.post(name: .page, object: by) }
     }
 
     #if os(macOS)
@@ -142,6 +170,8 @@ struct WideLayout: View {
                 NotificationCenter.default.post(name: .spotlightStep, object: event.keyCode == 125 ? 1 : -1)
                 return nil
             }
+            // Shift-Space pages back up.
+            if event.keyCode == 49, event.modifierFlags.contains(.shift) { page(-1); return nil }
             return shortcut(event.charactersIgnoringModifiers.map { event.modifierFlags.contains(.shift) ? $0.uppercased() : $0 } ?? "") ? nil : event
         }
     }

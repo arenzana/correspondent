@@ -22,6 +22,10 @@ struct MacCommands: Commands {
             Button("Show or Hide the Sidebar") { NotificationCenter.default.post(name: .sidebar, object: nil) }
                 .keyboardShortcut("s", modifiers: [.control, .command])
         }
+        CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") { NotificationCenter.default.post(name: .shortcuts, object: nil) }
+                .keyboardShortcut("/", modifiers: [.command, .shift])
+        }
         CommandMenu("Go") {
             Button("Unread") { Task { await app.go(.unread) } }.keyboardShortcut("1")
             Button("Today") { Task { await app.go(.today) } }.keyboardShortcut("2")
@@ -29,6 +33,7 @@ struct MacCommands: Commands {
             Button("All Articles") { Task { await app.go(.all) } }.keyboardShortcut("4")
             Divider()
             Button("Search…") { NotificationCenter.default.post(name: .search, object: nil) }.keyboardShortcut("f")
+            Button("Search or Jump To…") { NotificationCenter.default.post(name: .search, object: nil) }.keyboardShortcut("k")
         }
         CommandMenu("Article") {
             Button("Next Article") { Task { await app.move(1) } }.keyboardShortcut(.downArrow)
@@ -91,6 +96,9 @@ extension Notification.Name {
     static let search = Notification.Name("org.arenzana.correspondent.search")
     static let escape = Notification.Name("org.arenzana.correspondent.escape")
     static let sidebar = Notification.Name("org.arenzana.correspondent.sidebar")
+    /// Pages the article: the object is 1 (down) or -1 (up).
+    static let page = Notification.Name("org.arenzana.correspondent.page")
+    static let shortcuts = Notification.Name("org.arenzana.correspondent.shortcuts")
     /// Moves the article's spotlight: the object is 1 (down) or -1 (up).
     static let spotlightStep = Notification.Name("org.arenzana.correspondent.spotlightStep")
 }
