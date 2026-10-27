@@ -17,7 +17,7 @@ struct WireView: View {
     var footer: AnyView? = nil
 
     /// The time's column, wider with larger text (Dynamic Type).
-    static var gutter: CGFloat { Typeface.scaled(52) }
+    static var gutter: CGFloat { Typeface.interface(52) }
     static var spineX: CGFloat { gutter + 9 }
 
     var body: some View {

@@ -92,8 +92,15 @@ enum Typeface {
     /// size. On iPhone and iPad the size follows the reader's text size
     /// (Dynamic Type), up to the first accessibility size.
     func font(_ size: CGFloat, weight: CGFloat = 400, opsz: CGFloat? = nil, italic: Bool = false) -> Font {
-        Font(ctFont(Self.scaled(size), weight: weight, opsz: opsz, italic: italic))
+        Font(ctFont(Self.interface(size), weight: weight, opsz: opsz, italic: italic))
     }
+
+    /// The interface size the reader chose on this device (the web's
+    /// Interface text size: 0.92, 1, 1.1, 1.2). Set by the app model.
+    nonisolated(unsafe) static var uiScale: CGFloat = 1
+
+    /// A size in the interface: Dynamic Type, then the reader's interface size.
+    static func interface(_ size: CGFloat) -> CGFloat { scaled(size) * uiScale }
 
     /// The Dynamic Type scale for a size (1 on the Mac, and at the default text size).
     static func scaled(_ size: CGFloat) -> CGFloat {

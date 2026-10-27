@@ -207,17 +207,24 @@ public final class Client: Sendable {
     public func deleteSearch(_ id: Int64) async throws { let _: Empty = try await call("DELETE", "/searches/\(id)") }
 
     /// Changes some preferences. The server keeps them as one document the
-    /// web app also writes (pane widths, the Sun theme's place…), so this
-    /// reads the current one, changes only these keys, and writes it back.
-    @discardableResult
-    public func savePrefs(_ changes: [String: any Sendable]) async throws -> Prefs {
+    /// web app and other devices also write, so only these keys are sent
+    /// (a merge patch); a server from before 0.19.0 gets the old read,
+    /// change and write back instead.
+    public func savePrefs(_ changes: [String: any Sendable]) async throws {
+        do {
+            _ = try await data("PATCH", "/prefs", raw: try JSONSerialization.data(withJSONObject: changes))
+        } catch let e as APIError where e.status == 404 || e.status == 405 {
+            try await replacePrefs(changes)
+        }
+    }
+
+    private func replacePrefs(_ changes: [String: any Sendable]) async throws {
         let me = try await data("GET", "/me")
         let root = (try JSONSerialization.jsonObject(with: me)) as? [String: Any]
         var prefs = root?["prefs"] as? [String: Any] ?? [:]
         for (k, v) in changes { prefs[k] = v }
         let body = try JSONSerialization.data(withJSONObject: prefs)
         _ = try await data("PUT", "/prefs", raw: body)
-        return try JSONDecoder().decode(Prefs.self, from: body)
     }
 
     // MARK: Notifications

@@ -16,7 +16,7 @@ struct SettingsView: View {
     /// The sections, with the words each answers to (as the web's settings search).
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
-        ("Reading", "text size font typeface serif sans line length unread only mark read opened sponsored skip"),
+        ("Reading", "text size interface larger smaller font typeface serif sans line length unread only mark read opened sponsored skip"),
         ("This device", "offline badge count icon dock notifications bell test save background"),
         ("Account", "server sign out password passkey web token"),
         ("About", "version build source"),
@@ -126,7 +126,21 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 10).fill(theme.fog))
 
-                labeled("Text size", "\(Int(app.prefs.readSize)) pt") {
+                Text("Sizes are kept on this device, so a phone and a desk can each have their own.")
+                    .font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Interface text").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                    Picker("Interface text", selection: Binding(get: { app.prefs.uiScale }, set: { v in
+                        app.setPrefs({ $0.uiScale = v }, ["uiScale": v])
+                    })) {
+                        Text("Small").tag(0.92)
+                        Text("Default").tag(1.0)
+                        Text("Large").tag(1.1)
+                        Text("Larger").tag(1.2)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+                }
+                labeled("Article text", "\(Int(app.prefs.readSize)) pt") {
                     Stepper("", value: Binding(get: { app.prefs.readSize }, set: { v in
                         app.setPrefs({ $0.readSize = v }, ["readSize": v])
                     }), in: 14...30, step: 1).labelsHidden()

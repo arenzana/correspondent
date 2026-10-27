@@ -226,6 +226,8 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var readSize: Double
     /// Line length in characters.
     public var measure: Double
+    /// Interface text size: 0.92, 1, 1.1 or 1.2, as the web's.
+    public var uiScale: Double = 1
     /// serif (Newsreader) or sans (Schibsted Grotesk).
     public var readFont: String
     /// wire, byline or morse: the app's icon, as the web app's.
@@ -267,6 +269,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         readFont = try c.decodeIfPresent(String.self, forKey: .readFont) ?? "serif"
         appIcon = try c.decodeIfPresent(String.self, forKey: .appIcon) ?? "wire"
         place = try? c.decodeIfPresent(Place.self, forKey: .place)
+        uiScale = (try? c.decodeIfPresent(Double.self, forKey: .uiScale)) ?? 1
     }
 }
 

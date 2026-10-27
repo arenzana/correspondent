@@ -40,7 +40,7 @@ struct RootView: View {
             if let t = app.toast { Toast(message: t).padding(.bottom, player.now != nil && !isPhone ? 110 : 0) }
         }
         // Fonts are sized when built: a new text size rebuilds the views.
-        .id(textSize)
+        .id("\(textSize)-\(app.prefs.uiScale)")
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.toast)
         .environment(\.theme, theme)
         .tint(theme.accent)
@@ -54,6 +54,9 @@ struct WideLayout: View {
     @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
     @State private var searching = false
+    #if os(macOS)
+    @State private var keyMonitor: Any?
+    #endif
     @State private var settings = Self.debugEnv("CORR_TAB") == "settings"
     @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
 
@@ -85,6 +88,10 @@ struct WideLayout: View {
         .navigationSplitViewStyle(.balanced)
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
         .onKeyPress { press in keys(press) }
+        #if os(macOS)
+        .onAppear { keyMonitor = watchKeys() }
+        .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
+        #endif
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
         .onReceive(NotificationCenter.default.publisher(for: .sidebar)) { _ in toggleSidebar() }
@@ -94,9 +101,15 @@ struct WideLayout: View {
         .onChange(of: app.selectedID) { _, id in if id != nil { settings = false } }
     }
 
-    /// The web's keyboard shortcuts.
+    /// The web's keyboard shortcuts (iPad with a keyboard; the Mac uses the monitor below).
     private func keys(_ press: KeyPress) -> KeyPress.Result {
-        switch press.characters {
+        if press.key == .escape { return escape() ? .handled : .ignored }
+        return shortcut(press.characters) ? .handled : .ignored
+    }
+
+    /// One of the web's single-key shortcuts. False when the key isn't one.
+    private func shortcut(_ key: String) -> Bool {
+        switch key {
         case "j": Task { await app.move(1) }
         case "k": Task { await app.move(-1) }
         case "s": if let id = app.selectedID { Task { await app.toggleStar(id) } }
@@ -109,11 +122,25 @@ struct WideLayout: View {
         case "/": searching = true
         case "f": toggleFocus()
         case "v": if let u = app.article.flatMap({ URL(string: $0.url) }) { openOriginal(u) }
-        default:
-            return press.key == .escape && escape() ? .handled : .ignored
+        default: return false
         }
-        return .handled
+        return true
     }
+
+    #if os(macOS)
+    /// On the Mac the keys work wherever the focus is (the article's text,
+    /// the list, nowhere), as on the web, but never while typing, with
+    /// Command, Control or Option held, or in a sheet.
+    private func watchKeys() -> Any? {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let window = event.window, window.isKeyWindow, window.sheetParent == nil, window.attachedSheet == nil,
+                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            if let text = window.firstResponder as? NSText, text.isEditable { return event }
+            if searching { return event }
+            return shortcut(event.charactersIgnoringModifiers.map { event.modifierFlags.contains(.shift) ? $0.uppercased() : $0 } ?? "") ? nil : event
+        }
+    }
+    #endif
 
     /// Escape, as on the web: leaves focused reading, then closes Settings
     /// or the article. False when there was nothing to close.

@@ -17,7 +17,9 @@ final class AppModel {
     var account: Account?
     var client: Client?
     var booting = true
-    var prefs = Prefs()
+    var prefs = AppModel.withDeviceSizes(Prefs()) {
+        didSet { Typeface.uiScale = prefs.uiScale }
+    }
     /// Moves when the Sun theme's phase changes (sunrise, sunset, dusk), so
     /// views that read it redraw in the new theme.
     private(set) var sunPhase: Sun.Phase?
@@ -169,7 +171,7 @@ final class AppModel {
             // Re-register each launch: tokens can change.
             if notificationsOn, notificationsAvailable { _ = await Notifications.shared.enable() }
             if let me = try? await client?.me(), let p = me.prefs {
-                prefs = p
+                prefs = Self.withDeviceSizes(p, seed: true)
                 #if os(macOS)
                 AppIconChoice(rawValue: p.appIcon)?.apply()
                 #endif
@@ -217,22 +219,59 @@ final class AppModel {
         sunPhase = id == "sun" ? Theme.sun(place: prefs.place).phase : nil
     }
 
-    /// Changes preferences at once, and saves them with the web app's (only
-    /// these keys change). If the server refuses, they go back.
+    /// Sizes belong to the device, not the account: a phone, a laptop and
+    /// the web each want their own. They're kept in this device's defaults.
+    private static let deviceSizes: [(key: String, path: WritableKeyPath<Prefs, Double>)] = [
+        ("readSize", \.readSize), ("measure", \.measure), ("uiScale", \.uiScale),
+    ]
+
+    /// Puts this device's sizes into the account's preferences. With `seed`,
+    /// a size this device hasn't chosen yet starts from the account's.
+    static func withDeviceSizes(_ p: Prefs, seed: Bool = false) -> Prefs {
+        var p = p
+        let d = UserDefaults.standard
+        for s in deviceSizes {
+            if d.object(forKey: "size." + s.key) != nil {
+                p[keyPath: s.path] = d.double(forKey: "size." + s.key)
+            } else if seed {
+                d.set(p[keyPath: s.path], forKey: "size." + s.key)
+            }
+        }
+        Typeface.uiScale = p.uiScale
+        return p
+    }
+
+    /// Changes not yet sent, gathered so a run of slider or stepper steps
+    /// is one save (as the web waits 400 ms).
+    private var unsaved: [String: any Sendable] = [:]
+    private var saving: Task<Void, Never>?
+
+    /// Changes preferences at once. Sizes stay on this device; the rest is
+    /// saved with the account, sending only the keys that changed.
     func setPrefs(_ change: (inout Prefs) -> Void, _ keys: [String: any Sendable]) {
         let before = prefs
         change(&prefs)
-        let reload = before.unreadOnly != prefs.unreadOnly
-        Task {
+        var keys = keys
+        for s in Self.deviceSizes where keys[s.key] != nil {
+            UserDefaults.standard.set(prefs[keyPath: s.path], forKey: "size." + s.key)
+            keys[s.key] = nil
+        }
+        if before.unreadOnly != prefs.unreadOnly { Task { await load() } }
+        guard !keys.isEmpty else { return }
+        unsaved.merge(keys) { _, new in new }
+        saving?.cancel()
+        saving = Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            let changes = unsaved
+            unsaved = [:]
             do {
-                try await client?.savePrefs(keys)
-                if keys["skipSponsored"] as? Bool == true { await refreshTree(); await load() }
+                try await client?.savePrefs(changes)
+                if changes["skipSponsored"] as? Bool == true { await refreshTree(); await load() }
             } catch {
-                prefs = before
                 show("Couldn't save the setting. \(error.localizedDescription)")
             }
         }
-        if reload { Task { await load() } }
     }
 
     // MARK: Loading

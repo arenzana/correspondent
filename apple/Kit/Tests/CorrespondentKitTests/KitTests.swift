@@ -80,17 +80,24 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     }
 
     @Test func savesPrefsWithoutLosingTheWebsOwn() async throws {
+        // Only the keys changed go to the server, as a patch.
+        FakeServer.routes = ["PATCH /api/v1/prefs": (204, "")]
+        FakeServer.seen = []
+        let c = Client(server: server, token: "t", session: FakeServer.session())
+        try await c.savePrefs(["theme": "evening"])
+        let patch = try #require(FakeServer.seen.last)
+        #expect(patch.httpMethod == "PATCH")
+        #expect((try JSONSerialization.jsonObject(with: patch.httpBody ?? Data()) as? [String: Any])?.keys.sorted() == ["theme"])
+
+        // An older server: read, change these keys, write the whole document back.
         FakeServer.routes = [
             "GET /api/v1/me": (200, #"{"username":"isma","prefs":{"theme":"night","navWidth":280,"place":{"lat":40.4,"lon":-3.7}}}"#),
             "PUT /api/v1/prefs": (204, ""),
         ]
-        FakeServer.seen = []
-        let c = Client(server: server, token: "t", session: FakeServer.session())
-        let p = try await c.savePrefs(["readSize": 21, "theme": "evening"])
-        #expect(p.theme == "evening" && p.readSize == 21 && p.unreadOnly)
+        try await c.savePrefs(["theme": "evening"])
         let put = try #require(FakeServer.seen.last)
         let sent = try JSONSerialization.jsonObject(with: put.httpBody ?? Data()) as? [String: Any]
-        #expect(sent?["navWidth"] as? Int == 280 && sent?["place"] != nil && sent?["theme"] as? String == "evening")
+        #expect(put.httpMethod == "PUT" && sent?["navWidth"] as? Int == 280 && sent?["place"] != nil && sent?["theme"] as? String == "evening")
     }
 
         @Test func normalizesTheServerAddress() {
