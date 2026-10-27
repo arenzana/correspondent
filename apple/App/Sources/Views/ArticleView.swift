@@ -219,7 +219,8 @@ enum ArticleHTML {
         .summary p { margin: 0 0 6px; }
         .summary small { color: var(--slate); font-size: 12px; }
         .prose { font-family: \(family); font-size: \(Int(size))px; line-height: 1.66; font-variation-settings: 'opsz' 16; overflow-wrap: break-word; hanging-punctuation: first; }
-        .prose b.bionic { font-weight: 680; }
+        .prose:has(b.bionic) { color: color-mix(in srgb, var(--ink) 72%, var(--slate)); }
+        .prose b.bionic { font-weight: \(prefs.readFont == "sans" ? 600 : 580); color: var(--ink); }
         .spotlit .sl { opacity: 0.28; transition: opacity 0.25s ease; }
         .spotlit .sl.lit { opacity: 1; }
         .veil { position: fixed; left: 0; right: 0; pointer-events: none; z-index: 2; background: color-mix(in srgb, var(--sheet) 72%, transparent); }

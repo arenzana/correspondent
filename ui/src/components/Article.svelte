@@ -230,7 +230,7 @@
           {/if}
           {#if a.entry.content}
             <!-- Content is sanitized server-side by an allowlist before storage. -->
-            <div class="prose" class:bionic={app.prefs.bionic} bind:this={prose}>{@html content}</div>
+            <div class="prose" class:bionic={app.prefs.bionic} class:sans={app.prefs.readFont === 'sans'} bind:this={prose}>{@html content}</div>
           {/if}
           {#if looksPartial}
             <div class="partial">
@@ -392,8 +392,17 @@
     top: calc(var(--top) + var(--band));
     height: 100vh;
   }
+  /* Semibold, not bold: heavy starts turn words into blobs. The rest of
+     each word is a shade lighter, so the eye still lands on the starts. */
+  .prose.bionic {
+    color: color-mix(in srgb, var(--ink) 72%, var(--slate));
+  }
   .prose.bionic :global(b.bionic) {
-    font-weight: 680;
+    font-weight: 580;
+    color: var(--ink);
+  }
+  .prose.bionic.sans :global(b.bionic) {
+    font-weight: 600;
   }
   @media (prefers-reduced-motion: reduce) {
     .spotlit :global(.sl) {
