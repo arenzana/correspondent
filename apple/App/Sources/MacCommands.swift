@@ -18,6 +18,10 @@ struct MacCommands: Commands {
             Button("Refresh") { Task { await app.refreshTree(); await app.load() } }
                 .keyboardShortcut("r")
         }
+        CommandGroup(replacing: .sidebar) {
+            Button("Show or Hide the Sidebar") { NotificationCenter.default.post(name: .sidebar, object: nil) }
+                .keyboardShortcut("s", modifiers: [.control, .command])
+        }
         CommandMenu("Go") {
             Button("Unread") { Task { await app.go(.unread) } }.keyboardShortcut("1")
             Button("Today") { Task { await app.go(.today) } }.keyboardShortcut("2")
@@ -29,6 +33,9 @@ struct MacCommands: Commands {
         CommandMenu("Article") {
             Button("Next Article") { Task { await app.move(1) } }.keyboardShortcut(.downArrow)
             Button("Previous Article") { Task { await app.move(-1) } }.keyboardShortcut(.upArrow)
+            // A menu item, so Escape works with the article's text focused too.
+            Button("Close Article") { NotificationCenter.default.post(name: .escape, object: nil) }
+                .keyboardShortcut(.escape, modifiers: [])
             Divider()
             Button(app.article?.read == false ? "Mark as Read" : "Mark as Unread") {
                 if let id = app.article?.id { Task { await app.toggleRead(id) } }
@@ -82,4 +89,6 @@ struct SettingsWindow: View {
 extension Notification.Name {
     static let addFeed = Notification.Name("org.arenzana.correspondent.addFeed")
     static let search = Notification.Name("org.arenzana.correspondent.search")
+    static let escape = Notification.Name("org.arenzana.correspondent.escape")
+    static let sidebar = Notification.Name("org.arenzana.correspondent.sidebar")
 }

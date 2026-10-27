@@ -13,6 +13,8 @@ struct WireView: View {
     /// Pushed on iPhone: the navigation bar shows the title.
     var pushed = false
     var leading: AnyView? = nil
+    /// Below the list: the sidebar's own actions while the sidebar is hidden.
+    var footer: AnyView? = nil
 
     /// The time's column, wider with larger text (Dynamic Type).
     static var gutter: CGFloat { Typeface.scaled(52) }
@@ -53,6 +55,7 @@ struct WireView: View {
                     .padding(.top, 10)
                 }
             }
+            if let footer { footer }
         }
         .background(theme.sheet)
     }

@@ -54,17 +54,26 @@ struct WideLayout: View {
     @Environment(Player.self) private var player
     @Environment(\.theme) private var theme
     @State private var searching = false
-    @State private var settings = false
-    @State private var columns = NavigationSplitViewVisibility.all
+    @State private var settings = Self.debugEnv("CORR_TAB") == "settings"
+    @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
+
+    /// Screenshots start where they need to (debug builds only).
+    private static func debugEnv(_ key: String) -> String? {
+        #if DEBUG
+        ProcessInfo.processInfo.environment[key]
+        #else
+        nil
+        #endif
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
-            SidebarView(onSearch: { searching = true }, onSettings: { settings = true })
+            SidebarView(onSearch: { searching = true }, onSettings: { settings = true }, onCollapse: { toggleSidebar() })
                 .toolbar(removing: .sidebarToggle)
                 .frame(minWidth: 220)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } content: {
-            WireView()
+            WireView(leading: collapsed ? AnyView(collapsedLeading) : nil, footer: collapsed ? AnyView(collapsedFooter) : nil)
                 .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 560)
         } detail: {
             if settings {
@@ -78,6 +87,10 @@ struct WideLayout: View {
         .onKeyPress { press in keys(press) }
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
+        .onReceive(NotificationCenter.default.publisher(for: .sidebar)) { _ in toggleSidebar() }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: .escape)) { _ in _ = escape() }
+        #endif
         .onChange(of: app.selectedID) { _, id in if id != nil { settings = false } }
     }
 
@@ -97,11 +110,46 @@ struct WideLayout: View {
         case "f": toggleFocus()
         case "v": if let u = app.article.flatMap({ URL(string: $0.url) }) { openOriginal(u) }
         default:
-            if press.key == .escape, columns == .detailOnly { toggleFocus(); return .handled }
-            if press.key == .escape, app.article != nil { app.closeArticle(); return .handled }
-            return .ignored
+            return press.key == .escape && escape() ? .handled : .ignored
         }
         return .handled
+    }
+
+    /// Escape, as on the web: leaves focused reading, then closes Settings
+    /// or the article. False when there was nothing to close.
+    private func escape() -> Bool {
+        if columns == .detailOnly { toggleFocus() } else if settings { settings = false } else if app.article != nil { app.closeArticle() } else { return false }
+        return true
+    }
+
+    /// The sidebar is hidden (focused reading hides everything instead).
+    private var collapsed: Bool { columns == .doubleColumn }
+
+    /// The sidebar's mark and a way back, at the head of the list.
+    private var collapsedLeading: some View {
+        HStack(spacing: 6) {
+            Button { toggleSidebar() } label: { Image(systemName: "sidebar.left") }.iconButton()
+                .accessibilityLabel("Show the sidebar")
+            Mark(size: 24)
+        }
+    }
+
+    /// The sidebar's toolbar, under the list.
+    private var collapsedFooter: some View {
+        HStack(spacing: 2) {
+            Button { NotificationCenter.default.post(name: .addFeed, object: nil) } label: { Image(systemName: "plus") }.iconButton()
+                .accessibilityLabel("Add a feed")
+            Spacer()
+            Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }.iconButton()
+                .accessibilityLabel("Settings")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(theme.fog)
+        .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
+    }
+
+    private func toggleSidebar() {
+        withAnimation(.easeOut(duration: 0.2)) { columns = collapsed ? .all : .doubleColumn }
     }
 
     /// Focused reading: the article alone, then back to three columns.

@@ -11,6 +11,24 @@ struct SettingsView: View {
     var onBack: (() -> Void)? = nil
     @State private var saving = false
     @State private var confirmSignOut = false
+    @State private var search = ""
+
+    /// The sections, with the words each answers to (as the web's settings search).
+    private static let sections: [(title: String, words: String)] = [
+        ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
+        ("Reading", "text size font typeface serif sans line length unread only mark read opened sponsored skip"),
+        ("This device", "offline badge count icon dock notifications bell test save background"),
+        ("Account", "server sign out password passkey web token"),
+        ("About", "version build source"),
+    ]
+
+    private var shown: [String] {
+        let words = search.lowercased().split(separator: " ").map(String.init)
+        return Self.sections.filter { s in
+            let hay = (s.title + " " + s.words).lowercased()
+            return words.allSatisfy { hay.contains($0) }
+        }.map(\.title)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,17 +45,24 @@ struct SettingsView: View {
             .padding(.horizontal, 18).padding(.vertical, 12)
             .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 34) {
-                    appearance
-                    reading
-                    device
-                    account
-                    about
+            ScrollViewReader { proxy in
+                guide(proxy)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 34) {
+                        if shown.contains("Appearance") { appearance.id("Appearance") }
+                        if shown.contains("Reading") { reading.id("Reading") }
+                        if shown.contains("This device") { device.id("This device") }
+                        if shown.contains("Account") { account.id("Account") }
+                        if shown.contains("About") { about.id("About") }
+                        if shown.isEmpty {
+                            Text("No settings match “\(search.trimmingCharacters(in: .whitespaces))”.")
+                                .font(Typeface.ui.font(14.5)).foregroundStyle(theme.slate)
+                        }
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 24)
+                    .frame(maxWidth: 680, alignment: .leading)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 20).padding(.vertical, 24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
             }
         }
         .background(theme.sheet)
@@ -192,6 +217,40 @@ struct SettingsView: View {
 
     // MARK: Pieces
 
+    /// Search, and the sections to jump to, as on the web.
+    private func guide(_ proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(theme.slate)
+                TextField("Search settings", text: $search)
+                    .textFieldStyle(.plain).font(Typeface.ui.font(14)).foregroundStyle(theme.ink)
+                    .autocorrectionDisabled()
+                if !search.isEmpty {
+                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(theme.slate).accessibilityLabel("Clear the search")
+                }
+            }
+            .padding(.horizontal, 12).frame(height: 34)
+            .background(RoundedRectangle(cornerRadius: 6).fill(theme.fog))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(shown, id: \.self) { title in
+                        Button {
+                            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(title, anchor: .top) }
+                        } label: {
+                            Text(title).font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
+                                .padding(.horizontal, 11).frame(height: 28)
+                                .background(Capsule().stroke(theme.rule))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
+    }
+
     private var badgeLabel: String {
         #if os(iOS)
         "Show the unread count on the app icon"
@@ -266,13 +325,17 @@ struct SettingsView: View {
     }
 
     private func toggle(_ title: String, _ note: String, isOn: Bool, set: @escaping (Bool) -> Void) -> some View {
-        Toggle(isOn: Binding(get: { isOn }, set: set)) {
+        // The text wraps and the switch sits at the end: a Mac checkbox's
+        // label would keep to one line and widen the whole page.
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
                 Text(note).font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(title, isOn: Binding(get: { isOn }, set: set)).labelsHidden().toggleStyle(.switch).tint(theme.accent)
         }
-        .tint(theme.accent)
     }
 
     private func row(_ label: String, _ value: String) -> some View {

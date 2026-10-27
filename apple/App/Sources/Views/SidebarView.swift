@@ -10,6 +10,8 @@ struct SidebarView: View {
     var onSettings: () -> Void
     /// On iPhone, choosing a list moves on to it.
     var onChoose: () -> Void = {}
+    /// On iPad and Mac, hides the sidebar (the list then shows its controls).
+    var onCollapse: (() -> Void)? = nil
 
     @State private var adding = false
     /// Renaming a feed, folder or saved search: what, and the new name.
@@ -23,7 +25,12 @@ struct SidebarView: View {
             HStack(spacing: 10) {
                 Mark(size: 28)
                 Text("Correspondent").font(Typeface.read.font(21, weight: 560, opsz: 48)).foregroundStyle(theme.ink)
-                Spacer()
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Spacer(minLength: 0)
+                if let onCollapse {
+                    Button(action: onCollapse) { Image(systemName: "sidebar.left") }.iconButton()
+                        .accessibilityLabel("Hide the sidebar")
+                }
             }
             .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
 
@@ -235,6 +242,10 @@ struct SidebarView: View {
                 FeedIcon(feed: feed, size: 16)
                 Text(feed.title.isEmpty ? feed.url : feed.title).font(Typeface.ui.font(15))
                     .foregroundStyle(feed.paused || feed.errorCount > 0 ? theme.slate : theme.ink).lineLimit(1)
+                if feed.notify {
+                    Image(systemName: "bell.fill").font(.system(size: 9)).foregroundStyle(theme.slate.opacity(0.8))
+                        .accessibilityLabel("Notifications on")
+                }
                 Spacer()
                 if feed.errorCount > 0 { Image(systemName: "exclamationmark.triangle").font(.system(size: 11)).foregroundStyle(theme.slate) }
                 Count(n: feed.unread)
