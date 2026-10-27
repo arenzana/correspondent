@@ -51,6 +51,7 @@ async function send(op: OutboxOp, fetchFn: typeof fetch): Promise<Response> {
       feed: op.scope.feed ? String(op.scope.feed) : undefined,
       folder: op.scope.folder ? String(op.scope.folder) : undefined,
       view: op.scope.view,
+      q: op.scope.q || undefined, // only a search's matches
       before: op.before,
     }) })
 }

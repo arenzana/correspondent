@@ -21,6 +21,10 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
         Self.seen.append(req)
         let key = "\(request.httpMethod ?? "GET") \(request.url!.path())"
         let (status, body) = Self.routes[key] ?? (404, #"{"error":"No such route."}"#)
+        if status == 0 { // a dropped connection
+            client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+            return
+        }
         let resp = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(body.utf8))
@@ -133,4 +137,54 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     #expect(await again.tree()?.feeds.first?.title == "DF")
     await again.clear()
     #expect(await OfflineStore(account: "isma@rss.example.org", directory: dir).tree() == nil)
+}
+
+// The outbox shares the fake server: same serialized suite as the client's.
+extension ClientTests {
+    @Test func mergesABurstAndKeepsMarkAllInPlace() {
+        let steps = Outbox.plan([
+            .state(action: "read", ids: ["1", "2"]),
+            .state(action: "unread", ids: ["2"]),
+            .state(action: "star", ids: ["1"]),
+            .markAll(feed: 3, folder: nil, view: nil, search: nil, before: "9"),
+            .state(action: "unstar", ids: ["1"]),
+        ])
+        #expect(steps == [
+            .state(action: "read", ids: ["1"]),
+            .state(action: "unread", ids: ["2"]),
+            .state(action: "star", ids: ["1"]),
+            .markAll(feed: 3, folder: nil, view: nil, search: nil, before: "9"),
+            .state(action: "unstar", ids: ["1"]),
+        ])
+    }
+
+    @Test func sendsInOrderKeepsWhenOfflineAndDropsWhatTheServerRefuses() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let box = Outbox(account: "isma@x", directory: dir)
+        let c = Client(server: server, token: "t", session: FakeServer.session())
+        await box.enqueue(.state(action: "star", ids: ["1"]))
+        await box.enqueue(.markAll(feed: nil, folder: nil, view: nil, search: "duo", before: "99"))
+
+        FakeServer.routes = ["POST /api/v1/entries/state": (0, ""), "POST /api/v1/entries/mark-all-read": (0, "")]
+        #expect(await box.flush(c).stopped == "offline")
+        // Kept, and still there for a new app launch.
+        #expect(await Outbox(account: "isma@x", directory: dir).count == 2)
+
+        FakeServer.routes = [
+            "POST /api/v1/entries/state": (404, #"{"error":"No such article."}"#),
+            "GET /api/v1/tree": (200, #"{"counts":{"newest":"99"}}"#),
+            "POST /api/v1/entries/mark-all-read": (200, #"{"ids":["5"]}"#),
+        ]
+        FakeServer.seen = []
+        #expect(await box.flush(c) == FlushResult(sent: 2, left: 0))
+        #expect(await box.count == 0)
+        let mark = try #require(FakeServer.seen.last)
+        let body = try JSONSerialization.jsonObject(with: mark.httpBody ?? Data()) as? [String: String]
+        #expect(body?["q"] == "duo" && body?["before"] == "99")
+
+        await box.enqueue(.state(action: "read", ids: ["7"]))
+        FakeServer.routes = ["POST /api/v1/entries/state": (401, #"{"error":"Sign in."}"#)]
+        #expect(await box.flush(c).stopped == "signedOut")
+        #expect(await box.count == 1)
+    }
 }

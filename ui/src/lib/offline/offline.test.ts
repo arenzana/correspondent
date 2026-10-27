@@ -92,6 +92,14 @@ describe('outbox flush', () => {
     expect(await db.pending()).toEqual([])
   })
 
+  it('replays a mark-all made in a search with its search, so only the matches are read', async () => {
+    await db.enqueue({ kind: 'markAll', scope: { q: 'duo' }, before: '99', at: 1 })
+    const fetchFn = vi.fn(async () => ok())
+    await flush(fetchFn as unknown as typeof fetch)
+    const [[, init]] = fetchFn.mock.calls as unknown as [string, RequestInit][]
+    expect(JSON.parse(init.body as string)).toEqual({ q: 'duo', before: '99' })
+  })
+
   it('keeps everything queued when the network is down', async () => {
     await db.enqueue({ kind: 'state', action: 'read', ids: ['1'], at: 1 })
     const r = await flush((async () => { throw new TypeError('Failed to fetch') }) as unknown as typeof fetch)

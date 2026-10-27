@@ -1,4 +1,5 @@
 import SwiftUI
+import Network
 import CorrespondentKit
 
 /// The app's state, as the web app's (ui/src/lib/state.svelte.ts): the
@@ -40,8 +41,13 @@ final class AppModel {
     var summarizing = false
 
     var toast: String?
+    /// Changes made offline, waiting to be sent.
+    var outboxCount = 0
 
     private var offline: OfflineStore?
+    private var outbox: Outbox?
+    private var pathMonitor: NWPathMonitor?
+    private var retryTask: Task<Void, Never>?
     private var liveTask: Task<Void, Never>?
     private var dwell: Task<Void, Never>?
     private var loadSeq = 0
@@ -128,6 +134,8 @@ final class AppModel {
         try? await client?.signOut()
         account?.forget()
         await offline?.clear()
+        await outbox?.clear()
+        outboxCount = 0
         liveTask?.cancel()
         account = nil
         client = nil
@@ -141,6 +149,9 @@ final class AppModel {
         self.account = account
         client = Client(server: account.server, token: token)
         offline = OfflineStore(account: account.key)
+        outbox = Outbox(account: account.key)
+        watchNetwork()
+        Task { await flushOutbox() }
         Task {
             if let me = try? await client?.me(), let p = me.prefs {
                 prefs = p
@@ -360,7 +371,10 @@ final class AppModel {
             try await client.setState(read ? "read" : "unread", targets)
             await refreshTree()
         } catch {
-            if isOffline(error) { return }
+            if isOffline(error) {
+                await queue(.state(action: read ? "read" : "unread", ids: targets))
+                return
+            }
             patch(targets) { $0.read = !read }
             show("Couldn't update the article. \(error.localizedDescription)")
         }
@@ -375,6 +389,10 @@ final class AppModel {
             try await client.setState(starred ? "star" : "unstar", [id])
             await refreshTree()
         } catch {
+            if isOffline(error) {
+                await queue(.state(action: starred ? "star" : "unstar", ids: [id]))
+                return
+            }
             patch([id]) { $0.starred = !starred }
             show("Couldn't update the star. \(error.localizedDescription)")
         }
@@ -389,14 +407,23 @@ final class AppModel {
     func markAllRead() async {
         guard let client, source != .starred else { return }
         let q = query(for: source)
+        let view = source == .today ? "today" : nil
         do {
-            let ids = try await client.markAllRead(feed: q.feed, folder: q.folder, view: source == .today ? "today" : nil,
-                                                   search: q.search, before: boundary)
+            let ids = try await client.markAllRead(feed: q.feed, folder: q.folder, view: view, search: q.search, before: boundary)
             if ids.isEmpty { show("Nothing to mark as read."); return }
             patch(ids) { $0.read = true }
             await refreshTree()
             show("Marked \(ids.count) \(ids.count == 1 ? "article" : "articles") as read.")
         } catch {
+            if isOffline(error) {
+                // Mark what's here now; the server applies the same boundary when it's sent.
+                let ids = entries.filter { !$0.read }.map(\.id)
+                patch(ids) { $0.read = true }
+                await offline?.patch(ids, read: true)
+                await queue(.markAll(feed: q.feed, folder: q.folder, view: view, search: q.search, before: boundary))
+                show("Marked as read. It will sync when you're back online.")
+                return
+            }
             show("Couldn't mark as read. \(error.localizedDescription)")
         }
     }
@@ -412,6 +439,65 @@ final class AppModel {
     }
 
     // MARK: Live and offline
+
+    /// Queues a change made without a network.
+    private func queue(_ op: OutboxOp) async {
+        online = false
+        await outbox?.enqueue(op)
+        outboxCount = await outbox?.count ?? 0
+        retryWhileWaiting()
+    }
+
+    /// Sends the changes made offline; says so once they're through.
+    func flushOutbox() async {
+        guard let client, let outbox, await outbox.count > 0 else { outboxCount = 0; return }
+        let r = await outbox.flush(client)
+        outboxCount = await outbox.count
+        switch r.stopped {
+        case "offline": online = false
+        case "signedOut": handle(APIError(status: 401, message: ""))
+        default:
+            if r.left == 0 && r.sent > 0 {
+                online = true
+                show(r.sent == 1 ? "Synced your offline change." : "Synced your offline changes.")
+                await refreshTree()
+            }
+        }
+    }
+
+    /// iOS has no background sync for this: while changes wait, keep trying.
+    private func retryWhileWaiting() {
+        guard retryTask == nil else { return }
+        retryTask = Task { [weak self] in
+            while let self, self.outboxCount > 0, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                await self.flushOutbox()
+            }
+            self?.retryTask = nil
+        }
+    }
+
+    /// Notices the network coming back, and sends what waited.
+    private func watchNetwork() {
+        pathMonitor?.cancel()
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                guard let self else { return }
+                await self.flushOutbox()
+                if !self.online { await self.refreshTree(); await self.load() }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "network"))
+        pathMonitor = monitor
+    }
+
+    /// The app came back to the front.
+    func resumed() async {
+        await flushOutbox()
+        await catchUp()
+    }
 
     /// Follows the server's live events; reconnects after a drop.
     func listen() {

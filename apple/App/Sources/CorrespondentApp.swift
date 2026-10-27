@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct CorrespondentApp: App {
     @State private var app = AppModel()
+    @Environment(\.scenePhase) private var phase
 
     init() {
         Typeface.register()
@@ -13,6 +14,9 @@ struct CorrespondentApp: App {
             RootView()
                 .environment(app)
                 .task { await app.boot() }
+                .onChange(of: phase) { _, now in
+                    if now == .active, app.account != nil { Task { await app.resumed() } }
+                }
                 #if os(macOS)
                 .frame(minWidth: 980, minHeight: 620)
                 #endif

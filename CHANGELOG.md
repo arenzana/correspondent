@@ -15,6 +15,11 @@ change behaviour; the Google Reader API stays compatible throughout.
   live updates and an offline copy. iPhone uses iOS's own tab bar and
   navigation. Not yet released.
 
+### Fixed
+
+- A Mark all read made offline inside a search marked the whole list read
+  when it synced, not only the search's matches.
+
 ## [0.17.1] - 2026-10-27
 
 ### Changed

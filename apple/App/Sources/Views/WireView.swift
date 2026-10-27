@@ -19,6 +19,12 @@ struct WireView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if app.outboxCount > 0 {
+                Text("\(app.outboxCount) \(app.outboxCount == 1 ? "change" : "changes") waiting to be sent.")
+                    .font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 6)
+                    .background(theme.fog)
+            }
             if !app.online {
                 Text("Offline. Reading the copy kept on this device.")
                     .font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
