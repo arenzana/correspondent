@@ -7,6 +7,8 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-27
+
 ### Changed
 
 - The sidebar folds with an arrow beside the logo (or `[`). Folded, the
