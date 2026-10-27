@@ -7,10 +7,13 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-27
+
 ### Added
 
-- corr for Arch Linux and Omarchy: `yay -S corr-bin` (AUR), published with
-  each release.
+- A pacman repository for corr, for Arch Linux and Omarchy (x86_64, aarch64,
+  armv7h), published with each release. Add it to `/etc/pacman.conf` once
+  (see docs/cli.md), then `sudo pacman -S corr`; it updates with the system.
 
 ## [0.14.0] - 2026-10-27
 

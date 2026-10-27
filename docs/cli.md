@@ -8,10 +8,22 @@ and AI agents as much as for people.
 
 ```sh
 brew install arenzana/tap/corr   # macOS and Linux
-yay -S corr-bin                  # Arch Linux and Omarchy (AUR)
+sudo pacman -S corr              # Arch Linux and Omarchy, after adding the repository below
 ```
 
-or download a binary for macOS, Linux (including 32-bit ARM), Windows or
+On Arch Linux and Omarchy, add corr's repository to `/etc/pacman.conf`
+once; after that corr updates with the rest of the system (`pacman -Syu`):
+
+```ini
+[correspondent]
+SigLevel = Optional TrustAll
+Server = https://arenzana.github.io/correspondent/arch/$arch
+```
+
+The packages aren't signed: like the Homebrew tap, they come over HTTPS
+from this project's GitHub Pages (x86_64, aarch64 and armv7h).
+
+Or download a binary for macOS, Linux (including 32-bit ARM), Windows or
 FreeBSD from the [releases](https://github.com/arenzana/correspondent/releases), or
 `go install github.com/arenzana/correspondent/cmd/corr@latest`.
 

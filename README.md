@@ -118,7 +118,7 @@ range) so sign-in throttling sees real client addresses.
 
 ## From the terminal, and for AI tools
 
-`corr` is a terminal reader and manager (`brew install arenzana/tap/corr`, or `yay -S corr-bin` on Arch and Omarchy).
+`corr` is a terminal reader and manager (`brew install arenzana/tap/corr`, or from its pacman repository on Arch and Omarchy; see [docs/cli.md](docs/cli.md)).
 Run it alone for a full-screen reader in your web theme; every command also
 speaks JSON with stable fields and meaningful exit codes, for scripts and
 agents.

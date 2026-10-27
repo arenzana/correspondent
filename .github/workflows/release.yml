@@ -2,8 +2,8 @@ name: Release
 
 # Publishes a GitHub release for a version tag, with the notes from that
 # version's section of CHANGELOG.md, then adds the corr CLI to it (built,
-# signed and sent to the Homebrew tap by GoReleaser). Images are built by
-# image.yml.
+# signed and sent to the Homebrew tap by GoReleaser) and publishes the pacman
+# repository for Arch on GitHub Pages. Images are built by image.yml.
 
 on:
   push:
@@ -69,5 +69,42 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           # Empty without the secret: the cask is then built but not pushed.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          # Likewise for the AUR package.
-          AUR_KEY: ${{ secrets.AUR_KEY }}
+
+  # The pacman repository (Arch Linux, Omarchy), on GitHub Pages: this
+  # release's packages, indexed with repo-add.
+  arch:
+    needs: cli
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # pacman's download sandbox can't switch users in some containers.
+          sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+          pacman -Sy --noconfirm --needed github-cli
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.pkg.tar.zst' -D packages
+          .github/arch-repo.sh packages site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  pages:
+    needs: arch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

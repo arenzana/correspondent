@@ -3,7 +3,7 @@ project_name: corr
 
 # The corr CLI. The server ships as a container image (image.yml); this
 # builds corr for macOS, Linux, Windows and FreeBSD, signs the checksums, and publishes the
-# Homebrew cask to arenzana/homebrew-tap and the corr-bin package to the AUR (Arch, Omarchy).
+# Homebrew cask to arenzana/homebrew-tap, and pacman packages for Arch and Omarchy.
 
 before:
   hooks:
@@ -96,30 +96,26 @@ homebrew_casks:
             run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/corr"]
           end
 
-# Arch Linux and Omarchy: yay -S corr-bin. Built from the release's own
-# archives (x86_64, aarch64, armv7h), so pacman checks the same checksums.
-aurs:
-  - name: corr-bin
-    ids: [default]
+# Arch Linux and Omarchy: pacman packages, which release.yml indexes into
+# the pacman repository on GitHub Pages (.github/arch-repo.sh).
+nfpms:
+  - id: arch
+    ids: [corr]
+    package_name: corr
+    formats: [archlinux]
+    file_name_template: '{{ .ConventionalFileName }}'
     homepage: https://github.com/arenzana/correspondent
     description: Read and manage a Correspondent feed reader from the terminal
-    maintainers:
-      - Ismael Arenzana <isma at arenzana dot org>
+    maintainer: Ismael Arenzana <isma@arenzana.org>
     license: MIT
-    provides: [corr]
-    conflicts: [corr]
-    private_key: '{{ .Env.AUR_KEY }}'
-    git_url: ssh://aur@aur.archlinux.org/corr-bin.git
-    # Without the key (forks, dry runs) the package is built but not pushed.
-    skip_upload: '{{ if not .Env.AUR_KEY }}true{{ end }}'
-    commit_author:
-      name: Ismael Arenzana
-      email: isma@arenzana.org
-    commit_msg_template: 'corr {{ .Tag }}'
-    package: |-
-      install -Dm755 ./corr "${pkgdir}/usr/bin/corr"
-      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/corr-bin/LICENSE"
-      install -Dm644 ./docs/cli.md "${pkgdir}/usr/share/doc/corr-bin/cli.md"
+    mtime: '{{ .CommitDate }}'
+    archlinux:
+      packager: Ismael Arenzana <isma@arenzana.org>
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/corr/LICENSE
+      - src: docs/cli.md
+        dst: /usr/share/doc/corr/cli.md
 
 # The release itself (with notes from CHANGELOG.md) is made by release.yml;
 # GoReleaser only adds corr's files to it.
