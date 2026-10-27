@@ -28,6 +28,13 @@ targets:
         buildPhase: resources
     dependencies:
       - package: CorrespondentKit
+      - target: Share
+        destinationFilters: [iOS]
+    entitlements:
+      path: App/Correspondent.entitlements
+      properties:
+        com.apple.security.application-groups: [group.org.arenzana.correspondent]
+        keychain-access-groups: ["$(AppIdentifierPrefix)org.arenzana.correspondent.shared"]
     info:
       path: App/Info.plist
       properties:
@@ -57,3 +64,40 @@ targets:
         ENABLE_APP_SANDBOX: YES
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
         ENABLE_USER_SELECTED_FILES: readonly
+  Share:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Share/Sources
+      - path: App/Sources/Theme.swift
+      - path: App/Resources/Fonts
+        buildPhase: resources
+    dependencies:
+      - package: CorrespondentKit
+    entitlements:
+      path: Share/Share.entitlements
+      properties:
+        com.apple.security.application-groups: [group.org.arenzana.correspondent]
+        keychain-access-groups: ["$(AppIdentifierPrefix)org.arenzana.correspondent.shared"]
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Correspondent
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.arenzana.correspondent.share
+        PRODUCT_NAME: Share
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Correspondent
+        SKIP_INSTALL: YES
