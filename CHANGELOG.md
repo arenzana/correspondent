@@ -7,6 +7,8 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-10-27
+
 ### Added
 
 - The start of native apps for iPhone, iPad and Mac (`apple/`), with the
@@ -19,6 +21,8 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 - A Mark all read made offline inside a search marked the whole list read
   when it synced, not only the search's matches.
+- `correspondent invite` failed with a foreign-key error: an invitation
+  made from the command line has no creating account.
 
 ## [0.17.1] - 2026-10-27
 

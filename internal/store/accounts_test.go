@@ -192,3 +192,13 @@ func TestValidUsername(t *testing.T) {
 		}
 	}
 }
+
+// TestInviteFromCommandLine: `correspondent invite` makes one with no
+// creator (by 0), which must not trip the foreign key.
+func TestInviteFromCommandLine(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	tok, err := s.CreateInvite(ctx, InviteAccount, 0, RoleUser, "from the command line", 0, time.Hour)
+	if err != nil || tok == "" {
+		t.Fatalf("invite from the command line: %q %v", tok, err)
+	}
+}

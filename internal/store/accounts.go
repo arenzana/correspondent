@@ -249,7 +249,10 @@ func (s *Store) CreateInvite(ctx context.Context, kind string, userID int64, rol
 	}
 	token := base64.RawURLEncoding.EncodeToString(buf)
 	now := time.Now()
-	var forUser any
+	var forUser, creator any
+	if by != 0 {
+		creator = by // 0: made from the command line, by no account
+	}
 	if kind == InviteReset {
 		forUser = userID
 		// A new reset link replaces any earlier one for that account.
@@ -259,7 +262,7 @@ func (s *Store) CreateInvite(ctx context.Context, kind string, userID int64, rol
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO invites (token_hash, kind, user_id, role, note, created_by, created_at, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, hashToken(token), kind, forUser, role, strings.TrimSpace(note), by, now.Unix(), now.Add(ttl).Unix())
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, hashToken(token), kind, forUser, role, strings.TrimSpace(note), creator, now.Unix(), now.Add(ttl).Unix())
 	return token, err
 }
 
