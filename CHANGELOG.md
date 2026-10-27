@@ -7,6 +7,12 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Changed
+
+- The selection's blue line ripples as it moves between articles, like a
+  plucked string, and settles straight when it lands (still with Reduce
+  Motion).
+
 ## [0.15.1] - 2026-10-27
 
 ### Changed

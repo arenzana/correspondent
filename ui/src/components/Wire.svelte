@@ -91,8 +91,41 @@
     const r = row.getBoundingClientRect()
     const next = { top: r.top - base, bottom: r.bottom - base }
     const dir = !cursor ? 'none' : next.top > cursor.top ? 'down' : next.top < cursor.top ? 'up' : cursor.dir
+    if (cursor && next.top !== cursor.top && dir !== 'none') wave(dir)
     cursor = { ...next, dir }
   }
+
+  // As the cursor travels, its spine ripples like a plucked string: a sine
+  // wave running the way it moves, pinned at both ends, swelling and then
+  // settling straight as the row lands. Drawn in a 12-unit-wide box whose
+  // height stretches with the cursor (the stroke keeps its width).
+  const WAVE_MS = 520
+  let spine = $state(spinePath(0, 0))
+  let waveRaf = 0
+  function spinePath(amp: number, phase: number): string {
+    let d = ''
+    for (let y = 0; y <= 100; y += 2.5) {
+      const pin = Math.sin((Math.PI * y) / 100) // 0 at both ends
+      const x = 6 + amp * pin * Math.sin((2 * Math.PI * y) / 55 + phase)
+      d += `${y ? 'L' : 'M'}${x.toFixed(2)} ${y}`
+    }
+    return d
+  }
+  function wave(dir: 'up' | 'down') {
+    cancelAnimationFrame(waveRaf)
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const start = performance.now()
+    const way = dir === 'down' ? -1 : 1 // the crests travel with the cursor
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / WAVE_MS)
+      // Swells fast, then settles: sin(πt) eased toward the end.
+      const amp = 2.6 * Math.sin(Math.PI * t) * (1 - t * t * 0.5)
+      spine = spinePath(t < 1 ? amp : 0, way * t * 3 * Math.PI)
+      if (t < 1) waveRaf = requestAnimationFrame(step)
+    }
+    waveRaf = requestAnimationFrame(step)
+  }
+  $effect(() => () => cancelAnimationFrame(waveRaf))
   $effect(() => {
     void app.selectedId
     void app.entries
@@ -264,7 +297,9 @@
       <ol class="days" bind:this={days}>
         {#if cursor}
           <li class="cursor" aria-hidden="true" data-dir={cursor.dir}
-            style:--cur-top="{cursor.top}px" style:--cur-bot="{cursor.bottom}px"></li>
+            style:--cur-top="{cursor.top}px" style:--cur-bot="{cursor.bottom}px">
+            <svg class="spine" viewBox="0 0 12 100" preserveAspectRatio="none"><path d={spine} /></svg>
+          </li>
         {/if}
         {#each groups as g (g.key)}
           <li class="day">
@@ -564,15 +599,22 @@
       --cur-top 300ms var(--ease),
       --cur-bot 300ms var(--ease);
   }
-  .cursor::before {
-    content: '';
+  .spine {
     position: absolute;
-    left: calc(var(--spine-x) - 0.75px);
+    /* Centred where the 3px bar was: on the spine. */
+    left: calc(var(--spine-x) + 0.75px - 6px);
     top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--accent);
-    border-radius: 2px;
+    width: 12px;
+    height: 100%;
+    overflow: visible;
+  }
+  .spine path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
   }
   /* Moving down, the bottom edge leads and the top follows; moving up, the
      reverse. */
