@@ -2,3 +2,4 @@ Correspondent.xcodeproj/
 build/
 .build/
 DerivedData/
+.swiftpm/
