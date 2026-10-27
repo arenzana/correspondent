@@ -174,3 +174,24 @@ struct Pulse: View {
         .accessibilityLabel("\(days.reduce(0, +)) articles in the last 14 days")
     }
 }
+
+/// Connection state along the bottom, as YouTube's: dark while offline,
+/// green for a moment once the connection is back.
+struct ConnectionRibbon: View {
+    var state: AppModel.Ribbon
+
+    var body: some View {
+        let offline = state == .offline
+        HStack(spacing: 8) {
+            Image(systemName: offline ? "wifi.slash" : "wifi").font(.system(size: 12, weight: .semibold))
+            Text(offline ? "No connection. Reading the copy kept on this device." : "Back online")
+                .font(Typeface.ui.font(13, weight: 560)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(offline ? Color(hex: "#2a3349") : Color(hex: "#2e7d4f"))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}

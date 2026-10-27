@@ -25,7 +25,24 @@ final class AppModel {
     private(set) var sunPhase: Sun.Phase?
     /// Whether the reader set up text-to-speech (on the web): articles can be read aloud.
     var speechConfigured = false
-    var online = true
+    var online = true {
+        didSet { if online != oldValue { connectionChanged() } }
+    }
+    /// The ribbon at the bottom, as YouTube's: shown while offline, and
+    /// briefly once the connection is back.
+    var ribbon: Ribbon?
+    enum Ribbon: Equatable { case offline, backOnline }
+    private var ribbonTask: Task<Void, Never>?
+
+    private func connectionChanged() {
+        ribbonTask?.cancel()
+        if !online { ribbon = .offline; return }
+        ribbon = .backOnline
+        ribbonTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled, online { ribbon = nil }
+        }
+    }
 
     // Sidebar
     var tree = Tree()
@@ -120,6 +137,7 @@ final class AppModel {
             await refreshTree()
             await load()
             if env["CORR_OPEN_FIRST"] != nil, let first = entries.first { await select(first.id) }
+            if env["CORR_RIBBON"] == "offline" { ribbon = .offline } else if env["CORR_RIBBON"] == "back" { ribbon = .backOnline }
             listen()
             return
         }
@@ -778,10 +796,13 @@ final class AppModel {
         pathMonitor?.cancel()
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
-            guard path.status == .satisfied else { return }
+            let up = path.status == .satisfied
             Task { @MainActor in
                 guard let self else { return }
+                // Losing the network shows at once, not at the next failed request.
+                guard up else { self.online = false; return }
                 await self.flushOutbox()
+                // Back: online once the server answers (refreshTree sets it).
                 if !self.online { await self.refreshTree(); await self.load() }
             }
         }

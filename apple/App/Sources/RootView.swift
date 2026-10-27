@@ -41,13 +41,20 @@ struct RootView: View {
             VStack(spacing: 8) {
                 ForEach(app.notices) { n in Toast(notice: n) }
             }
-            .padding(.bottom, 24 + (player.now != nil && !isPhone ? 110 : 0))
+            .padding(.bottom, 24 + (player.now != nil && !isPhone ? 110 : 0) + (app.ribbon != nil ? 40 : 0))
+            if let ribbon = app.ribbon, app.account != nil {
+                ConnectionRibbon(state: ribbon)
+                    // Above the iPhone's tab bar; along the bottom edge elsewhere.
+                    .padding(.bottom, isPhone ? 58 : 0)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         // The device's text size (Dynamic Type) is read when fonts are made:
         // a new one rebuilds the views. The interface size and typeface are
         // observed instead (InterfaceType), so changing them keeps your place.
         .id(textSize)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: app.notices)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: app.ribbon)
         .animation(reduceMotion ? nil : .spring(duration: 0.35), value: player.now?.id)
         .environment(\.theme, theme)
         .tint(theme.accent)

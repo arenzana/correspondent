@@ -31,12 +31,6 @@ struct WireView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 6)
                     .background(theme.fog)
             }
-            if !app.online {
-                Text("Offline. Reading the copy kept on this device.")
-                    .font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.vertical, 6)
-                    .background(theme.fog)
-            }
             ZStack(alignment: .top) {
                 if app.entries.isEmpty && !app.loading {
                     // Scrollable so it can be pulled down to refresh too
