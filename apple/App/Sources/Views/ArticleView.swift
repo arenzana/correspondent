@@ -24,7 +24,8 @@ struct ArticleView: View {
                             theme: theme, prefs: app.prefs, base: app.client?.server,
                             next: neighbour(e, 1), previous: neighbour(e, -1),
                             onNavigate: { step in Task { await app.move(step) } },
-                            onImage: { zoomed = $0 })
+                            onImage: { zoomed = $0 },
+                            onAction: { act(on: e, $0) })
                     .id(e.id)
             } else if !app.articleError.isEmpty {
                 Text("Couldn't load this article. \(app.articleError)").font(Typeface.ui.font(15)).foregroundStyle(theme.slate).padding()
@@ -50,6 +51,19 @@ struct ArticleView: View {
     }
 
     /// The next or previous article in the list, for the links at the end.
+    /// A button in one of the page's notices.
+    private func act(on e: Entry, _ action: String) {
+        let feed = app.feedsByID[e.feedId]
+        switch action {
+        case "skip-sponsored": app.answerSponsored(skip: true)
+        case "keep-sponsored": app.answerSponsored(skip: false)
+        case "full": Task { await app.loadFullArticle() }
+        case "feed-text": Task { await app.showFeedText() }
+        case "always-full": if let feed { Task { await app.fullTextForFeed(feed) } }
+        default: break
+        }
+    }
+
     private func neighbour(_ e: Entry, _ step: Int) -> Entry? {
         guard let i = app.entries.firstIndex(where: { $0.id == e.id }), app.entries.indices.contains(i + step) else { return nil }
         return app.entries[i + step]
@@ -156,15 +170,57 @@ struct ArticlePage: View {
     var previous: Entry? = nil
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
+    var onAction: (String) -> Void = { _ in }
 
     var body: some View {
         WebPage(html: ArticleHTML.page(entry: entry, feed: feed, summary: summary, theme: theme, prefs: prefs,
                                        next: next?.title, previous: previous?.title),
-                base: base, onNavigate: onNavigate, onImage: onImage)
+                base: base, onNavigate: onNavigate, onImage: onImage, onAction: onAction)
     }
 }
 
 enum ArticleHTML {
+    /// The web's notices: a sponsored post's question and the full-article
+    /// note above the text; an offer to fetch the rest below a summary.
+    /// Their buttons are correspondent-action: links the app handles.
+    static func notices(_ e: Entry, feed: Feed?, prefs: Prefs) -> (before: String, after: String) {
+        var before = "", after = ""
+        if e.sponsored, !prefs.skipSponsored, !prefs.sponsoredAsked {
+            before += """
+            <div class="notice" role="note"><p>We think this is a sponsored post. Would you rather not see posts like it?</p>
+            <p class="acts"><a class="btn primary" href="correspondent-action:skip-sponsored">Skip sponsored posts</a>
+            <a class="btn" href="correspondent-action:keep-sponsored">Keep showing them</a></p></div>
+            """
+        }
+        let host = URL(string: e.url)?.host() ?? ""
+        if e.fullText, !host.isEmpty {
+            let every = feed.map { $0.fullText ? "" : " · <a href=\"correspondent-action:always-full\">Do this for every article from \(escape($0.title))</a>" } ?? ""
+            before += "<p class=\"source-note\">Full article from <a href=\"\(escape(e.url))\">\(escape(host))</a>. <a href=\"correspondent-action:feed-text\">Show the feed text</a>\(every)</p>"
+        }
+        if !e.url.isEmpty, !e.fullText, Partial.looksPartial(e.content ?? "") {
+            let what = (e.content ?? "").isEmpty ? "This feed publishes only titles." : "This feed publishes only part of the article."
+            let err = e.fullError.map { $0.isEmpty ? "" : "<span class=\"err\">Last try: \(escape($0))</span>" } ?? ""
+            let always = feed.map { $0.fullText ? "" : """
+                <a class="always" href="correspondent-action:always-full">Always load full articles from \(escape($0.title))<small>New articles arrive complete, here and in your other apps.</small></a>
+                """ } ?? ""
+            after += """
+            <div class="notice"><p>\(what)\(err)</p>
+            <p class="acts"><a class="btn primary" href="correspondent-action:full">Load the full article</a>
+            <a class="btn" href="\(escape(e.url))">Read it on the site</a></p>\(always)</div>
+            """
+        }
+        return (before, after)
+    }
+
+    /// Audio and video attached to the article, with the system's controls.
+    static func media(_ e: Entry) -> String {
+        e.enclosures.compactMap { en in
+            if en.type.hasPrefix("audio/") { return "<audio class=\"media\" controls preload=\"none\" src=\"\(escape(en.url))\"></audio>" }
+            if en.type.hasPrefix("video/") { return "<video class=\"media\" controls preload=\"none\" src=\"\(escape(en.url))\"></video>" }
+            return nil
+        }.joined(separator: "\n")
+    }
+
     static func escape(_ s: String) -> String {
         s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
@@ -246,12 +302,26 @@ enum ArticleHTML {
         .turn a { display: block; max-width: 48%; color: var(--ink); text-decoration: none; font-family: var(--font-read); font-size: 17px; font-weight: 560; line-height: 1.3; }
         .turn a small { display: block; margin-bottom: 4px; font-family: var(--font-ui); font-size: 12.5px; font-weight: 500; color: var(--slate); }
         .turn .next { text-align: right; margin-left: auto; }
+        .notice { margin: 0 0 26px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px; font-family: var(--font-ui); font-size: 14.5px; line-height: 1.5; }
+        .notice p { margin: 0 0 10px; }
+        .notice .err { display: block; margin-top: 4px; font-size: 13px; color: var(--slate); }
+        .notice .acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+        .btn { display: inline-block; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--rule); color: var(--ink); text-decoration: none; font-weight: 560; font-size: 14px; }
+        .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--sheet); }
+        .notice .always { display: block; margin-top: 12px; color: var(--ink); text-decoration: none; font-weight: 560; }
+        .notice .always small { display: block; font-weight: 400; font-size: 13px; color: var(--slate); }
+        .source-note { margin: 0 0 22px; font-family: var(--font-ui); font-size: 13.5px; color: var(--slate); }
+        .source-note a { color: var(--accent); text-decoration: none; }
+        .media { display: block; width: 100%; margin: 0 0 24px; border-radius: 8px; }
         </style></head><body data-bionic="\(prefs.bionic ? "1" : "0")" data-spotlight="\(prefs.spotlight)" data-line="\(Int(size * 1.66))"><div class="column">
         <p class="byline"><strong>\(escape(byline.first ?? ""))</strong>\(byline.count > 1 ? " " + escape(byline[1]) : "")</p>
         <h1 class="title">\(title)</h1>
         <p class="dateline"><span>\(escape(date))</span><span>\(minutes) min read</span></p>
+        \(notices(e, feed: feed, prefs: prefs).before)
         \(summaryHTML)
+        \(media(e))
         <div class="prose">\(e.content ?? "")</div>
+        \(notices(e, feed: feed, prefs: prefs).after)
         \(footer)
         </div></body></html>
         """
@@ -265,6 +335,7 @@ struct WebPage: UIViewRepresentable {
     var base: URL?
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
+    var onAction: (String) -> Void = { _ in }
     func makeCoordinator() -> WebDelegate { WebDelegate() }
     func makeUIView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
@@ -279,6 +350,7 @@ struct WebPage: UIViewRepresentable {
         context.coordinator.onNavigate = onNavigate
         context.coordinator.onImage = onImage
         context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
+        context.coordinator.onAction = onAction
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -291,6 +363,7 @@ struct WebPage: NSViewRepresentable {
     var base: URL?
     var onNavigate: (Int) -> Void = { _ in }
     var onImage: (URL) -> Void = { _ in }
+    var onAction: (String) -> Void = { _ in }
     func makeCoordinator() -> WebDelegate { WebDelegate() }
     func makeNSView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: WebDelegate.configuration(context.coordinator))
@@ -303,6 +376,7 @@ struct WebPage: NSViewRepresentable {
         context.coordinator.onNavigate = onNavigate
         context.coordinator.onImage = onImage
         context.coordinator.onEnd = { [onNavigate] in onNavigate(1) }
+        context.coordinator.onAction = onAction
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(html, baseURL: base)
@@ -317,6 +391,8 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     var onImage: (URL) -> Void = { _ in }
     /// Space at the end of the article: on to the next.
     var onEnd: () -> Void = {}
+    /// A notice's button in the page (correspondent-action: links).
+    var onAction: (String) -> Void = { _ in }
     private var observers: [NSObjectProtocol] = []
 
     /// Keys the window handles for the page: ↓ and ↑ move the spotlight
@@ -401,6 +477,10 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         if let url = action.request.url, url.scheme == "correspondent-nav" {
             onNavigate(url.absoluteString.hasSuffix("next") ? 1 : -1)
+            return .cancel
+        }
+        if let url = action.request.url, url.scheme == "correspondent-action" {
+            onAction(String(url.absoluteString.dropFirst("correspondent-action:".count)))
             return .cancel
         }
         if action.navigationType == .linkActivated, let url = action.request.url {

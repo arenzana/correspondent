@@ -257,3 +257,24 @@ extension ClientTests {
         #expect(Sun.estimate(zone: TimeZone(secondsFromGMT: 3600)!).lon == 15)
     }
 }
+
+// The same cases as the web's partial.test.ts.
+@Suite struct PartialTests {
+    func words(_ n: Int) -> String { (0..<n).map { "word\($0)" }.joined(separator: " ") }
+
+    @Test func findsSummaries() {
+        #expect(Partial.looksPartial(""))
+        #expect(Partial.looksPartial("<p>A short teaser.</p>"))
+        #expect(Partial.looksPartial("<p>\(words(150))…</p>"))
+        #expect(Partial.looksPartial("<p>\(words(150)) [...]</p>"))
+        #expect(Partial.looksPartial("<p>\(words(150))</p><p><a href=\"x\">Continue reading →</a></p>"))
+        #expect(Partial.looksPartial("<p>\(words(150))</p><p>The post Hello appeared first on Example.</p>"))
+        #expect(Partial.looksPartial("<p>\(words(500))</p><p><a href=\"x\">Continue reading →</a></p>"))
+    }
+
+    @Test func leavesCompleteArticlesAlone() {
+        #expect(!Partial.looksPartial("<p>\(words(60)) you can read more about it here \(words(150)).</p>"))
+        #expect(!Partial.looksPartial("<p>\(words(150)).</p>"))
+        #expect(!Partial.looksPartial("<p>\(words(600))…</p>"))
+    }
+}

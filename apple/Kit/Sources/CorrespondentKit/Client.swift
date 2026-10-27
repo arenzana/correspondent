@@ -90,11 +90,22 @@ public final class Client: Sendable {
     }
 
     public func entry(_ id: EntryID) async throws -> Entry {
-        struct Out: Decodable { var entry: Entry }
-        let out: Out = try await call("GET", "/entries/\(id)")
+        try await article("GET", "/entries/\(id)")
+    }
+
+    /// One article with its text and attachments.
+    private func article(_ method: String, _ path: String) async throws -> Entry {
+        struct Out: Decodable { var entry: Entry; var enclosures: [Enclosure]? }
+        let out: Out = try await call(method, path)
         var e = out.entry
         e.content = e.content ?? ""
+        e.enclosures = out.enclosures ?? []
         return e
+    }
+
+    /// Back to the text the feed published, after loading the full article.
+    public func feedText(_ id: EntryID) async throws -> Entry {
+        try await article("DELETE", "/entries/\(id)/full")
     }
 
     /// read, unread, star or unstar; returns how many changed.
@@ -119,9 +130,7 @@ public final class Client: Sendable {
     }
 
     public func fullArticle(_ id: EntryID) async throws -> Entry {
-        struct Out: Decodable { var entry: Entry }
-        let out: Out = try await call("POST", "/entries/\(id)/full")
-        return out.entry
+        try await article("POST", "/entries/\(id)/full")
     }
 
     /// The article's short summary: the shared one, or written now by the reader's AI.

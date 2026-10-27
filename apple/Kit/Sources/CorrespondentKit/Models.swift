@@ -24,6 +24,10 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
     public var audio: Bool
     public var summary: String?
     public var sponsored: Bool
+    /// Why fetching the full article failed last time, if it did.
+    public var fullError: String?
+    /// Audio and video attached to the article (podcasts, clips): only for one article.
+    public var enclosures: [Enclosure] = []
 
     public var published: Date { Date(timeIntervalSince1970: TimeInterval(publishedAt)) }
 
@@ -64,7 +68,15 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
         audio = try c.decodeIfPresent(Bool.self, forKey: .audio) ?? false
         summary = try c.decodeIfPresent(String.self, forKey: .summary)
         sponsored = try c.decodeIfPresent(Bool.self, forKey: .sponsored) ?? false
+        fullError = try c.decodeIfPresent(String.self, forKey: .fullError)
+        enclosures = (try? c.decodeIfPresent([Enclosure].self, forKey: .enclosures)) ?? []
     }
+}
+
+/// A file attached to an article.
+public struct Enclosure: Codable, Hashable, Sendable {
+    public var url: String
+    public var type: String
 }
 
 public struct Feed: Codable, Identifiable, Hashable, Sendable {
@@ -226,6 +238,8 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var readSize: Double
     /// Line length in characters.
     public var measure: Double
+    /// Answered the question on a sponsored post with "keep showing them".
+    public var sponsoredAsked = false
     /// Interface text size: 0.92, 1, 1.1 or 1.2, as the web's.
     public var uiScale: Double = 1
     /// Bold the start of each word, for the eye to jump from word to word.
@@ -275,6 +289,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         place = try? c.decodeIfPresent(Place.self, forKey: .place)
         uiScale = (try? c.decodeIfPresent(Double.self, forKey: .uiScale)) ?? 1
         bionic = (try? c.decodeIfPresent(Bool.self, forKey: .bionic)) ?? false
+        sponsoredAsked = (try? c.decodeIfPresent(Bool.self, forKey: .sponsoredAsked)) ?? false
         spotlight = (try? c.decodeIfPresent(String.self, forKey: .spotlight)) ?? "off"
     }
 }

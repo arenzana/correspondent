@@ -443,15 +443,46 @@ final class AppModel {
         }
     }
 
+    var fetchingFull = false
+
     func loadFullArticle() async {
-        guard let client, let e = article else { return }
+        guard let client, let e = article, !fetchingFull else { return }
+        fetchingFull = true
+        defer { fetchingFull = false }
         do {
             let full = try await client.fullArticle(e.id)
             if article?.id == e.id { article = full }
-            patchRow(e.id) { $0.fullText = true; $0.imageUrl = full.imageUrl }
+            patchRow(e.id) { $0.fullText = true; $0.fullError = nil; $0.imageUrl = full.imageUrl }
         } catch {
             show(error.localizedDescription)
+            if article?.id == e.id { article?.fullError = error.localizedDescription }
         }
+    }
+
+    /// Back to the text the feed published.
+    func showFeedText() async {
+        guard let client, let e = article else { return }
+        do {
+            let feedText = try await client.feedText(e.id)
+            if article?.id == e.id { article = feedText }
+            patchRow(e.id) { $0.fullText = false }
+        } catch {
+            show("Couldn't switch back. \(error.localizedDescription)")
+        }
+    }
+
+    /// Full articles for everything new from a feed, starting with the open one.
+    func fullTextForFeed(_ feed: Feed) async {
+        await updateFeed(feed.id, .init(fullText: true), done: "Fetching full articles for \(feed.title). Recent ones are on their way.")
+        if article?.feedId == feed.id, article?.fullText == false { await loadFullArticle() }
+    }
+
+    /// The question on a sponsored post: skip them from now on, or keep them.
+    func answerSponsored(skip: Bool) {
+        guard skip else { setPrefs({ $0.sponsoredAsked = true }, ["sponsoredAsked": true]); return }
+        setPrefs({ $0.skipSponsored = true; $0.sponsoredAsked = true }, ["skipSponsored": true, "sponsoredAsked": true])
+        if let e = article, !e.read { Task { await setRead([e.id], true) } }
+        show("Sponsored posts will arrive already read. Change this in Settings → Reading.")
     }
 
     // MARK: Subscriptions and saved searches
