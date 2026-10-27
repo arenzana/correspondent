@@ -20,6 +20,10 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26
+    defaults:
+      run:
+        # -o pipefail: a failed build fails the step even through `| tail`.
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
