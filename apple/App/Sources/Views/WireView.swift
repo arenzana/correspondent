@@ -162,6 +162,8 @@ struct WireView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            // Pull down to check for new articles, as the r key does.
+            .refreshable { await app.refreshTree(); await app.load() }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: app.entries.map(\.id))
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top < 40 } action: { _, top in
                 if app.atTop != top { app.atTop = top }

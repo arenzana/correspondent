@@ -98,6 +98,7 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 8).padding(.bottom, 12)
             }
+            .refreshable { await app.refreshTree(); await app.load() }
 
             HStack(spacing: 2) {
                 Button { adding = true } label: { Image(systemName: "plus") }.iconButton()
