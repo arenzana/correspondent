@@ -74,7 +74,7 @@ struct WideLayout: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).frame(minWidth: 520, minHeight: 480) }
+        .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
         .onKeyPress { press in keys(press) }
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }

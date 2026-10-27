@@ -34,10 +34,10 @@ struct ArticleView: View {
             }
         }
         .background(theme.sheet)
-        .sheet(item: $zoomed) { url in ImageViewer(url: url).environment(\.theme, theme) }
+        .sheet(item: $zoomed) { url in ImageViewer(url: url).environment(\.theme, theme).environment(app) }
         // On iPhone the Text item in the menu opens the controls as a short sheet.
         .sheet(isPresented: Binding(get: { native && textControls }, set: { textControls = $0 })) {
-            TextControls().environment(\.theme, theme).padding(24)
+            TextControls().environment(\.theme, theme).environment(app).padding(24)
                 .presentationDetents([.height(260)])
         }
         #if os(iOS)
@@ -114,7 +114,7 @@ struct ArticleView: View {
             .iconButton().accessibilityLabel("Summary")
             Button { textControls = true } label: { Image(systemName: "textformat.size") }
                 .iconButton().accessibilityLabel("Text size and typeface")
-                .popover(isPresented: $textControls) { TextControls().environment(\.theme, theme).padding(20).frame(width: 300) }
+                .popover(isPresented: $textControls) { TextControls().environment(\.theme, theme).environment(app).padding(20).frame(width: 300) }
             Button { NotificationCenter.default.post(name: .focus, object: nil) } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
                 .iconButton().accessibilityLabel("Focused reading")
             Button { Task { await app.loadFullArticle() } } label: { Image(systemName: "doc.text") }

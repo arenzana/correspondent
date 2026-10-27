@@ -91,7 +91,7 @@ struct SidebarView: View {
         .background(theme.fog)
         .onReceive(NotificationCenter.default.publisher(for: .addFeed)) { _ in adding = true }
         .sheet(isPresented: $adding) {
-            AddFeedView().environment(\.theme, theme)
+            AddFeedView().environment(\.theme, theme).environment(app)
                 #if os(macOS)
                 .frame(width: 520, height: 560)
                 #endif
