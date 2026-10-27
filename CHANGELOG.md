@@ -7,6 +7,8 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-27
+
 ### Added
 
 - Summaries: `Shift+S`, the summary button or the command palette shows a

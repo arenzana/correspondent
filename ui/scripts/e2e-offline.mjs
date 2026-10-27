@@ -156,7 +156,6 @@ try {
     const r = document.querySelector('.wire .cursor').getBoundingClientRect()
     return { top: r.top - days.top, height: r.height }
   })
-  await page.keyboard.press('Escape')
   await page.locator('.wire .row .hit').first().focus()
   await page.keyboard.press('j')
   await page.waitForTimeout(120)
@@ -168,6 +167,9 @@ try {
   const settled = await cursorBox()
   if (process.env.SHOT_DIR) await page.locator('.wire').screenshot({ path: process.env.SHOT_DIR + '/cursor-settled.png' })
   check(Math.abs(settled.top - second.top) < 1 && Math.abs(settled.height - second.height) < 1, 'and settles on the next row')
+  await page.keyboard.press('Escape')
+  await page.locator('.wire .cursor').waitFor({ state: 'detached', timeout: 2_000 })
+  check((await page.locator('.prose').count()) === 0, 'Esc closes the article')
 
   // A new article while the list is at the top slides in, without a prompt
   // (once the reader's last touch on the list is a moment ago).
