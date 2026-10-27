@@ -7,6 +7,11 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Added
+
+- corr for Arch Linux and Omarchy: `yay -S corr-bin` (AUR), published with
+  each release.
+
 ## [0.14.0] - 2026-10-27
 
 ### Added

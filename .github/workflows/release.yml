@@ -69,3 +69,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           # Empty without the secret: the cask is then built but not pushed.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Likewise for the AUR package.
+          AUR_KEY: ${{ secrets.AUR_KEY }}

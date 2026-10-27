@@ -7,7 +7,8 @@ and AI agents as much as for people.
 ## Install
 
 ```sh
-brew install arenzana/tap/corr
+brew install arenzana/tap/corr   # macOS and Linux
+yay -S corr-bin                  # Arch Linux and Omarchy (AUR)
 ```
 
 or download a binary for macOS, Linux (including 32-bit ARM), Windows or
