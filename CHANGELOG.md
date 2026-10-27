@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-10-27
+
+### Changed
+
+- Bionic reading uses semibold rather than bold, and the rest of each word
+  is a shade lighter: heavy word starts read as blobs, Newsreader most of
+  all.
+
 ## [0.20.0] - 2026-10-27
 
 ### Added
