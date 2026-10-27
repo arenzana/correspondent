@@ -10,6 +10,17 @@ struct CorrespondentApp: App {
         Typeface.register()
     }
 
+    /// Links from widgets and Shortcuts: unread, an article, or listen.
+    @MainActor
+    private func handle(_ url: URL) async {
+        if url.host() == "listen" {
+            await app.go(.unread)
+            await player.playList(app.entries, from: nil)
+        } else {
+            await app.open(url)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -25,7 +36,12 @@ struct CorrespondentApp: App {
                 }
                 #endif
                 .task { await app.boot() }
-                .onOpenURL { url in Task { await app.open(url) } }
+                .onOpenURL { url in Task { await handle(url) } }
+                .onChange(of: IntentRouter.shared.pending) { _, url in
+                    guard let url else { return }
+                    IntentRouter.shared.pending = nil
+                    Task { await handle(url) }
+                }
                 .onChange(of: phase) { _, now in
                     if now == .active, app.account != nil { Task { await app.resumed() } }
                     if now == .background { app.scheduleRefresh() }
