@@ -572,3 +572,21 @@ describe('closing the article', () => {
     expect(app.pane).toBe('list')
   })
 })
+
+describe('list rows', () => {
+  it('pick up a picture found since the list loaded, when the article opens', async () => {
+    app.entries = [entry('1'), entry('2')]
+    vi.mocked(api.entry).mockResolvedValue({ entry: { ...entry('1'), imageUrl: '/img/abc', content: '<p>x</p>' }, enclosures: [] })
+    app.select('1')
+    await vi.waitFor(() => expect(app.entries[0].imageUrl).toBe('/img/abc'))
+  })
+
+  it('and when its full article loads', async () => {
+    app.entries = [entry('5')]
+    app.selectedId = '5'
+    app.article = { entry: entry('5'), enclosures: [] }
+    vi.mocked(api.fullArticle).mockResolvedValue({ entry: { ...entry('5'), imageUrl: '/img/full', content: '<p>all</p>', fullText: true }, enclosures: [] })
+    await app.loadFullArticle()
+    expect(app.entries[0].imageUrl).toBe('/img/full')
+  })
+})

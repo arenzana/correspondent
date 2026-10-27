@@ -15,6 +15,9 @@
   import Invite from './components/Invite.svelte'
   import Admin from './components/Admin.svelte'
   import Listen from './components/Listen.svelte'
+  import BrandBar from './components/BrandBar.svelte'
+  import ToolBar from './components/ToolBar.svelte'
+  import { dock } from './lib/dock.svelte'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -140,14 +143,16 @@
       <button class="scrim" aria-label="Close feeds" onclick={() => (app.navOpen = false)}></button>
     {/if}
     {#if app.page === 'manage'}
-      <div class="list manage-pane"><Manage /></div>
+      <div class="list manage-pane">{@render brand()}<Manage />{@render tools()}</div>
     {:else if app.page === 'settings'}
-      <div class="list manage-pane"><Settings /></div>
+      <div class="list manage-pane">{@render brand()}<Settings />{@render tools()}</div>
     {:else if app.page === 'admin'}
-      <div class="list manage-pane"><Admin /></div>
+      <div class="list manage-pane">{@render brand()}<Admin />{@render tools()}</div>
     {:else}
     <div class="list">
+      {@render brand()}
       <Wire />
+      {@render tools()}
       <span class="handle list-handle">
         <Resizer label="Resize article list" value={live.list ?? listWidth} min={300} max={Math.max(320, Math.round(window.innerWidth * 0.5))}
           fallback={listDefault()}
@@ -166,6 +171,15 @@
   {#if app.addFeedOpen}<AddFeed />{/if}
 {/if}
 <Toasts />
+
+<!-- With the sidebar folded on a wide screen, its logo row and toolbar
+     dock on the middle column. -->
+{#snippet brand()}
+  {#if dock.docked && !app.focusMode}<BrandBar />{/if}
+{/snippet}
+{#snippet tools()}
+  {#if dock.docked && !app.focusMode}<ToolBar />{/if}
+{/snippet}
 
 <style>
   .boot {
@@ -197,6 +211,15 @@
   .nav > :global(nav),
   .list > :global(section) {
     overflow: hidden;
+  }
+  /* The list, with the docked logo row and toolbar above and below it. */
+  .list {
+    display: flex;
+    flex-direction: column;
+  }
+  .list > :global(section) {
+    flex: 1 1 0;
+    min-height: 0;
   }
   .shell.resizing {
     transition: none;

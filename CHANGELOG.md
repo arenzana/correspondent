@@ -7,6 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+### Changed
+
+- The sidebar folds with an arrow beside the logo (or `[`). Folded, the
+  logo row and the toolbar (add feed, shortcuts, subscriptions, settings)
+  glide over to the article list, so they're always on screen.
+
+### Fixed
+
+- A list row shows the article's picture as soon as the server finds one
+  (when its full article is fetched, for instance), instead of only after
+  the list reloads.
+
 ## [0.15.0] - 2026-10-27
 
 ### Added

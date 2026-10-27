@@ -397,7 +397,7 @@ class AppState {
     const fresh = new Map(r.entries.map((e) => [e.id, e]))
     this.entries = this.entries.map((e) => {
       const f = fresh.get(e.id)
-      return f ? { ...e, read: f.read, starred: f.starred } : e
+      return f ? { ...e, read: f.read, starred: f.starred, imageUrl: f.imageUrl, excerpt: f.excerpt } : e
     })
   }
 
@@ -749,6 +749,9 @@ class AppState {
       // The API omits an empty body; once loaded, "no content" must not look
       // like "still loading" (title-only feeds would spin forever).
       this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
+      // The server may have found a picture or excerpt since the list loaded
+      // (a full article fetched in the background): the row shows it too.
+      this.patch([id], { imageUrl: r.entry.imageUrl, excerpt: r.entry.excerpt })
       offline.saveEntries([this.article.entry]).catch(() => {})
     } catch (e) {
       if (this.selectedId !== id) return
@@ -1198,7 +1201,7 @@ class AppState {
     try {
       const r = await api.fullArticle(id)
       if (this.selectedId === id) this.article = { ...r, entry: { ...r.entry, content: r.entry.content ?? '' } }
-      this.patch([id], { fullText: true, fullError: '' })
+      this.patch([id], { fullText: true, fullError: '', imageUrl: r.entry.imageUrl, excerpt: r.entry.excerpt })
       offline.saveEntries([{ ...r.entry, content: r.entry.content ?? '' }]).catch(() => {})
     } catch (e) {
       this.toast((e as Error).message)

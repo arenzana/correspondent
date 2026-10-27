@@ -4,7 +4,9 @@
   import Icon, { type IconName } from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import Pulse from './Pulse.svelte'
-  import Mark from './Mark.svelte'
+  import BrandBar from './BrandBar.svelte'
+  import ToolBar from './ToolBar.svelte'
+  import { dock } from '../lib/dock.svelte'
 
   const views: { view: View; label: string; icon: IconName }[] = [
     { view: 'unread', label: 'Unread', icon: 'inbox' },
@@ -54,10 +56,7 @@
 </script>
 
 <nav class="sidebar" aria-label="Feeds">
-  <header class="brand">
-    <Mark size={28} />
-    <span class="wordmark">Correspondent</span>
-  </header>
+  {#if !dock.docked}<BrandBar />{/if}
 
   <button class="search" onclick={() => (app.paletteOpen = true)}>
     <Icon name="search" size={15} />
@@ -126,22 +125,7 @@
     {/if}
   </div>
 
-  <footer class="foot">
-    <button class="icon-btn" aria-label="Add feed" title="Add feed (a)" onclick={() => (app.addFeedOpen = true)}>
-      <Icon name="plus" />
-    </button>
-    <button class="icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onclick={() => (app.shortcutsOpen = true)}>
-      <Icon name="keyboard" />
-    </button>
-    <button class="icon-btn" aria-label="Manage subscriptions" title="Manage subscriptions (g m)"
-      aria-pressed={app.page === 'manage'} onclick={() => app.manage()}>
-      <Icon name="rss" />
-    </button>
-    <span class="spacer"></span>
-    <button class="icon-btn" aria-label="Settings" title="Settings" onclick={() => app.openSettings()}>
-      <Icon name="settings" />
-    </button>
-  </footer>
+  {#if !dock.docked}<ToolBar />{/if}
 </nav>
 
 {#snippet feedRow(feed: Feed)}
@@ -174,19 +158,6 @@
     height: 100%;
     min-height: 0;
     background: var(--fog);
-  }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: calc(18px + env(safe-area-inset-top)) 18px 14px;
-  }
-  .wordmark {
-    font-family: var(--font-read);
-    font-size: calc(21px * var(--ui-scale));
-    font-weight: 560;
-    font-variation-settings: 'opsz' 48;
-    letter-spacing: -0.01em;
   }
   .search {
     display: flex;
@@ -323,14 +294,4 @@
     color: var(--slate);
   }
 
-  .foot {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--rule-soft);
-  }
-  .spacer {
-    flex: 1;
-  }
 </style>

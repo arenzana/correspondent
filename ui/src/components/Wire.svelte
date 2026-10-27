@@ -152,15 +152,6 @@
     <button class="icon-btn only-medium" aria-label="Show feeds" onclick={() => (app.navOpen = true)}>
       <Icon name="menu" />
     </button>
-    <button
-      class="icon-btn only-wide"
-      aria-label={app.prefs.sidebar ? 'Hide feeds' : 'Show feeds'}
-      aria-pressed={app.prefs.sidebar}
-      title="{app.prefs.sidebar ? 'Hide' : 'Show'} feeds ([)"
-      onclick={() => app.setPrefs({ sidebar: !app.prefs.sidebar })}
-    >
-      <Icon name="sidebar" />
-    </button>
     <div class="titles">
       <h1>{app.title}</h1>
       <p class="sub">
@@ -762,14 +753,6 @@
   .only-narrow,
   .only-medium {
     display: none;
-  }
-  .head .only-wide[aria-pressed='true'] {
-    color: var(--slate);
-  }
-  @media (max-width: 1099px) {
-    .only-wide {
-      display: none;
-    }
   }
   @media (max-width: 1099px) and (min-width: 700px) {
     .only-medium {
