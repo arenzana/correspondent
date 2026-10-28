@@ -7,6 +7,20 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-10-28
+
+### Fixed
+
+- The Sun theme follows the local day rather than the UTC one. In the
+  Americas an evening counted as the next UTC day and showed Night desk
+  before sunset; east of Greenwich the next change could fall in the past.
+
+### Added
+
+- The Apple apps ask for a rough location when the Sun theme is chosen, as
+  the web does, rounded to about 11 km; refusing keeps the estimate from the
+  time zone.
+
 ## [0.21.0] - 2026-10-27
 
 ### Changed
