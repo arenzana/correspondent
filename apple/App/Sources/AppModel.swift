@@ -147,6 +147,7 @@ final class AppModel {
             }
             if env["CORR_RIBBON"] == "offline" { ribbon = .offline } else if env["CORR_RIBBON"] == "back" { ribbon = .backOnline }
             if let theme = env["CORR_THEME"] { setTheme(theme) }
+            if env["CORR_SOURCE"] == "starred" { await go(.starred) } // a short list, for its end
             if let link = env["CORR_OPEN_URL"].flatMap(URL.init(string:)) {
                 Task { try? await Task.sleep(for: .seconds(2)); await open(link) } // as a widget, after the first screen
             }

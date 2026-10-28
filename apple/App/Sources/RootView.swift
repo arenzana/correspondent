@@ -98,7 +98,13 @@ struct WideLayout: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { PaneWidths.saveSoon(nav: $0) }
         } content: {
             WireView(leading: collapsed ? AnyView(collapsedLeading) : nil, footer: collapsed ? AnyView(collapsedFooter) : nil)
-                .navigationSplitViewColumnWidth(min: 320, ideal: PaneWidths.list, max: 560)
+                // macOS ignores the column's minimum and ideal when it first
+                // lays out a window it hasn't saved (each new build is one it
+                // hasn't), and opened the list at ~200; only a frame's
+                // minimum holds, and it opens at that. So the minimum is a
+                // width that reads well.
+                .frame(minWidth: PaneWidths.listMin)
+                .navigationSplitViewColumnWidth(min: PaneWidths.listMin, ideal: PaneWidths.list, max: 560)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { PaneWidths.saveSoon(list: $0) }
         } detail: {
             if settings {
@@ -401,7 +407,8 @@ struct MinimizeTabBarOnScroll: ViewModifier {
 enum PaneWidths {
     private static let d = UserDefaults.standard
     static var nav: CGFloat { saved("width.nav", 260, 220...360) }
-    static var list: CGFloat { saved("width.list", 400, 320...560) }
+    static let listMin: CGFloat = 360
+    static var list: CGFloat { saved("width.list", 400, listMin...560) }
 
     private static func saved(_ key: String, _ fallback: CGFloat, _ range: ClosedRange<CGFloat>) -> CGFloat {
         let w = d.double(forKey: key)
@@ -415,7 +422,7 @@ enum PaneWidths {
     /// minimum) is never saved.
     static func saveSoon(nav: CGFloat? = nil, list: CGFloat? = nil) {
         if let nav, nav >= 220 { pending["width.nav"] = nav }
-        if let list, list >= 320 { pending["width.list"] = list }
+        if let list, list >= listMin { pending["width.list"] = list }
         task?.cancel()
         task = Task {
             try? await Task.sleep(for: .milliseconds(600))
