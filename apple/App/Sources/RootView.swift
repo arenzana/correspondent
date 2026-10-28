@@ -78,7 +78,8 @@ struct WideLayout: View {
     @State private var managing = Self.debugEnv("CORR_MANAGE") != nil
     /// When g was pressed: the next key picks a list (g u, g t, g s, g a).
     @State private var gAt: Date?
-    @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
+    @State private var columns: NavigationSplitViewVisibility = Self.debugEnv("CORR_FOCUS") != nil ? .detailOnly
+        : Self.debugEnv("CORR_SIDEBAR") == "hidden" ? .doubleColumn : .all
 
     /// Screenshots start where they need to (debug builds only).
     private static func debugEnv(_ key: String) -> String? {
@@ -89,7 +90,7 @@ struct WideLayout: View {
         #endif
     }
 
-    var body: some View {
+    private var split: some View {
         NavigationSplitView(columnVisibility: $columns) {
             SidebarView(onSearch: { searching = true }, onSettings: { settings = true }, onCollapse: { toggleSidebar() })
                 .toolbar(removing: .sidebarToggle)
@@ -114,6 +115,32 @@ struct WideLayout: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+    }
+
+    /// Focused reading on the Mac: the window shows the article alone
+    /// (macOS's split view ignores "detail only" and keeps every column).
+    @State private var macFocus = Self.debugEnv("CORR_FOCUS") != nil
+
+    private var focused: Bool {
+        #if os(macOS)
+        macFocus
+        #else
+        columns == .detailOnly
+        #endif
+    }
+
+    var body: some View {
+        Group {
+            #if os(macOS)
+            if macFocus {
+                ArticleView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                split
+            }
+            #else
+            split
+            #endif
+        }
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
         .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme) }
         .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
@@ -219,7 +246,7 @@ struct WideLayout: View {
     /// Escape, as on the web: leaves focused reading, then closes Settings
     /// or the article. False when there was nothing to close.
     private func escape() -> Bool {
-        if columns == .detailOnly { toggleFocus() } else if settings { settings = false } else if app.article != nil { app.closeArticle() } else { return false }
+        if focused { toggleFocus() } else if settings { settings = false } else if app.article != nil { app.closeArticle() } else { return false }
         return true
     }
 
@@ -258,7 +285,11 @@ struct WideLayout: View {
 
     /// Focused reading: the article alone, then back to three columns.
     private func toggleFocus() {
+        #if os(macOS)
+        withAnimation(.easeOut(duration: 0.2)) { macFocus.toggle() }
+        #else
         withAnimation(.easeOut(duration: 0.2)) { columns = columns == .detailOnly ? .all : .detailOnly }
+        #endif
     }
 
     private func openOriginal(_ url: URL) {
