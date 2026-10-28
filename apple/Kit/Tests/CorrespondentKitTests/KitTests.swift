@@ -119,6 +119,23 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     #expect(got == [LiveEvent(name: "state", action: "read", ids: ["1", "2"]), LiveEvent(name: "refresh", action: "", ids: [])])
 }
 
+/// The raw stream, as the server sends it: events end at a blank line,
+/// which the reader must keep (bytes.lines drops it), CRLF or LF alike.
+@Test func readsLiveEventsFromBytes() async throws {
+    let raw = ": ok\n\nevent: state\ndata: {\"action\":\"star\",\"ids\":[\"9\"]}\n\nevent: refresh\r\ndata: {}\r\n\r\n"
+    let bytes = AsyncStream<UInt8> { c in
+        for b in raw.utf8 { c.yield(b) }
+        c.finish()
+    }
+    var p = EventParser()
+    var got: [LiveEvent] = []
+    for try await line in EventParser.lines(bytes) {
+        if let e = p.feed(line) { got.append(e) }
+        if got.count == 2 { break } // both arrive while the stream is still open
+    }
+    #expect(got == [LiveEvent(name: "state", action: "star", ids: ["9"]), LiveEvent(name: "refresh", action: "", ids: [])])
+}
+
 @Test func keepsAnOfflineCopy() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let store = OfflineStore(account: "isma@rss.example.org", directory: dir)

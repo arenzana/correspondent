@@ -23,10 +23,9 @@ extension Client {
                     let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
                     guard status == 200 else { throw APIError(status: status, message: "Live updates are unavailable (\(status)).") }
                     var parser = EventParser()
-                    for try await line in bytes.lines {
+                    for try await line in EventParser.lines(bytes) {
                         if let ev = parser.feed(line) { continuation.yield(ev) }
                     }
-                    // bytes.lines drops the blank line that ends the last event.
                     if let ev = parser.feed("") { continuation.yield(ev) }
                     continuation.finish()
                 } catch {
@@ -44,6 +43,35 @@ public struct EventParser: Sendable {
     private var data = ""
 
     public init() {}
+
+    /// The stream's lines, blank ones included. Not `bytes.lines`: it drops
+    /// blank lines, and a blank line is what ends each event, so nothing
+    /// would arrive until the connection closed.
+    public static func lines<Bytes: AsyncSequence & Sendable>(_ bytes: Bytes) -> AsyncThrowingStream<String, Error> where Bytes.Element == UInt8 {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var line: [UInt8] = []
+                    var afterCR = false
+                    for try await byte in bytes {
+                        if byte == 0x0A, afterCR { afterCR = false; continue } // the LF of a CRLF
+                        afterCR = byte == 0x0D
+                        if byte == 0x0A || byte == 0x0D {
+                            continuation.yield(String(decoding: line, as: UTF8.self))
+                            line.removeAll(keepingCapacity: true)
+                        } else {
+                            line.append(byte)
+                        }
+                    }
+                    if !line.isEmpty { continuation.yield(String(decoding: line, as: UTF8.self)) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 
     public mutating func feed(_ line: String) -> LiveEvent? {
         if line.isEmpty {

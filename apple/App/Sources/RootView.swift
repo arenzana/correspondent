@@ -315,9 +315,12 @@ struct PhoneLayout: View {
         .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
         .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
         .onChange(of: tab) { _, now in
+            // Only when the list shows something else: a notification or
+            // widget has already chosen Unread and the article, and going
+            // there again would close that article.
             switch now {
-            case .unread: Task { await app.go(.unread) }
-            case .starred: Task { await app.go(.starred) }
+            case .unread where app.source != .unread: Task { await app.go(.unread) }
+            case .starred where app.source != .starred: Task { await app.go(.starred) }
             default: break
             }
         }
