@@ -20,6 +20,7 @@ import (
 
 	"github.com/arenzana/correspondent/internal/imgproxy"
 	"github.com/arenzana/correspondent/internal/ingest"
+	"github.com/arenzana/correspondent/internal/integrations"
 	"github.com/arenzana/correspondent/internal/opml"
 	"github.com/arenzana/correspondent/internal/pagefeed"
 	"github.com/arenzana/correspondent/internal/push"
@@ -61,6 +62,8 @@ type API struct {
 	DataDir string
 	// PublicURL is the address readers use (CORRESPONDENT_PUBLIC_URL).
 	PublicURL string
+	// Integrations sends articles to readers' services; nil turns them off.
+	Integrations *integrations.Service
 
 	hub        hub
 	ceremonies ceremonies
@@ -109,6 +112,14 @@ func (a *API) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/entries", a.auth(a.entries))
 	mux.HandleFunc("GET /api/v1/entries/{id}", a.auth(a.entry))
 	mux.HandleFunc("POST /api/v1/entries/state", a.auth(a.setState))
+	mux.HandleFunc("GET /api/v1/integrations", a.auth(a.listIntegrations))
+	mux.HandleFunc("POST /api/v1/integrations", a.session(a.createIntegration))
+	mux.HandleFunc("PATCH /api/v1/integrations/{id}", a.session(a.updateIntegration))
+	mux.HandleFunc("DELETE /api/v1/integrations/{id}", a.session(a.deleteIntegration))
+	mux.HandleFunc("POST /api/v1/integrations/{id}/test", a.session(a.testIntegration))
+	mux.HandleFunc("POST /api/v1/entries/{id}/send", a.auth(a.sendEntry))
+	mux.HandleFunc("GET /api/v1/entries/{id}/deliveries", a.auth(a.entryDeliveries))
+	mux.HandleFunc("GET /api/v1/entries/{id}/markdown", a.auth(a.entryMarkdown))
 	mux.HandleFunc("POST /api/v1/entries/{id}/full", a.auth(a.fullArticle))
 	mux.HandleFunc("DELETE /api/v1/entries/{id}/full", a.auth(a.revertFullArticle))
 	mux.HandleFunc("POST /api/v1/entries/mark-all-read", a.auth(a.markAllRead))

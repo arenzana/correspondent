@@ -46,6 +46,7 @@ import (
 	"github.com/arenzana/correspondent/internal/greader"
 	"github.com/arenzana/correspondent/internal/imgproxy"
 	"github.com/arenzana/correspondent/internal/ingest"
+	"github.com/arenzana/correspondent/internal/integrations"
 	"github.com/arenzana/correspondent/internal/migrate"
 	"github.com/arenzana/correspondent/internal/push"
 	"github.com/arenzana/correspondent/internal/ratelimit"
@@ -74,6 +75,7 @@ func run(log *slog.Logger, args []string) error {
 	starredPath := fs.String("starred", "", "import-freshrss: starred JSON export")
 	subsPath := fs.String("subscriptions", "", "import-freshrss: saved subscription/list JSON, to keep feed IDs")
 	allowPrivate := fs.Bool("allow-private-feeds", false, "allow fetching feeds on private networks (development only)")
+	integrationsAllow := fs.String("integrations-allow", os.Getenv("CORRESPONDENT_INTEGRATIONS_ALLOW"), "comma-separated CIDRs of private networks readers' integrations may reach, such as a tailnet's 100.64.0.0/10 (also allows http:// addresses)")
 	retention := fs.Int("retention-days", envInt("CORRESPONDENT_RETENTION_DAYS", 0), "delete read, unstarred articles older than this that have left their feed (0 = keep everything)")
 	imageCache := fs.Int("image-cache-mb", envInt("CORRESPONDENT_IMAGE_CACHE_MB", 512), "disk space for proxied images (0 = load images directly from their sites)")
 	publicURL := fs.String("public-url", os.Getenv("CORRESPONDENT_PUBLIC_URL"), "the https address readers use (enables passkeys; used in invite links)")
@@ -134,7 +136,7 @@ func run(log *slog.Logger, args []string) error {
 	case "serve":
 		proxies, err := parsePrefixes(*trusted)
 		if err != nil {
-			return err
+			return fmt.Errorf("trusted-proxies: %w", err)
 		}
 		if err := bootstrap(ctx, log, st); err != nil {
 			return err
@@ -170,7 +172,13 @@ func run(log *slog.Logger, args []string) error {
 		} else {
 			log.Warn("passkeys are off: set CORRESPONDENT_PUBLIC_URL to the address readers use")
 		}
-		return serve(ctx, log, st, ing, images, keyring, wa, *dataDir, *publicURL, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
+		allow, err := parsePrefixes(*integrationsAllow)
+		if err != nil {
+			return fmt.Errorf("integrations-allow: %w", err)
+		}
+		integ := &integrations.Service{Store: st, Keyring: keyring, Log: log, PlainHTTP: len(allow) > 0 || *allowPrivate,
+			HTTP: integrationClient(fetch.New(fetch.Options{AllowPrivate: *allowPrivate, Allow: allow}))}
+		return serve(ctx, log, st, ing, images, keyring, wa, integ, *dataDir, *publicURL, *addr, !*insecure, ratelimit.ClientIP{Trusted: proxies}, !*noPoll)
 	case "user":
 		if sub == "role" {
 			if len(positional) != 2 {
@@ -276,16 +284,21 @@ func run(log *slog.Logger, args []string) error {
 	}
 }
 
-func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, dataDir, publicURL, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
+func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.Service, images *imgproxy.Proxy, keyring *secretbox.Box, wa *webauthn.WebAuthn, integ *integrations.Service, dataDir, publicURL, addr string, secure bool, ip ratelimit.ClientIP, poll bool) error {
 	// One limiter for both sign-in paths: 10 failures per client per 10 minutes.
 	limiter := ratelimit.New(10, 10*time.Minute)
 	notifier := &push.Notifier{Store: st, Log: log, APNS: appleNotifications(log)}
 	a := &api.API{Store: st, Ingest: ing, Log: log, Secure: secure, Limiter: limiter, ClientIP: ip, Push: notifier, Images: images,
-		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir, PublicURL: publicURL}
+		Keyring: keyring, AITransport: ing.Fetch.Transport(), WebAuthn: wa, DataDir: dataDir, PublicURL: publicURL, Integrations: integ}
 	ing.AIFor = a.AIForApps
 	ing.Notify = a.Notify
 	ing.OnNewEntries = notifier.NewArticles
-	st.OnStateChange = a.NotifyState
+	st.OnStateChange = func(uid int64, action string, ids []int64) {
+		a.NotifyState(uid, action, ids)
+		if action == "star" {
+			go integ.Starred(context.WithoutCancel(ctx), uid, ids) // the send-starred rules
+		}
+	}
 	g := &greader.Server{Store: st, Log: log, Limiter: limiter, ClientIP: ip, Subscriber: ing, AudioLink: a.AudioLink}
 	srv := &http.Server{
 		Addr:              addr,
@@ -298,6 +311,7 @@ func serve(ctx context.Context, log *slog.Logger, st *store.Store, ing *ingest.S
 		go pruneImages(ctx, log, images)
 	}
 	go sweepAudio(ctx, log, a)
+	go integ.Run(ctx)
 	if poll {
 		go ing.Run(ctx)
 	} else {
@@ -514,6 +528,14 @@ func importFreshRSS(ctx context.Context, st *store.Store, username, opmlPath, st
 	return err
 }
 
+// integrationClient sends to readers' services through the guarded
+// transport, never following a redirect: credentials go only where the
+// reader pointed them.
+func integrationClient(f *fetch.Client) *http.Client {
+	return &http.Client{Transport: f.Transport(), Timeout: time.Minute,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
 func parsePrefixes(s string) ([]netip.Prefix, error) {
 	var out []netip.Prefix
 	for _, part := range strings.Split(s, ",") {
@@ -522,7 +544,7 @@ func parsePrefixes(s string) ([]netip.Prefix, error) {
 		}
 		p, err := netip.ParsePrefix(part)
 		if err != nil {
-			return nil, fmt.Errorf("trusted proxy %q: %w", part, err)
+			return nil, fmt.Errorf("network %q: %w", part, err)
 		}
 		out = append(out, p)
 	}

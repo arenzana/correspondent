@@ -45,6 +45,20 @@ func TestBlocksLoopbackServer(t *testing.T) {
 	}
 }
 
+// An allowed network gets through; everything else private stays blocked.
+func TestAllowsListedNetworks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	if _, err := New(Options{Allow: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}}).Get(context.Background(), Request{URL: srv.URL}); err != nil {
+		t.Fatalf("allowed network: %v", err)
+	}
+	if _, err := New(Options{Allow: []netip.Prefix{netip.MustParsePrefix("100.64.0.0/10")}}).Get(context.Background(), Request{URL: srv.URL}); !errors.Is(err, ErrBlocked) {
+		t.Fatalf("a network not listed: %v", err)
+	}
+}
+
 func TestRejectsSchemes(t *testing.T) {
 	c := New(Options{})
 	for _, u := range []string{"file:///etc/passwd", "gopher://x", "http://user:pw@example.com/"} {

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -34,8 +35,11 @@ type Options struct {
 	// AllowPrivate disables the destination check; only for tests and for
 	// explicitly trusted local development.
 	AllowPrivate bool
-	MaxBytes     int64
-	Timeout      time.Duration
+	// Allow lets these networks through the destination check, for the
+	// admin's own services (say a tailnet, 100.64.0.0/10) and nothing else.
+	Allow    []netip.Prefix
+	MaxBytes int64
+	Timeout  time.Duration
 }
 
 func New(o Options) *Client {
@@ -58,7 +62,7 @@ func New(o Options) *Client {
 			if err != nil {
 				return err
 			}
-			if !Allowed(ip) {
+			if !Allowed(ip) && !slices.ContainsFunc(o.Allow, func(p netip.Prefix) bool { return p.Contains(ip.Unmap()) }) {
 				return fmt.Errorf("%w: %s", ErrBlocked, ip)
 			}
 			return nil
