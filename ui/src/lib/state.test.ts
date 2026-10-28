@@ -427,6 +427,37 @@ describe('live arrivals', () => {
     expect(app.pending).toBe(0)
   })
 
+  it('keeps rows read here where they were: the unread page leaves them out', () => {
+    // Unread, with 3 and 2 read here: the server's page now lacks them.
+    const at = (id: string, over: Partial<Entry> = {}) => entry(id, { publishedAt: 1_790_000_000 + Number(id), ...over })
+    app.entries = [at('3', { read: true }), at('2', { read: true }), at('1')]
+    app.boundary = '3'
+    app.mergeArrivals([at('5'), at('1')], [at('5')])
+    expect(app.entries.map((e) => e.id)).toEqual(['5', '3', '2', '1'])
+  })
+
+  it('an article arriving while the list loads is still looked for', async () => {
+    let reply!: (v: { entries: Entry[]; cursor: string }) => void
+    vi.mocked(api.entries).mockReturnValueOnce(new Promise((ok) => (reply = ok)))
+    app.counts = { ...app.counts, newest: '3' }
+    const check = vi.spyOn(app, 'checkArrivals').mockResolvedValue(undefined)
+    const loading = app.load()
+    app.counts = { ...app.counts, newest: '9' } // arrives mid-request
+    reply({ entries: [entry('3'), entry('2')], cursor: '' })
+    await loading
+    expect(app.boundary).toBe('3') // not past the article it hasn't got
+    expect(check).toHaveBeenCalled()
+    check.mockRestore()
+  })
+
+  it('places an arrival between rows, by the list\'s order', () => {
+    const at = (id: string) => entry(id, { publishedAt: 1_790_000_000 + Number(id) })
+    app.entries = [at('9'), at('6')]
+    app.boundary = '9'
+    app.mergeArrivals([at('9'), at('7'), at('6')], [at('7')])
+    expect(app.entries.map((e) => e.id)).toEqual(['9', '7', '6'])
+  })
+
   it('never moves a list the reader is in: it offers the new ones instead', async () => {
     app.entries = [entry('3'), entry('2')]
     app.boundary = '3'

@@ -541,13 +541,7 @@ class AppState {
     const have = new Set(this.entries.map((e) => e.id))
     const added = newer.filter((e) => !have.has(e.id))
     if (!added.length) return
-    const inPage = new Set(page.map((e) => e.id))
-    const latest = new Map(page.map((e) => [e.id, e]))
-    // The fresh page in order, then anything loaded beyond it.
-    this.entries = [
-      ...page.filter((e) => have.has(e.id) || added.some((a) => a.id === e.id)).map((e) => latest.get(e.id)!),
-      ...this.entries.filter((e) => !inPage.has(e.id)),
-    ]
+    this.entries = placeArrivals(this.entries, page, added)
     this.boundary = newer.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), this.boundary)
     this.pending = 0
     this.arriving = new Set(added.map((e) => e.id))
@@ -704,13 +698,17 @@ class AppState {
     this.loadError = ''
     this.pending = 0
     this.arriving = new Set()
+    // The newest article known when the request goes out: one that arrives
+    // while it's in flight may be missing from the reply, so the list's
+    // boundary can't move past it.
+    const known = this.counts.newest || '0'
     try {
       const r = await api.entries({ ...this.query_(), limit: 60 })
       if (seq !== this.loadSeq) return
       this.online = true
       this.entries = r.entries
       this.cursor = r.cursor
-      this.boundary = r.entries.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), this.counts.newest || '0')
+      this.boundary = r.entries.reduce((m, e) => (BigInt(e.id) > BigInt(m) ? e.id : m), known)
       offline.saveEntries(r.entries).catch(() => {})
     } catch (e) {
       if (seq !== this.loadSeq) return
@@ -725,7 +723,11 @@ class AppState {
         this.loadError = (e as Error).message
       }
     } finally {
-      if (seq === this.loadSeq) this.loading = false
+      if (seq === this.loadSeq) {
+        this.loading = false
+        // Arrivals skipped while loading are looked for now.
+        if (this.online && BigInt(this.counts.newest || '0') > BigInt(this.boundary || '0')) void this.checkArrivals()
+      }
     }
   }
 
@@ -740,9 +742,11 @@ class AppState {
       this.entries = [...this.entries, ...r.entries.filter((e) => !seen.has(e.id))]
       this.cursor = r.cursor
     } catch (e) {
-      this.toast((e as Error).message)
+      if (seq === this.loadSeq) this.toast((e as Error).message)
     } finally {
-      this.loading = false
+      // A newer load owns the flag now; clearing it would let a scroll fetch
+      // the old list's next page into the new one.
+      if (seq === this.loadSeq) this.loading = false
     }
   }
 
@@ -1461,6 +1465,25 @@ function inviteFromHash(): string {
 export const app = new AppState()
 
 /** Any modal overlay currently owns the keyboard. */
+/**
+ * The list with arrivals slotted in by the list's order (newest published
+ * first, as the server sends it), and every row the page refreshed. Rows
+ * already shown keep their places: in Unread the page leaves out what was
+ * read here, and rebuilding from it pushed those rows, the open one too, to
+ * the end.
+ */
+export function placeArrivals(list: Entry[], page: Entry[], added: Entry[]): Entry[] {
+  const latest = new Map(page.map((e) => [e.id, e]))
+  const out = list.map((e) => latest.get(e.id) ?? e)
+  const before = (a: Entry, b: Entry) =>
+    a.publishedAt !== b.publishedAt ? a.publishedAt > b.publishedAt : BigInt(a.id) > BigInt(b.id)
+  for (const e of added) {
+    const at = out.findIndex((row) => before(e, row))
+    out.splice(at < 0 ? out.length : at, 0, e)
+  }
+  return out
+}
+
 export function overlayOpen(): boolean {
   // Any open modal counts, including ones a page opens itself (Manage's).
   return app.paletteOpen || app.shortcutsOpen || app.addFeedOpen || !!document.querySelector('dialog[open]')
