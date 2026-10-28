@@ -721,6 +721,23 @@ describe('preferences', () => {
   })
 })
 
+describe('the offline copy', () => {
+  it('downloads only the text of articles that are new or changed', async () => {
+    await offline.saveEntries([{ ...entry('1'), content: '<p>kept</p>' }])
+    vi.mocked(api.entries).mockImplementation(async (q) =>
+      q.view === 'unread' && !q.content ? { entries: [entry('1'), entry('2')], cursor: '' } : { entries: [], cursor: '' })
+    vi.mocked(api.entry).mockResolvedValue({ entry: { ...entry('2'), content: '<p>new</p>' }, enclosures: [] })
+    app.user = 'reader'
+    app.online = true
+    await app.syncOffline()
+    expect(api.entry).toHaveBeenCalledTimes(1)
+    expect(api.entry).toHaveBeenCalledWith('2')
+    expect(vi.mocked(api.entries).mock.calls.some(([q]) => q.content)).toBe(false)
+    expect((await offline.getEntry('2'))?.content).toBe('<p>new</p>')
+    expect((await offline.getEntry('1'))?.content).toBe('<p>kept</p>')
+  })
+})
+
 describe('settings saved while offline', () => {
   it('keeps a change the server didn\'t get, and sends it later', async () => {
     vi.useFakeTimers()

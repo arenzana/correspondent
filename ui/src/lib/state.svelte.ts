@@ -438,8 +438,22 @@ class AppState {
       for (const [view, pages] of [['unread', 6], ['starred', 3]] as const) {
         let cursor = ''
         for (let i = 0; i < pages; i++) {
-          const r = await api.entries({ view, content: true, limit: 100, cursor: cursor || undefined })
-          await offline.saveEntries(r.entries.map((e) => ({ ...e, content: e.content ?? '' })))
+          // The list without its text first: only articles that are new here
+          // or changed since need their text, so a sync every few minutes
+          // doesn't download the same articles again.
+          const r = await api.entries({ view, limit: 100, cursor: cursor || undefined })
+          const kept = await Promise.all(r.entries.map((e) => offline.getEntry(e.id).catch(() => undefined)))
+          const stale = r.entries.filter((e, n) => !kept[n]?.content || kept[n]?.updatedAt !== e.updatedAt)
+          await offline.saveEntries(r.entries) // states and summaries; kept text stays
+          if (stale.length > 10) {
+            const full = await api.entries({ view, content: true, limit: 100, cursor: cursor || undefined })
+            await offline.saveEntries(full.entries.map((e) => ({ ...e, content: e.content ?? '' })))
+          } else {
+            for (const e of stale) {
+              const one = await api.entry(e.id)
+              await offline.saveEntries([{ ...one.entry, content: one.entry.content ?? '' }])
+            }
+          }
           withAudio.push(...r.entries.filter((e) => e.audio).map((e) => e.id))
           if (!r.cursor) break
           cursor = r.cursor
