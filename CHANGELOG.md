@@ -7,6 +7,26 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-28
+
+### Added
+
+- Integrations: send any article to Readwise Reader, Instapaper,
+  Raindrop.io, your own Wallabag, Linkding or Karakeep, or a webhook.
+  Connect them in Settings → Integrations (credentials are checked with
+  the service and stored encrypted); send with `b`, the send button, the
+  palette, the apps' paper plane, `corr send` or the MCP `send_article`
+  tool. The server sends each article and retries while the service is
+  down, and says where it went. Each service can also get every article
+  you star, from any app, Reeder included.
+- Webhooks get each article as JSON with its Markdown, signed with
+  `Correspondent-Signature: t=…,v1=…` (HMAC-SHA256 of "t.body").
+- Send to Obsidian, on the device: the article as a Markdown note with
+  its title, source, author and dates as properties, in the vault and
+  folder set in Settings.
+- `CORRESPONDENT_INTEGRATIONS_ALLOW`: your own networks (a tailnet) that
+  integrations may reach, with plain `http://` allowed there.
+
 ## [0.21.3] - 2026-10-28
 
 ### Security
