@@ -244,7 +244,8 @@ try {
   check(text.icons, 'every app icon choice shows in Settings')
   // The section buttons move through the page and follow it.
   await settings.locator('.chips').getByRole('button', { name: 'Apps & sync' }).tap()
-  await mobile.waitForTimeout(900)
+  // A smooth scroll takes longer the further it goes: wait for it to land.
+  await mobile.waitForFunction(() => document.querySelector('.settings .chips [aria-current="true"]')?.textContent?.trim() === 'Apps & sync', null, { timeout: 4000 }).catch(() => {})
   check(await settings.locator('.chips [aria-current="true"]').innerText() === 'Apps & sync' && await settings.getByText('Reeder and other apps').isVisible(),
     'the section buttons jump to a section and follow the page')
   if (process.env.SHOT_DIR) await mobile.screenshot({ path: process.env.SHOT_DIR + '/settings-larger.png' })
