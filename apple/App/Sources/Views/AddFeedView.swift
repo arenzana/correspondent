@@ -21,7 +21,7 @@ struct AddFeedView: View {
             HStack {
                 Text("Add a feed").font(Typeface.read.font(23, weight: 560, opsz: 36)).foregroundStyle(theme.ink)
                 Spacer()
-                Button("Cancel") { dismiss() }.tint(theme.accent).font(Typeface.ui.font(15, weight: 520))
+                Button("Cancel") { dismiss() }.tint(theme.accent).font(Typeface.ui.font(15, weight: 520)).keyboardShortcut(.cancelAction)
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 14)
 

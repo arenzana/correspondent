@@ -35,6 +35,7 @@ struct SignInView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Password").font(Typeface.ui.font(13.5, weight: 600)).foregroundStyle(theme.ink)
                     SecureField("", text: $password)
+                        .accessibilityLabel("Password")
                         .textContentType(.password)
                         .modifier(FieldStyle())
                         .onSubmit(submit)
@@ -66,6 +67,7 @@ struct SignInView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(Typeface.ui.font(13.5, weight: 600)).foregroundStyle(theme.ink)
             TextField(prompt, text: text).autocorrectionDisabled().modifier(FieldStyle())
+                .accessibilityLabel(label) // the visible label above isn't tied to the field
         }
     }
 

@@ -43,8 +43,14 @@ struct MacCommands: Commands {
             Button("Next Article") { Task { await app.move(1) } }.keyboardShortcut(.downArrow)
             Button("Previous Article") { Task { await app.move(-1) } }.keyboardShortcut(.upArrow)
             // A menu item, so Escape works with the article's text focused too.
-            Button("Close Article") { NotificationCenter.default.post(name: .escape, object: nil) }
-                .keyboardShortcut(.escape, modifiers: [])
+            Button("Close Article") {
+                // Menu shortcuts fire whatever window is in front: Escape in a
+                // sheet or in Settings is theirs, not the article's.
+                guard let key = NSApp.keyWindow, key.sheetParent == nil, key.attachedSheet == nil, key == NSApp.mainWindow,
+                      key.identifier?.rawValue.contains("Settings") != true else { return }
+                NotificationCenter.default.post(name: .escape, object: nil)
+            }
+            .keyboardShortcut(.escape, modifiers: [])
             Divider()
             Button(app.article?.read == false ? "Mark as Read" : "Mark as Unread") {
                 if let id = app.article?.id { Task { await app.toggleRead(id) } }

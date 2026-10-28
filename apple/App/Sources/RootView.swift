@@ -272,6 +272,7 @@ struct PhoneLayout: View {
     }()
     @State private var feedsPath: [Screen] = []
     @State private var managing = false
+    @State private var adding = false
     @State private var unreadPath: [Screen] = {
         #if DEBUG
         if ProcessInfo.processInfo.environment["CORR_OPEN_FIRST"] != nil { return [.article] }
@@ -280,6 +281,10 @@ struct PhoneLayout: View {
     }()
     @State private var starredPath: [Screen] = []
     @State private var searchPath: [Screen] = []
+    /// What each tab showed when it was left: every tab shares one list,
+    /// so a tab shows its own again when it comes back.
+    @State private var shown: [TabID: Source] = [:]
+    @State private var shownQuery: [TabID: String] = [:]
 
     var body: some View {
         TabView(selection: $tab) {
@@ -296,7 +301,7 @@ struct PhoneLayout: View {
             Tab("Settings", systemImage: "slider.horizontal.3", value: TabID.settings) { SettingsView() }
             Tab(value: TabID.search, role: .search) {
                 NavigationStack(path: $searchPath) {
-                    SearchView(onOpen: { _ in searchPath = [.article] }, onList: { searchPath = [.list] }, inTab: true)
+                    SearchView(onOpen: { _ in searchPath = [.article] }, onList: { searchPath = [.list] }, onAddFeed: { adding = true }, inTab: true)
                         .toolbar(.hidden, for: .navigationBar)
                         .navigationDestination(for: Screen.self) { destination($0, path: $searchPath) }
                 }
@@ -313,14 +318,26 @@ struct PhoneLayout: View {
         .modifier(MinimizeTabBarOnScroll())
         .modifier(PlayerAccessory())
         .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
+        .sheet(isPresented: $adding) { AddFeedView().environment(\.theme, theme).environment(app) }
         .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
-        .onChange(of: tab) { _, now in
+        .onChange(of: tab) { old, now in
+            shown[old] = app.source
+            shownQuery[old] = app.query
             // Only when the list shows something else: a notification or
             // widget has already chosen Unread and the article, and going
             // there again would close that article.
             switch now {
-            case .unread where app.source != .unread: Task { await app.go(.unread) }
-            case .starred where app.source != .starred: Task { await app.go(.starred) }
+            case .unread where app.source != .unread || !app.query.isEmpty: Task { await app.go(.unread) }
+            case .starred where app.source != .starred || !app.query.isEmpty: Task { await app.go(.starred) }
+            case .feeds:
+                // The feed opened here, again (its article closed with it).
+                if let s = shown[.feeds], s != app.source || !app.query.isEmpty, !feedsPath.isEmpty {
+                    feedsPath = [.list]
+                    Task { await app.go(s) }
+                }
+            case .search:
+                // The list changed meanwhile: back to the search field.
+                if let s = shown[.search], s != app.source || shownQuery[.search] != app.query { searchPath = [] }
             default: break
             }
         }

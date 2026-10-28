@@ -241,6 +241,8 @@ struct PlayerBar: View {
                     HStack(spacing: 8) {
                         Slider(value: Binding(get: { player.current }, set: { player.seek($0) }), in: 0...max(player.duration, 1))
                             .tint(theme.accent)
+                            .accessibilityLabel("Position")
+                            .accessibilityValue("\(clock(player.current)) of \(clock(player.duration))")
                         Text("\(clock(player.current)) / \(clock(player.duration))").font(Typeface.ui.font(12)).monospacedDigit().foregroundStyle(theme.slate)
                     }
                     .padding(.horizontal, 8)

@@ -16,6 +16,9 @@ struct SearchView: View {
     @FocusState private var focused: Bool
     var onOpen: (EntryID) -> Void = { _ in }
     var onList: () -> Void = {}
+    /// Adding a feed, where the sidebar that usually shows it isn't built
+    /// (the iPhone's Search tab); else the sidebar is asked.
+    var onAddFeed: (() -> Void)? = nil
     /// In the iPhone's Search tab rather than a sheet: nothing to dismiss,
     /// and no sidebar or window-wide actions.
     var inTab = false
@@ -42,7 +45,7 @@ struct SearchView: View {
                     .onKeyPress(.downArrow) { active = min(active + 1, max(items.count - 1, 0)); return .handled }
                     .onKeyPress(.upArrow) { active = max(active - 1, 0); return .handled }
                 if !inTab {
-                    Button("Done") { dismiss() }.font(Typeface.ui.font(15, weight: 560)).tint(theme.accent)
+                    Button("Done") { dismiss() }.font(Typeface.ui.font(15, weight: 560)).tint(theme.accent).keyboardShortcut(.cancelAction)
                 }
             }
             .padding(.horizontal, 16).frame(height: 56)
@@ -139,7 +142,7 @@ struct SearchView: View {
         }
         out.append(Item(id: "a-listen", label: "Listen to unread with audio in \(scope)", hint: "⇧L", symbol: "headphones", group: "Actions",
                         run: then { Task { await player.playList(app.entries, from: app.selectedID) } }))
-        out.append(Item(id: "a-add", label: "Add feed…", hint: "a", symbol: "plus", group: "Actions", run: post(.addFeed)))
+        out.append(Item(id: "a-add", label: "Add feed…", hint: "a", symbol: "plus", group: "Actions", run: onAddFeed.map { add in then { add() } } ?? post(.addFeed)))
         out.append(Item(id: "a-manage", label: "Manage subscriptions", hint: "g m", symbol: "list.bullet.rectangle", group: "Actions", run: post(.manage)))
         if case .feed(let id) = app.source, let feed = app.feedsByID[id] {
             out.append(Item(id: "a-full", label: feed.fullText ? "Stop fetching full articles for \(feed.title)" : "Fetch full articles for \(feed.title)",

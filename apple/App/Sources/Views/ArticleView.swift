@@ -412,7 +412,10 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
     /// A notice's button in the page (correspondent-action: links).
     var onAction: (String) -> Void = { _ in }
     var onProgress: (Double) -> Void = { _ in }
-    private var observers: [NSObjectProtocol] = []
+    // Removed with the delegate: each article gets a new web view, and the
+    // observers would otherwise pile up, one pair per article opened.
+    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     /// Keys the window handles for the page: ↓ and ↑ move the spotlight
     /// (reading.js); Space pages, and from the end goes on to the next article.

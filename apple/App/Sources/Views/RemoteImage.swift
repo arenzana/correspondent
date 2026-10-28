@@ -81,6 +81,8 @@ final class SVGRenderer: NSObject, WKNavigationDelegate {
     static let shared = SVGRenderer()
     private var loaded: CheckedContinuation<Void, Never>?
     private var queue: Task<Void, Never>?
+    /// Which render is waiting: a late timeout never ends the next one's.
+    private var loading = 0
 
     func render(_ data: Data, size: CGSize, scale: CGFloat) async -> UIImage? {
         let previous = queue
@@ -114,9 +116,17 @@ final class SVGRenderer: NSObject, WKNavigationDelegate {
         <img src="data:image/svg+xml;base64,\(data.base64EncodedString())" style="display:block;width:\(w)px;height:\(h)px;object-fit:cover">
         </body></html>
         """
+        loading += 1
+        let mine = loading
         await withCheckedContinuation { c in
             loaded = c
             web.loadHTMLString(html, baseURL: nil)
+            // Renders wait in line: one that never finishes mustn't hold up
+            // every other icon.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(5))
+                if self.loading == mine { self.finish() }
+            }
         }
         // The load event waits for the picture; give it frames to paint.
         try? await Task.sleep(for: .milliseconds(60))
@@ -126,12 +136,25 @@ final class SVGRenderer: NSObject, WKNavigationDelegate {
         return try? await web.takeSnapshot(configuration: config)
     }
 
+    private func finish() {
+        loaded?.resume()
+        loaded = nil
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor in self.loaded?.resume(); self.loaded = nil }
+        Task { @MainActor in self.finish() }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        Task { @MainActor in self.loaded?.resume(); self.loaded = nil }
+        Task { @MainActor in self.finish() }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        Task { @MainActor in self.finish() }
+    }
+
+    nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        Task { @MainActor in self.finish() }
     }
 }
 #endif

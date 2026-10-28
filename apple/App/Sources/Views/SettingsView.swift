@@ -174,7 +174,7 @@ struct SettingsView: View {
                     app.setPrefs({ $0.density = v }, ["density": v])
                 }
                 labeled("Article text", "\(Int(app.prefs.readSize)) pt") {
-                    Stepper("", value: Binding(get: { app.prefs.readSize }, set: { v in
+                    Stepper("Article text size", value: Binding(get: { app.prefs.readSize }, set: { v in
                         app.setPrefs({ $0.readSize = v }, ["readSize": v])
                     }), in: 14...30, step: 1).labelsHidden()
                 }
