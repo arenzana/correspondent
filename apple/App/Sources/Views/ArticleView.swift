@@ -14,6 +14,7 @@ struct ArticleView: View {
     /// In a navigation stack (iPhone): the actions go in the navigation bar.
     var native = false
     @State private var textControls = false
+    @State private var choosingSend = false // the Mac's b: Send to… as a dialog
     @State private var zoomed: URL?
 
     var body: some View {
@@ -35,6 +36,8 @@ struct ArticleView: View {
             }
         }
         .background(theme.sheet)
+        .confirmationDialog("Send to", isPresented: $choosingSend) { sendChoices() }
+        .onReceive(NotificationCenter.default.publisher(for: .send)) { _ in if app.article != nil { choosingSend = true } }
         .sheet(item: $zoomed) { url in ImageViewer(url: url).environment(\.theme, theme).environment(app) }
         // On iPhone the Text item in the menu opens the controls as a short sheet.
         .sheet(isPresented: Binding(get: { native && textControls }, set: { textControls = $0 })) {
@@ -69,6 +72,25 @@ struct ArticleView: View {
         return app.entries[i + step]
     }
 
+    /// The reader's services, Obsidian on this device, and where to add more.
+    @ViewBuilder
+    private func sendChoices() -> some View {
+        ForEach(app.integrations) { i in
+            Button(i.name) { Task { await app.send(to: i) } }
+        }
+        if let o = app.prefs.obsidian, !o.vault.isEmpty {
+            Button("Obsidian") { Task { await app.sendToObsidian() } }
+        }
+        if app.integrations.isEmpty && (app.prefs.obsidian?.vault ?? "").isEmpty {
+            Button("Connect a service in Settings") { NotificationCenter.default.post(name: .openSettings, object: nil) }
+        }
+    }
+
+    private var sendMenu: some View {
+        Menu { sendChoices() } label: { Image(systemName: "paperplane") }
+            .accessibilityLabel("Send to")
+    }
+
     /// Reads the article aloud (making its audio if needed: the reader asked).
     private func listenButton(_ e: Entry) -> some View {
         Button {
@@ -91,6 +113,7 @@ struct ArticleView: View {
         if app.speechConfigured || e.audio {
             listenButton(e).tint(theme.slate)
         }
+        sendMenu.tint(theme.slate)
         Menu {
             Button { textControls = true } label: { Label("Text", systemImage: "textformat.size") }
             Button { Task { await app.summarize() } } label: { Label(app.summaryOpen ? "Hide summary" : "Summary", systemImage: "text.alignleft") }
@@ -126,6 +149,7 @@ struct ArticleView: View {
                 Image(systemName: "text.alignleft").symbolEffect(.pulse, isActive: app.summarizing)
             }
             .iconButton().accessibilityLabel("Summary")
+            sendMenu.iconButton()
             Button { textControls = true } label: { Image(systemName: "textformat.size") }
                 .iconButton().accessibilityLabel("Text size and typeface")
                 .popover(isPresented: $textControls) { TextControls().environment(\.theme, theme).environment(app).padding(20).frame(width: 300) }

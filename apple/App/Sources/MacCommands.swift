@@ -111,6 +111,7 @@ extension Notification.Name {
     static let shortcuts = Notification.Name("org.arenzana.correspondent.shortcuts")
     static let openSettings = Notification.Name("org.arenzana.correspondent.openSettings")
     static let manage = Notification.Name("org.arenzana.correspondent.manage")
+    static let send = Notification.Name("org.arenzana.correspondent.send")
     /// Moves the article's spotlight: the object is 1 (down) or -1 (up).
     static let spotlightStep = Notification.Name("org.arenzana.correspondent.spotlightStep")
 }

@@ -12,6 +12,8 @@ struct SettingsView: View {
     var onBack: (() -> Void)? = nil
     @State private var saving = false
     @State private var confirmSignOut = false
+    @State private var obsidianVault = ""
+    @State private var obsidianFolder = "Correspondent"
     @State private var search: String = {
         #if DEBUG
         ProcessInfo.processInfo.environment["CORR_SETTINGS_SEARCH"] ?? ""
@@ -29,6 +31,7 @@ struct SettingsView: View {
         ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
         ("Feeds", "feeds subscriptions manage folders rename move pause delete failing address opml import export full pages"),
         ("AI", "ai model anthropic openai claude key summaries parser read aloud speech voice tts elevenlabs deepgram"),
+        ("Integrations", "send integration webhook readwise reader instapaper raindrop wallabag linkding karakeep obsidian vault note read later"),
         ("Apps & sync", "reeder apps freshrss google reader server username password sync api"),
         ("This device", "offline badge count icon dock notifications bell test save background audio listen"),
         ("Account", "server sign out password passkey web token"),
@@ -77,6 +80,7 @@ struct SettingsView: View {
                         if shown.contains("Reading") { reading.id(Self.anchor("Reading")) }
                         if shown.contains("Feeds") { feeds.id(Self.anchor("Feeds")) }
                         if shown.contains("AI"), app.me?.aiAvailable == true { ai.id(Self.anchor("AI")) }
+                        if shown.contains("Integrations") { integrations.id(Self.anchor("Integrations")) }
                         if shown.contains("Apps & sync") { apps.id(Self.anchor("Apps & sync")) }
                         if shown.contains("This device") { device.id(Self.anchor("This device")) }
                         if shown.contains("Account") { account.id(Self.anchor("Account")) }
@@ -290,6 +294,59 @@ struct SettingsView: View {
                 Text("Not set up.").font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
             }
         }
+    }
+
+    /// Services articles are sent to. They're added on the web, which a
+    /// token (this app's sign-in) can't do; Obsidian is this device's own.
+    private var integrations: some View {
+        section("Integrations") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Send any article to a read-later service, your own Wallabag, Linkding or Karakeep, or a webhook, with the paper plane in an article. The server sends it, and tries again if the service is down.")
+                    .font(Typeface.ui.font(14)).foregroundStyle(theme.slate).fixedSize(horizontal: false, vertical: true)
+                if app.integrations.isEmpty {
+                    Text("None connected yet.").font(Typeface.ui.font(13.5, weight: 500)).foregroundStyle(theme.ink)
+                }
+                ForEach(app.integrations) { i in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(i.name).font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                        let detail = [i.kindLabel, i.baseUrl, i.sendStarred ? "gets what you star" : nil].compactMap { $0 }.joined(separator: ", ")
+                        Text(detail).font(Typeface.ui.font(13)).foregroundStyle(theme.slate)
+                        if let error = i.lastError, !error.isEmpty {
+                            Text(error).font(Typeface.ui.font(13)).foregroundStyle(theme.seal)
+                        }
+                    }
+                }
+                webButton(app.integrations.isEmpty ? "Connect one on the web" : "Change on the web")
+                Divider().overlay(theme.rule)
+                Text("Obsidian").font(Typeface.ui.font(15, weight: 600)).foregroundStyle(theme.ink)
+                Text("Makes a note of the article in your vault on this device: its text in Markdown, with title, source, author and dates as properties.")
+                    .font(Typeface.ui.font(13)).foregroundStyle(theme.slate).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    TextField("Vault name", text: $obsidianVault).modifier(FieldStyle())
+                        .accessibilityLabel("Obsidian vault name")
+                    TextField("Folder", text: $obsidianFolder).modifier(FieldStyle())
+                        .accessibilityLabel("Folder in the vault")
+                }
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .onSubmit(saveObsidian)
+                Button("Save", action: saveObsidian).buttonStyle(QuietButton())
+            }
+        }
+        .task {
+            if let o = app.prefs.obsidian { obsidianVault = o.vault; obsidianFolder = o.folder }
+            await app.loadIntegrations()
+        }
+    }
+
+    private func saveObsidian() {
+        let vault = obsidianVault.trimmingCharacters(in: .whitespaces)
+        let folder = obsidianFolder.trimmingCharacters(in: .whitespaces)
+        let o = Prefs.Obsidian(vault: vault, folder: folder)
+        app.setPrefs({ $0.obsidian = vault.isEmpty ? nil : o }, ["obsidian": ["vault": vault, "folder": folder] as [String: any Sendable]])
+        app.show(vault.isEmpty ? "Obsidian removed." : "Notes go to \(vault)\(folder.isEmpty ? "" : "/" + folder).")
     }
 
     /// What Reeder and other FreshRSS-compatible apps need.

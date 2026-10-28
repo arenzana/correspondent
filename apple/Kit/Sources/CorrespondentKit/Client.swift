@@ -140,6 +140,37 @@ public final class Client: Sendable {
         return out.summary
     }
 
+    // MARK: Integrations
+
+    /// The reader's services articles are sent to (added and changed on the web).
+    public func integrations() async throws -> [Integration] {
+        struct Out: Decodable { var integrations: [Integration] }
+        let out: Out = try await call("GET", "/integrations")
+        return out.integrations
+    }
+
+    /// Queues an article for one of the reader's services; the server sends
+    /// it, retrying while the service is down.
+    public func send(_ id: EntryID, to integration: Int64) async throws -> Delivery {
+        struct Out: Decodable { var delivery: Delivery }
+        let out: Out = try await call("POST", "/entries/\(id)/send", body: ["integration": String(integration)])
+        return out.delivery
+    }
+
+    /// Where an article was sent, or is being sent.
+    public func deliveries(_ id: EntryID) async throws -> [Delivery] {
+        struct Out: Decodable { var deliveries: [Delivery] }
+        let out: Out = try await call("GET", "/entries/\(id)/deliveries")
+        return out.deliveries
+    }
+
+    /// An article as a Markdown note, for Obsidian.
+    public func markdown(_ id: EntryID) async throws -> String {
+        struct Out: Decodable { var markdown: String }
+        let out: Out = try await call("GET", "/entries/\(id)/markdown")
+        return out.markdown
+    }
+
     // MARK: Subscriptions
 
     /// The feeds a site offers. With ai, a page with no feed is read by the

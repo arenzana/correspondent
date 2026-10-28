@@ -142,6 +142,9 @@ final class AppModel {
             await refreshTree()
             await load()
             if env["CORR_OPEN_FIRST"] != nil, let first = entries.first { await select(first.id) }
+            if env["CORR_SEND"] != nil { // sends the open article to the first service, as the menu would
+                Task { try? await Task.sleep(for: .seconds(2)); await loadIntegrations(); if let i = integrations.first { await send(to: i) } }
+            }
             if env["CORR_RIBBON"] == "offline" { ribbon = .offline } else if env["CORR_RIBBON"] == "back" { ribbon = .backOnline }
             if let theme = env["CORR_THEME"] { setTheme(theme) }
             if let link = env["CORR_OPEN_URL"].flatMap(URL.init(string:)) {
@@ -208,6 +211,7 @@ final class AppModel {
         Task { await flushOutbox() }
         Task {
             if let me = try? await client?.me() { speechConfigured = me.speech != nil; self.me = me }
+            await loadIntegrations()
             notificationsAvailable = await client?.appleNotificationsAvailable() ?? false
             // Re-register each launch: tokens can change.
             if notificationsOn, notificationsAvailable { _ = await Notifications.shared.enable() }
@@ -1088,6 +1092,93 @@ final class AppModel {
     }
 
     /// Shows a message for a few seconds; with an action (Undo), a little longer.
+    // MARK: Send to…
+
+    /// The reader's services articles can be sent to (added on the web).
+    var integrations: [Integration] = []
+
+    func loadIntegrations() async {
+        if let list = try? await client?.integrations() { integrations = list }
+    }
+
+    /// Sends the open article to a service: the server queues and sends it
+    /// (retrying while the service is down); a look a moment later says how
+    /// it went.
+    func send(to i: Integration) async {
+        guard let client, let e = article else { return }
+        do {
+            _ = try await client.send(e.id, to: i.id)
+        } catch {
+            show("Couldn't send to \(i.name). \(error.localizedDescription)")
+            return
+        }
+        show("Sending to \(i.name)…")
+        for wait in [1.5, 3, 6] {
+            try? await Task.sleep(for: .seconds(wait))
+            guard let d = try? await client.deliveries(e.id).first(where: { $0.integrationId == i.id }), d.state != "pending" else { continue }
+            if d.state == "sent" {
+                if let remote = d.remote.flatMap(URL.init(string:)) {
+                    show("Saved to \(i.name).", action: "Open") { @MainActor in Self.openExternally(remote) }
+                } else {
+                    show("Saved to \(i.name).")
+                }
+            } else {
+                show("\(i.name) didn't take it. \(d.error ?? "")")
+                await loadIntegrations()
+            }
+            return
+        }
+        show("\(i.name) isn't answering; it'll be sent when it does.")
+    }
+
+    /// Makes a note of the open article in Obsidian: the note goes on the
+    /// clipboard and Obsidian creates it from there, as on the web.
+    func sendToObsidian() async {
+        guard let client, let e = article, let o = prefs.obsidian, !o.vault.isEmpty else { return }
+        do {
+            let note = try await client.markdown(e.id)
+            #if os(iOS)
+            UIPasteboard.general.string = note
+            #else
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(note, forType: .string)
+            #endif
+        } catch {
+            show("Couldn't make the note. \(error.localizedDescription)")
+            return
+        }
+        let folder = o.folder.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        let file = [folder, Self.noteName(e.title)].filter { !$0.isEmpty }.joined(separator: "/")
+        var c = URLComponents()
+        c.scheme = "obsidian"
+        c.host = "new"
+        c.queryItems = [URLQueryItem(name: "vault", value: o.vault), URLQueryItem(name: "file", value: file), URLQueryItem(name: "clipboard", value: nil)]
+        // Encode / and spaces too, as Obsidian's links need.
+        c.percentEncodedQuery = c.percentEncodedQuery?.replacingOccurrences(of: "/", with: "%2F")
+        if let url = c.url, !Self.openExternally(url) {
+            show("Obsidian isn't installed on this device.")
+        }
+    }
+
+    /// A file name Obsidian accepts, as the web's noteName.
+    static func noteName(_ title: String) -> String {
+        let banned = CharacterSet(charactersIn: "\\/:*?\"<>|#^[]")
+        let cleaned = title.unicodeScalars.map { banned.contains($0) ? " " : String($0) }.joined()
+        let name = cleaned.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return name.isEmpty ? "Untitled" : String(name.prefix(100)).trimmingCharacters(in: .whitespaces)
+    }
+
+    @discardableResult
+    static func openExternally(_ url: URL) -> Bool {
+        #if os(iOS)
+        guard UIApplication.shared.canOpenURL(url) || url.scheme?.hasPrefix("http") == true else { return false }
+        UIApplication.shared.open(url)
+        return true
+        #else
+        return NSWorkspace.shared.open(url)
+        #endif
+    }
+
     func show(_ message: String, action: String? = nil, run: (() async -> Void)? = nil) {
         let n = Notice(message: message, action: run == nil ? nil : action)
         notices.append(n)

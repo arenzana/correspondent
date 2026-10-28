@@ -271,6 +271,17 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var appIcon: String
     /// Coarse position (about 11 km) for the Sun theme, saved by the web app.
     public var place: Place?
+    /// Where Send to Obsidian makes notes; an empty vault means not set up.
+    public var obsidian: Obsidian?
+
+    public struct Obsidian: Codable, Hashable, Sendable {
+        public var vault: String
+        public var folder: String
+        public init(vault: String, folder: String) {
+            self.vault = vault
+            self.folder = folder
+        }
+    }
 
     public struct Place: Codable, Hashable, Sendable {
         public var lat: Double
@@ -313,6 +324,7 @@ public struct Prefs: Codable, Hashable, Sendable {
         uiFont = (try? c.decodeIfPresent(String.self, forKey: .uiFont)) ?? "grotesk"
         sidebar = (try? c.decodeIfPresent(Bool.self, forKey: .sidebar)) ?? true
         spotlight = (try? c.decodeIfPresent(String.self, forKey: .spotlight)) ?? "off"
+        obsidian = try? c.decodeIfPresent(Obsidian.self, forKey: .obsidian)
     }
 }
 
@@ -333,4 +345,40 @@ public struct Me: Codable, Sendable {
         public var voice: String?
         public var keyHint: String?
     }
+}
+
+/// A service the reader sends articles to.
+public struct Integration: Codable, Hashable, Sendable, Identifiable {
+    public var id: Int64
+    public var kind: String
+    public var name: String
+    public var baseUrl: String?
+    public var tags: [String]?
+    public var keyHint: String?
+    public var sendStarred: Bool
+    public var lastOkAt: Int64?
+    public var lastError: String?
+
+    public init(id: Int64, kind: String, name: String, sendStarred: Bool = false) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.sendStarred = sendStarred
+    }
+
+    /// The kind's name, as Settings shows it.
+    public var kindLabel: String {
+        ["readwise": "Readwise Reader", "instapaper": "Instapaper", "raindrop": "Raindrop.io", "wallabag": "Wallabag",
+         "linkding": "Linkding", "karakeep": "Karakeep", "webhook": "Webhook"][kind] ?? kind
+    }
+}
+
+/// An article sent, or being sent, to one integration.
+public struct Delivery: Codable, Hashable, Sendable {
+    public var id: Int64
+    public var integrationId: Int64
+    public var state: String // pending, sent or failed
+    public var attempts: Int
+    public var error: String?
+    public var remote: String?
 }

@@ -156,6 +156,7 @@ struct WideLayout: View {
         case "p": Task { await app.move(-1, unread: true) }
         case " ": page(1)
         case "a": NotificationCenter.default.post(name: .addFeed, object: nil)
+        case "b": NotificationCenter.default.post(name: .send, object: nil)
         case ",": settings = true
         case "[": toggleSidebar()
         case "?": showingKeys = true

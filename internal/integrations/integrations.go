@@ -246,7 +246,7 @@ func (c *client) do(ctx context.Context, method, target string, header http.Head
 	case resp.StatusCode >= 500 || resp.StatusCode == http.StatusRequestTimeout:
 		return resp, &Error{Status: resp.StatusCode, Message: fmt.Sprintf("the service had a problem (%d); trying again later", resp.StatusCode), Retry: true}
 	case resp.StatusCode >= 400:
-		return resp, &Error{Status: resp.StatusCode, Message: fmt.Sprintf("the service refused the article (%d): %s", resp.StatusCode, brief(data))}
+		return resp, &Error{Status: resp.StatusCode, Message: fmt.Sprintf("the service answered %d: %s", resp.StatusCode, brief(data))}
 	case resp.StatusCode >= 300:
 		return resp, &Error{Status: resp.StatusCode, Message: fmt.Sprintf("the service answered with a redirect (%d); check the address", resp.StatusCode)}
 	}
@@ -275,9 +275,13 @@ func (c *client) json(ctx context.Context, method, target string, header http.He
 	return c.do(ctx, method, target, header, body, out)
 }
 
-// brief is the start of an error reply, for the reader to see.
+// brief is the start of an error reply, for the reader to see. A web page
+// rather than the service's API usually means the address is wrong.
 func brief(b []byte) string {
 	s := strings.Join(strings.Fields(string(b)), " ")
+	if l := strings.ToLower(s); strings.HasPrefix(l, "<!doctype html") || strings.HasPrefix(l, "<html") {
+		return "a web page, not the service's API; check the address"
+	}
 	if r := []rune(s); len(r) > 160 {
 		s = string(r[:160]) + "…"
 	}

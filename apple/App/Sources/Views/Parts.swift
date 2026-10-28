@@ -113,7 +113,7 @@ struct ShortcutsView: View {
     private let groups: [(String, [(String, String)])] = [
         ("Reading", [("j  k", "Next, previous article"), ("n  p", "Next, previous unread"), ("Space", "Page down; at the end, the next article"),
                      ("↓  ↑", "Move the spotlight, when it's on"), ("v", "Open the original"), ("f", "Focused reading"), ("Esc", "Close")]),
-        ("Article", [("s", "Star"), ("m", "Mark read or unread"), ("S", "Summary"), ("l", "Read aloud"), ("L", "Listen to the list")]),
+        ("Article", [("s", "Star"), ("m", "Mark read or unread"), ("S", "Summary"), ("b", "Send to…"), ("l", "Read aloud"), ("L", "Listen to the list")]),
         ("Lists", [("g u", "Unread"), ("g t", "Today"), ("g s", "Starred"), ("g a", "All articles"), ("A", "Mark all read"), ("r", "Refresh")]),
         ("App", [("/  ⌘K", "Search or jump to"), ("a", "Add a feed"), ("[", "Show or hide the sidebar"), (",", "Settings"), ("?", "These shortcuts")]),
     ]

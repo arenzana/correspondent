@@ -51,6 +51,8 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: org.arenzana.correspondent
             CFBundleURLSchemes: [correspondent]
+        # Send to Obsidian asks whether it's installed before opening it.
+        LSApplicationQueriesSchemes: [obsidian]
         # Read-aloud keeps playing with the screen locked.
         UIBackgroundModes: [audio, fetch]
         BGTaskSchedulerPermittedIdentifiers: [org.arenzana.correspondent.refresh]
