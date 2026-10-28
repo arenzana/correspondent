@@ -7,12 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-10-28
+
+### Fixed
+
+- The end of the article list: the spine simply stops at the last
+  article, on the web and in the apps, with no stray bar below it.
+
 ## [0.23.1] - 2026-10-28
 
 ### Fixed
 
-- The end of the article list: the spine runs on into its end bar again,
-  on the web and in the apps, instead of stopping above a stray bar.
+- The end of the article list: the spine runs on into its end bar.
 
 ## [0.23.0] - 2026-10-28
 

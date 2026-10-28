@@ -110,18 +110,14 @@ struct WireView: View {
         return false
     }
 
-    /// More loading, or where the list ends: the spine runs on into a
-    /// short bar, as on the web (alone, the bar read as a stray line).
+    /// More loading, or room below the last article, where the spine
+    /// simply stops.
     @ViewBuilder private var listEnd: some View {
         if !app.cursor.isEmpty {
             ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear).listRowSeparator(.hidden)
         } else {
-            ZStack(alignment: .topLeading) {
-                Rectangle().fill(theme.rule).frame(width: 1.5, height: 22).padding(.leading, Self.spineX)
-                Rectangle().fill(theme.ring).frame(width: 12, height: 1.5).padding(.leading, Self.spineX - 5).padding(.top, 22)
-            }
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-            .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
+            Color.clear.frame(height: 64)
+                .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
         }
     }
 
