@@ -23,6 +23,16 @@ clients are concerned.
   new feeds that turn out to be summaries switch on by themselves. Link
   blogs' posts keep their commentary rather than the article they link to,
   and a feed's own text stays whenever the page has nothing more to add.
+- **One way of reading.** Whether an article came from its feed or its
+  page, it arrives in the same shape: wrappers and empty blocks gone,
+  headings in order below the title, and the site's own material at either
+  end (bylines and dates, subscribe and share prompts, tags, affiliate
+  notices, "Related articles") left behind. With a
+  [TypeSafe](https://typesafe.ai) key, the server also asks TypeSafe's Jev
+  model about the blocks at an article's start and end, for what no rule
+  recognises (a site's own newsletter box, an author bio); it removes them
+  from the outside in and stops at the first block it isn't sure of, so
+  nothing in the middle of an article is ever touched.
 - **Sites without feeds.** Add a page that lists articles (a lab's research
   page, a company blog) and Correspondent reads it like a feed. It finds the
   articles exactly where it can (microformats, structured data, link
@@ -113,6 +123,7 @@ docker compose exec correspondent /correspondent version
 | `CORRESPONDENT_IMAGE_CACHE_MB` | `512` | Disk for proxied images; `0` turns the image proxy off and images load straight from their sites |
 | `CORRESPONDENT_PUBLIC_URL` | | The https address readers use; turns on passkeys (they're bound to it) and appears in invitation links |
 | `CORRESPONDENT_INTEGRATIONS_ALLOW` | | Comma-separated CIDRs of your own networks that readers' integrations may reach, such as a tailnet's `100.64.0.0/10`, for a Wallabag or Linkding there; also allows `http://` addresses. Feeds stay blocked from private networks |
+| `CORRESPONDENT_TYPESAFE_KEY` | | A TypeSafe API key (or `CORRESPONDENT_TYPESAFE_KEY_FILE`, a file holding it): Jev also finds website material at new articles' ends. Usually two to four questions of about 500 tokens each per new article; without a key, rules alone tidy articles |
 | `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
 
 ## Build from source

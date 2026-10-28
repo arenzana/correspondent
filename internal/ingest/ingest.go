@@ -20,6 +20,7 @@ import (
 	"github.com/arenzana/correspondent/internal/fetch"
 	"github.com/arenzana/correspondent/internal/pagefeed"
 	"github.com/arenzana/correspondent/internal/store"
+	"github.com/arenzana/correspondent/internal/typesafe"
 )
 
 type Service struct {
@@ -33,6 +34,9 @@ type Service struct {
 	Log         *slog.Logger
 	Concurrency int
 	Tick        time.Duration
+	// Jev, when the admin has given a TypeSafe key, finds the website
+	// material the rules leave at articles' ends (see dropMaterial).
+	Jev *typesafe.Client
 	// Notify is called after new entries arrive for a user (for live UI updates).
 	Notify func(userID int64)
 	// OnNewEntries is called (in its own goroutine) after a poll inserted
@@ -129,8 +133,16 @@ func (s *Service) Poll(ctx context.Context, f store.Feed) {
 			res.Err = perr.Error()
 			break
 		}
-		if f.FullText && s.Extract != nil {
-			s.fetchFullArticles(ctx, f, p.Items)
+		if (f.FullText && s.Extract != nil) || s.Jev != nil {
+			known, err := s.Store.KnownGUIDs(ctx, f.ID, guidsOf(p.Items))
+			if err != nil {
+				res.Err = "could not read entries: " + err.Error()
+				break
+			}
+			if f.FullText && s.Extract != nil {
+				s.fetchFullArticles(ctx, p.Items, known)
+			}
+			s.dropMaterials(ctx, p, known)
 		}
 		// Write in short transactions, never across the network fetch.
 		since := time.Now().UnixMicro() - 1 // every ID allocated below is above this
@@ -298,16 +310,7 @@ const (
 // fetchFullArticles replaces the content of new items with the article
 // fetched from their page, keeping the feed's HTML. Items already stored
 // are left alone; failures are recorded per item and never fail the poll.
-func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []store.NewEntry) {
-	guids := make([]string, len(items))
-	for i, it := range items {
-		guids[i] = it.GUID
-	}
-	known, err := s.Store.KnownGUIDs(ctx, f.ID, guids)
-	if err != nil {
-		s.Log.Error("full text", "feed", f.ID, "err", err)
-		return
-	}
+func (s *Service) fetchFullArticles(ctx context.Context, items []store.NewEntry, known map[string]bool) {
 	sem := make(chan struct{}, fullConcurrency)
 	var wg sync.WaitGroup
 	n := 0
@@ -328,6 +331,7 @@ func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []s
 				it.FullError = err.Error()
 				return
 			}
+			r.HTML = content.Tidy(r.HTML, it.Title)
 			if keepFeedText(it.Content, r) {
 				return
 			}
@@ -403,8 +407,16 @@ func (s *Service) fullArticle(ctx context.Context, userID int64, e store.Entry, 
 		s.Store.SetFullError(context.WithoutCancel(ctx), userID, e.ID, err.Error())
 		return nil, err
 	}
+	r.HTML = content.Tidy(r.HTML, e.Title)
 	if auto && keepFeedText(e.Content, r) {
 		return nil, errFeedText
+	}
+	if s.Jev != nil {
+		var site string
+		if f, err := s.Store.Feed(ctx, userID, e.FeedID); err == nil {
+			site = f.Title
+		}
+		r.HTML = s.dropMaterial(ctx, e.Title, site, r.HTML)
 	}
 	return r, s.Store.SetFullText(ctx, userID, e.ID, r.HTML, content.Excerpt(r.Text, 320), r.ImageURL)
 }

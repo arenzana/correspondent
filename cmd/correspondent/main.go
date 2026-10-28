@@ -53,6 +53,7 @@ import (
 	"github.com/arenzana/correspondent/internal/secretbox"
 	"github.com/arenzana/correspondent/internal/server"
 	"github.com/arenzana/correspondent/internal/store"
+	"github.com/arenzana/correspondent/internal/typesafe"
 	"github.com/arenzana/correspondent/internal/version"
 	"github.com/arenzana/correspondent/web"
 )
@@ -132,6 +133,9 @@ func run(log *slog.Logger, args []string) error {
 	fetcher := fetch.New(fetch.Options{AllowPrivate: *allowPrivate})
 	ing := &ingest.Service{Store: st, Fetch: fetcher, Log: log, RetentionDays: *retention,
 		Extract: &extract.Extractor{Fetch: fetcher}}
+	if ing.Jev, err = typesafeClient(); err != nil {
+		return err
+	}
 	switch cmd {
 	case "serve":
 		proxies, err := parsePrefixes(*trusted)
@@ -144,6 +148,16 @@ func run(log *slog.Logger, args []string) error {
 		if err := ing.SeedBuiltins(ctx); err != nil {
 			return err
 		}
+		if ing.Jev != nil {
+			log.Info("website material: asking TypeSafe's Jev about articles' ends")
+		}
+		go func() {
+			if n, err := st.TidyStored(ctx); err != nil {
+				log.Error("tidy stored articles", "err", err)
+			} else if n > 0 {
+				log.Info("tidied stored articles", "changed", n)
+			}
+		}()
 		var images *imgproxy.Proxy
 		if *imageCache > 0 {
 			key, err := st.Secret(ctx, store.SettingImageKey)
@@ -556,6 +570,25 @@ func envInt(key string, def int) int {
 		return v
 	}
 	return def
+}
+
+// typesafeClient is Jev, for finding website material in articles, when
+// the admin gives a TypeSafe API key: CORRESPONDENT_TYPESAFE_KEY, or a file
+// holding it named by CORRESPONDENT_TYPESAFE_KEY_FILE. Without one, the
+// server's rules alone tidy articles.
+func typesafeClient() (*typesafe.Client, error) {
+	key := os.Getenv("CORRESPONDENT_TYPESAFE_KEY")
+	if file := os.Getenv("CORRESPONDENT_TYPESAFE_KEY_FILE"); file != "" {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("CORRESPONDENT_TYPESAFE_KEY_FILE: %w", err)
+		}
+		key = string(b)
+	}
+	if key = strings.TrimSpace(key); key == "" {
+		return nil, nil
+	}
+	return &typesafe.Client{Key: key}, nil
 }
 
 func envOr(key, def string) string {

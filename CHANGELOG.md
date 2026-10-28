@@ -7,6 +7,24 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-28
+
+### Added
+
+- One way of reading: every article, from its feed or its page, is
+  tidied into the same shape. Wrappers and empty blocks go, headings run
+  in order from just below the title (and one that only repeats the title
+  goes), a standfirst shown twice shows once, and the site's own material
+  at either end goes: navigation, bylines and dates, subscribe and share
+  prompts, tags, affiliate notices, newsletter boxes and "Related
+  articles" lists. "Read more" links stay, since they mark a summary.
+  Articles already stored are tidied once, in the background.
+- `CORRESPONDENT_TYPESAFE_KEY` (or `_FILE`): with a TypeSafe key, the
+  server asks Jev about the blocks at each new article's start and end,
+  for the site material no rule recognises (membership plugs, author
+  bios), removing it from the outside in and stopping at the first block
+  it isn't sure of. Optional; without a key, the rules alone tidy.
+
 ## [0.22.1] - 2026-10-28
 
 ### Fixed

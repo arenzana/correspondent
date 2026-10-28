@@ -209,6 +209,14 @@ var (
 	onward      = regexp.MustCompile(`(?i)\b(read more|continue reading|read the (full|rest)|keep reading|the post .{1,200} appeared first on)\b`)
 )
 
+// Onward reports whether text sends the reader on to the rest of the
+// article ("Read more", "Continue reading"). Tidying keeps such blocks:
+// they mark a summary, for LooksPartial here and in the reader.
+func Onward(text string) bool {
+	t := []rune(strings.TrimSpace(text))
+	return onward.MatchString(string(t[max(0, len(t)-partialTail):]))
+}
+
 // LooksPartial reports whether article HTML looks like a summary of a longer
 // article on the web.
 func LooksPartial(html string) bool {

@@ -97,11 +97,12 @@ func normalize(it *gofeed.Item, base string) store.NewEntry {
 			excerpt = d
 		}
 	}
+	title := content.PlainText(it.Title)
 	e := store.NewEntry{
 		URL:       link,
 		Permalink: permalink(it, link, base),
-		Title:     content.PlainText(it.Title),
-		Content:   body.HTML,
+		Title:     title,
+		Content:   content.Tidy(body.HTML, title),
 		Excerpt:   content.Excerpt(excerpt, 320),
 	}
 	if e.Title == "" {
