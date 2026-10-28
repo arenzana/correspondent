@@ -7,6 +7,21 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-10-28
+
+### Security
+
+- Admin routes refuse API tokens and take a signed-in session only. An
+  admin's API token could otherwise mint a password-reset link for its own
+  account and take it over, or invite another admin.
+
+### Fixed
+
+- Apple apps: live updates from other devices arrive while the app is
+  open, rather than only after reconnecting.
+- iPhone: opening an article from a notification or widget while on
+  another tab shows the article rather than an empty page.
+
 ## [0.21.1] - 2026-10-28
 
 ### Fixed
