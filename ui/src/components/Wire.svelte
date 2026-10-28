@@ -848,6 +848,15 @@
     font-size: calc(12.5px * var(--ui-scale));
     background: var(--sheet);
   }
+  /* Where the list ends, the spine runs on into the end bar: the tail's
+     sheet would otherwise cut the spine off above a stray bar. */
+  .tail:has(.spine-end) {
+    align-items: flex-start;
+    padding-top: 22px;
+    background:
+      linear-gradient(var(--rule), var(--rule)) no-repeat var(--spine-x) 0 / 1.5px 22px,
+      var(--sheet);
+  }
   /* Where the list ends, the spine ends in a short terminal bar. */
   .spine-end {
     display: block;

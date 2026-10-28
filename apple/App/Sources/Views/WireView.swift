@@ -110,6 +110,21 @@ struct WireView: View {
         return false
     }
 
+    /// More loading, or where the list ends: the spine runs on into a
+    /// short bar, as on the web (alone, the bar read as a stray line).
+    @ViewBuilder private var listEnd: some View {
+        if !app.cursor.isEmpty {
+            ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear).listRowSeparator(.hidden)
+        } else {
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(theme.rule).frame(width: 1.5, height: 22).padding(.leading, Self.spineX)
+                Rectangle().fill(theme.ring).frame(width: 12, height: 1.5).padding(.leading, Self.spineX - 5).padding(.top, 22)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+            .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
+        }
+    }
+
     private var list: some View {
         ScrollViewReader { proxy in
             List {
@@ -140,22 +155,13 @@ struct WireView: View {
                                 .onAppear { if e.id == app.entries.last?.id { Task { await app.loadMore() } } }
                                 .contextMenu { rowMenu(e) }
                         }
+                        // The end goes in the last day's section: after a
+                        // section the list leaves a gap, which broke the spine.
+                        if group.key == groups.last?.key { listEnd }
                     } header: {
                         DayLabel(label: group.label)
                             .listRowInsets(EdgeInsets())
                     }
-                }
-                if !app.cursor.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear).listRowSeparator(.hidden)
-                } else {
-                    // Where the list ends, the spine runs on into a short
-                    // bar, as on the web (alone, the bar read as a stray line).
-                    ZStack(alignment: .topLeading) {
-                        Rectangle().fill(theme.rule).frame(width: 1.5, height: 22).padding(.leading, Self.spineX)
-                        Rectangle().fill(theme.ring).frame(width: 12, height: 1.5).padding(.leading, Self.spineX - 5).padding(.top, 22)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-                    .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
