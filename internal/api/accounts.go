@@ -74,9 +74,11 @@ func clientName(ua string) string {
 	return browser + " on " + device
 }
 
-// admin wraps auth and requires the admin role, checked on every request.
+// admin requires a signed-in session (never an API token: a leaked admin
+// token must not mint reset links or admin invites) and the admin role,
+// checked on every request.
 func (a *API) admin(next http.HandlerFunc) http.HandlerFunc {
-	return a.auth(func(w http.ResponseWriter, r *http.Request) {
+	return a.session(func(w http.ResponseWriter, r *http.Request) {
 		u, err := a.Store.UserByID(r.Context(), userID(r))
 		if err != nil || u.Role != store.RoleAdmin {
 			fail(w, http.StatusForbidden, "Only admins can do that.")

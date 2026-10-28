@@ -109,3 +109,24 @@ func TestAPITokens(t *testing.T) {
 		t.Errorf("empty token: %d", r.StatusCode)
 	}
 }
+
+// Admin routes take a signed-in session only: an admin's API token can't
+// reach them, or a leaked token could mint a reset link for its own account.
+func TestAdminRefusesAPITokens(t *testing.T) {
+	e := newEnv(t)
+	admin, _ := e.user(t, "ada") // first account: admin
+	r := e.do(t, admin, "POST", "/api/v1/tokens", `{"name":"cli","scope":"write"}`, true)
+	var made struct{ Token string }
+	json.NewDecoder(r.Body).Decode(&made)
+	if made.Token == "" {
+		t.Fatalf("no token: %d", r.StatusCode)
+	}
+	for _, c := range [][2]string{{"GET", "/api/v1/admin/accounts"}, {"POST", "/api/v1/admin/invites"}, {"POST", "/api/v1/admin/accounts/1/reset"}} {
+		if r := bearer(t, e, made.Token, c[0], c[1], `{"role":"admin"}`); r.StatusCode != http.StatusForbidden {
+			t.Errorf("%s %s with an API token: %d, want 403", c[0], c[1], r.StatusCode)
+		}
+	}
+	if r := e.do(t, admin, "GET", "/api/v1/admin/accounts", "", false); r.StatusCode != 200 {
+		t.Errorf("admin session: %d", r.StatusCode)
+	}
+}
