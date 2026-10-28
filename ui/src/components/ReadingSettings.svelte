@@ -9,7 +9,13 @@
     const close = (e: MouseEvent) => {
       if (el && !el.parentElement?.contains(e.target as Node)) app.readingOpen = false
     }
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && (app.readingOpen = false)
+    // Escape closes only this: stopped here, it never reaches the window's
+    // shortcuts, which would close the article too.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      app.readingOpen = false
+      e.stopPropagation()
+    }
     setTimeout(() => document.addEventListener('click', close))
     document.addEventListener('keydown', esc)
     return () => {

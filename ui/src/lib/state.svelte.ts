@@ -1462,5 +1462,6 @@ export const app = new AppState()
 
 /** Any modal overlay currently owns the keyboard. */
 export function overlayOpen(): boolean {
-  return app.paletteOpen || app.shortcutsOpen || app.addFeedOpen
+  // Any open modal counts, including ones a page opens itself (Manage's).
+  return app.paletteOpen || app.shortcutsOpen || app.addFeedOpen || !!document.querySelector('dialog[open]')
 }

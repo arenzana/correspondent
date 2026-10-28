@@ -46,6 +46,19 @@
     return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
   }
 
+  /**
+   * A control reached with the keyboard keeps Space, to press or play it.
+   * One last clicked with the pointer doesn't, so click an article, or
+   * Star, and Space still pages through the article. (:focus-visible can't
+   * tell: Chrome turns it on with the very key being handled.)
+   */
+  let clicked: Element | null = null
+  function control(t: EventTarget | null): boolean {
+    const el = t as HTMLElement | null
+    const pressable = !!el && (['BUTTON', 'A', 'AUDIO', 'VIDEO', 'SUMMARY'].includes(el.tagName) || el.getAttribute('role') === 'button')
+    return pressable && el !== clicked
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (!app.user) return
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -55,6 +68,7 @@
     }
     // Shortcuts never fire while typing or while a dialog owns the keyboard.
     if (typing(e.target) || overlayOpen() || e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.key === ' ' && control(e.target)) return
 
     if (pendingG) {
       pendingG = false
@@ -113,7 +127,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} onpopstate={() => app.onPopState()} onhashchange={() => app.readInvite()} />
+<svelte:window {onkeydown} onpointerdowncapture={(e) => (clicked = (e.target as Element).closest('button, a, audio, video, summary, [role=button]'))} onpopstate={() => app.onPopState()} onhashchange={() => app.readInvite()} />
 <svelte:document
   onvisibilitychange={() => {
     if (document.visibilityState === 'visible' && app.user) app.refreshTree()
