@@ -90,6 +90,11 @@ func TestReaderFlow(t *testing.T) {
 	expect(t, e.do(t, c, "PATCH", fmt.Sprintf("/api/v1/folders/%d", folder.ID), `{"name":"World"}`, true), 204)
 	expect(t, e.do(t, c, "PATCH", "/api/v1/feeds/999999", `{"title":"x"}`, true), 404)
 
+	// Another reader can't file a feed in this reader's folder.
+	bob, _ := e.user(t, "bob")
+	bobTree := decodeJSON[struct{ Feeds []struct{ ID int64 } }](t, expect(t, e.do(t, bob, "GET", "/api/v1/tree", "", false), 200))
+	expect(t, e.do(t, bob, "PATCH", fmt.Sprintf("/api/v1/feeds/%d", bobTree.Feeds[0].ID), fmt.Sprintf(`{"folderId":%d}`, folder.ID), true), 404)
+
 	// Entries by view and folder; IDs travel as strings.
 	list := decodeJSON[struct {
 		Entries []struct {

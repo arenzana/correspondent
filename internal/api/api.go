@@ -763,6 +763,10 @@ func (a *API) subscribe(w http.ResponseWriter, r *http.Request) {
 	} else {
 		id, err = a.Ingest.Subscribe(r.Context(), uid, in.URL, in.Title, in.FolderID)
 	}
+	if errors.Is(err, store.ErrNotFound) {
+		fail(w, http.StatusNotFound, "That folder doesn't exist.")
+		return
+	}
 	if err != nil {
 		a.internal(w, err)
 		return

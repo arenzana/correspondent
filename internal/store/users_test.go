@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -114,5 +115,25 @@ func TestRotationSignsOut(t *testing.T) {
 	}
 	if _, _, err := st.TokenUser(ctx, token); err == nil {
 		t.Error("API token survived a reset")
+	}
+}
+
+// A feed can only be filed in its own reader's folders.
+func TestFoldersAreOwnersOnly(t *testing.T) {
+	st, ctx := open(t), context.Background()
+	ada, _ := st.CreateUser(ctx, "ada", "password-ada-1")
+	bob, _ := st.CreateUser(ctx, "bob", "password-bob-1")
+	folder, err := st.EnsureFolder(ctx, ada, "News")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddFeed(ctx, bob, "https://example.org/feed", "", &folder); !errors.Is(err, ErrNotFound) {
+		t.Errorf("subscribe into another reader's folder: %v", err)
+	}
+	if _, err := st.AddPageFeed(ctx, bob, "https://example.org/page", "", &folder, 0); !errors.Is(err, ErrNotFound) {
+		t.Errorf("page feed into another reader's folder: %v", err)
+	}
+	if _, err := st.AddFeed(ctx, ada, "https://example.org/feed", "", &folder); err != nil {
+		t.Errorf("subscribe into own folder: %v", err)
 	}
 }

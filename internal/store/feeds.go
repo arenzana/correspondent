@@ -172,9 +172,27 @@ func (s *Store) Feed(ctx context.Context, userID, feedID int64) (*Feed, error) {
 	return &f, err
 }
 
+// ownFolder refuses a folder that isn't the user's: folder IDs are
+// sequential, and a feed filed in someone else's folder would count in
+// their unread badge.
+func (s *Store) ownFolder(ctx context.Context, userID int64, folderID *int64) error {
+	if folderID == nil {
+		return nil
+	}
+	var one int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM folders WHERE id = ? AND user_id = ?`, *folderID, userID).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
 // AddFeed subscribes to url. If the subscription already exists its ID is
 // returned unchanged.
 func (s *Store) AddFeed(ctx context.Context, userID int64, url, title string, folderID *int64) (int64, error) {
+	if err := s.ownFolder(ctx, userID, folderID); err != nil {
+		return 0, err
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO feeds (user_id, folder_id, url, title, created_at) VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (user_id, url) DO NOTHING`, userID, folderID, url, title, time.Now().Unix())
@@ -190,6 +208,9 @@ func (s *Store) AddFeed(ctx context.Context, userID int64, url, title string, fo
 // full articles, since a listing carries only headlines. Subscribing again
 // to the same page switches it to this parser.
 func (s *Store) AddPageFeed(ctx context.Context, userID int64, url, title string, folderID *int64, parserID int64) (int64, error) {
+	if err := s.ownFolder(ctx, userID, folderID); err != nil {
+		return 0, err
+	}
 	var id int64
 	err := s.db.QueryRowContext(ctx, `
 		INSERT INTO feeds (user_id, folder_id, url, title, created_at, parser_id, full_text) VALUES (?, ?, ?, ?, ?, ?, 1)
@@ -208,6 +229,9 @@ func (s *Store) UpdateFeed(ctx context.Context, userID, feedID int64, title *str
 		}
 	}
 	if folderID != nil || clearFolder {
+		if err := s.ownFolder(ctx, userID, folderID); err != nil {
+			return err
+		}
 		return checkAffected(s.db.ExecContext(ctx,
 			`UPDATE feeds SET folder_id = ? WHERE id = ? AND user_id = ?`, folderID, feedID, userID))
 	}
