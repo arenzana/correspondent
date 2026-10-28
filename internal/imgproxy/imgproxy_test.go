@@ -285,3 +285,16 @@ func TestJPEGInput(t *testing.T) {
 		t.Errorf("%+v %v", cfg, err)
 	}
 }
+
+// What a decode costs depends on the pixels' depth, not just their count:
+// a 16-bit PNG well under the pixel cap is still too costly to resize.
+func TestDecodedSize(t *testing.T) {
+	deep := image.Config{ColorModel: color.NRGBA64Model, Width: 6300, Height: 6300}
+	if deep.Width*deep.Height > maxPixels || decodedSize(deep) <= maxDecodeBytes {
+		t.Errorf("16-bit 6300²: %d bytes, should pass the pixel cap but not the decode cap", decodedSize(deep))
+	}
+	photo := image.Config{ColorModel: color.YCbCrModel, Width: 4000, Height: 3000}
+	if decodedSize(photo) > maxDecodeBytes {
+		t.Errorf("a 12-megapixel JPEG should still be resized: %d bytes", decodedSize(photo))
+	}
+}

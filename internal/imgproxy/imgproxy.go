@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	_ "image/gif"
 	"image/jpeg"
@@ -51,8 +52,13 @@ var Widths = []int{0, 32, 64, 128, 256, 640, 960, 1280, 1600}
 const MaxBytes = 15 << 20
 
 const (
-	maxPixels    = 40_000_000
-	fetchTimeout = 20 * time.Second
+	maxPixels = 40_000_000
+	// The memory one decode may take. A small file can decode huge (a
+	// 6,300-pixel 16-bit PNG is about 320 MB), so larger ones are served as
+	// they are rather than resized, and only two decode at once.
+	maxDecodeBytes = 100 << 20
+	decoders       = 2
+	fetchTimeout   = 20 * time.Second
 	// Responses are served with this policy: an image needs nothing, and an
 	// SVG opened directly must not run script on this origin.
 	sandbox = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox"
@@ -67,6 +73,7 @@ type Proxy struct {
 
 	once     sync.Once
 	sem      chan struct{}
+	decoding chan struct{}
 	mu       sync.Mutex
 	inflight map[string]*call
 }
@@ -81,6 +88,7 @@ type call struct {
 func (p *Proxy) init() {
 	p.once.Do(func() {
 		p.sem = make(chan struct{}, 8)
+		p.decoding = make(chan struct{}, decoders)
 		p.inflight = map[string]*call{}
 	})
 }
@@ -209,15 +217,34 @@ func (p *Proxy) fetch(ctx context.Context, raw string, width int) ([]byte, strin
 	if cfg.Width*cfg.Height > maxPixels {
 		return nil, "", errors.New("image has too many pixels")
 	}
-	// Originals, animations, and images already small enough pass through.
-	if width == 0 || format == "gif" || cfg.Width <= width {
+	// Originals, animations, images already small enough, and ones too
+	// costly to decode pass through.
+	if width == 0 || format == "gif" || cfg.Width <= width || decodedSize(cfg) > maxDecodeBytes {
 		return resp.Body, ct, nil
 	}
+	p.decoding <- struct{}{}
+	defer func() { <-p.decoding }()
 	img, _, err := image.Decode(bytes.NewReader(resp.Body))
 	if err != nil {
 		return resp.Body, ct, nil
 	}
 	return resize(img, width)
+}
+
+// decodedSize is about how many bytes decoding an image takes.
+func decodedSize(cfg image.Config) int64 {
+	perPixel := int64(4)
+	switch cfg.ColorModel {
+	case color.RGBA64Model, color.NRGBA64Model:
+		perPixel = 8
+	case color.Gray16Model:
+		perPixel = 2
+	case color.GrayModel, color.AlphaModel:
+		perPixel = 1
+	case color.YCbCrModel:
+		perPixel = 3
+	}
+	return int64(cfg.Width) * int64(cfg.Height) * perPixel
 }
 
 func looksLikeSVG(b []byte) bool {
