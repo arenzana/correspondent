@@ -110,6 +110,7 @@ docker compose exec correspondent /correspondent version
 | `CORRESPONDENT_NO_POLL` | | `1` to serve without fetching feeds (used during migration) |
 | `CORRESPONDENT_IMAGE_CACHE_MB` | `512` | Disk for proxied images; `0` turns the image proxy off and images load straight from their sites |
 | `CORRESPONDENT_PUBLIC_URL` | | The https address readers use; turns on passkeys (they're bound to it) and appears in invitation links |
+| `CORRESPONDENT_INTEGRATIONS_ALLOW` | | Comma-separated CIDRs of your own networks that readers' integrations may reach, such as a tailnet's `100.64.0.0/10`, for a Wallabag or Linkding there; also allows `http://` addresses. Feeds stay blocked from private networks |
 | `CORRESPONDENT_INSECURE_COOKIES` | | `1` to allow plain HTTP (development only) |
 
 ## Build from source
@@ -216,6 +217,26 @@ articles that already have audio, one after another; each counts as read
 when it ends. Audio is only ever made for an article you pick. Audio for
 what you're listening to and the newest unread and starred articles is kept
 on the device, so it plays offline (Settings → This device).
+
+## Send to other services
+
+Any article can be sent to a read-later service (Readwise Reader,
+Instapaper, Raindrop.io), your own Wallabag, Linkding or Karakeep, or a
+webhook: `b` or the send button in an article, or `corr send`. Readers
+connect their services in Settings → Integrations; the credentials are
+checked with the service, stored encrypted, and only a signed-in browser
+can add or change them. The server sends each article and tries again,
+with growing waits, while the service is down. Each service can also get
+every article its reader stars, from any app, Reeder included.
+
+A webhook gets each article as JSON (title, link, author, feed, summary,
+HTML and Markdown), signed in `Correspondent-Signature: t=<unix>,v1=<hex>`:
+an HMAC-SHA256, with the key shown when the webhook is added, of
+`"<t>.<body>"`.
+
+Obsidian works on the device: set the vault in Settings, and Send to →
+Obsidian makes a Markdown note of the article, with its title, source,
+author and dates as properties.
 
 ## Layout
 

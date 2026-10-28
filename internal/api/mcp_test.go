@@ -88,7 +88,7 @@ func TestMCP(t *testing.T) {
 		hints[tl.Name] = tl.Annotations
 	}
 	sort.Strings(names)
-	if strings.Join(names, ",") != "find_feeds,list_articles,list_feeds,mark_all_read,read_article,remove_search,save_search,set_article_state,subscribe,summarize_article,unsubscribe,update_feed" {
+	if strings.Join(names, ",") != "find_feeds,list_articles,list_feeds,list_integrations,mark_all_read,read_article,remove_search,save_search,send_article,set_article_state,subscribe,summarize_article,unsubscribe,update_feed" {
 		t.Fatalf("tools: %v", names)
 	}
 	if !hints["list_articles"].ReadOnlyHint || hints["unsubscribe"].DestructiveHint == nil || !*hints["unsubscribe"].DestructiveHint {

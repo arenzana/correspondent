@@ -326,6 +326,49 @@ func (c *Client) Summarize(ctx context.Context, id string) (string, error) {
 	return r.Summary, err
 }
 
+// Integration is a service the reader sends articles to.
+type Integration struct {
+	ID          int64  `json:"id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	SendStarred bool   `json:"sendStarred"`
+	LastError   string `json:"lastError,omitempty"`
+}
+
+// Delivery is an article sent, or being sent, to an integration.
+type Delivery struct {
+	ID            int64  `json:"id"`
+	IntegrationID int64  `json:"integrationId"`
+	State         string `json:"state"`
+	Error         string `json:"error,omitempty"`
+	Remote        string `json:"remote,omitempty"`
+}
+
+// Integrations lists the reader's services (added in Settings on the web).
+func (c *Client) Integrations(ctx context.Context) ([]Integration, error) {
+	var r struct{ Integrations []Integration }
+	err := c.do(ctx, "GET", "/integrations", nil, &r)
+	if r.Integrations == nil {
+		r.Integrations = []Integration{}
+	}
+	return r.Integrations, err
+}
+
+// Send queues an article for one of the reader's services; the server
+// sends it, retrying while the service is down.
+func (c *Client) Send(ctx context.Context, id string, integration int64) (Delivery, error) {
+	var r struct{ Delivery Delivery }
+	err := c.do(ctx, "POST", "/entries/"+url.PathEscape(id)+"/send", map[string]string{"integration": strconv.FormatInt(integration, 10)}, &r)
+	return r.Delivery, err
+}
+
+// Deliveries says where an article was sent, or is being sent.
+func (c *Client) Deliveries(ctx context.Context, id string) ([]Delivery, error) {
+	var r struct{ Deliveries []Delivery }
+	err := c.do(ctx, "GET", "/entries/"+url.PathEscape(id)+"/deliveries", nil, &r)
+	return r.Deliveries, err
+}
+
 // SaveSearch keeps a search in the sidebar; saving the same query renames it.
 func (c *Client) SaveSearch(ctx context.Context, query, name string) (Search, error) {
 	var r struct{ Search Search }

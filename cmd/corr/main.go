@@ -48,6 +48,7 @@ Usage:
   corr watch [--feed ID] [--folder ID] [--notify]   new articles as they arrive
   corr listen ID [-o FILE]                          hear an article read aloud
   corr summary ID                                   an article's short summary
+  corr send [ID] [--to NAME]                        send an article to a service (none: list them)
   corr searches [save WORDS [--name N] | rename ID NAME | remove ID]
   corr version
 
@@ -190,6 +191,8 @@ func (a *app) run(args []string) error {
 		return a.listen(rest)
 	case "summary":
 		return a.summary(rest)
+	case "send":
+		return a.send(rest)
 	case "searches":
 		return a.searches(rest)
 	case "version":

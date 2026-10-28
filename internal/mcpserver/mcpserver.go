@@ -118,6 +118,20 @@ func New(api *client.Client, base, version string) *mcp.Server {
 			return nil, summaryOut{ID: in.ID, Summary: s}, err
 		})
 
+	mcp.AddTool(s, &mcp.Tool{Name: "list_integrations", Title: "List integrations", Annotations: readOnly,
+		Description: "List the services the user can send articles to (read-later services, their own Wallabag, Linkding or Karakeep, webhooks). They're added in Settings on the web; use an id with send_article."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, integrationsOut, error) {
+			list, err := api.Integrations(ctx)
+			return nil, integrationsOut{Integrations: list}, err
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "send_article", Title: "Send an article to a service", Annotations: &mcp.ToolAnnotations{DestructiveHint: &no, IdempotentHint: true, OpenWorldHint: &yes},
+		Description: "Send an article to one of the user's services (see list_integrations), as they would from the article's Send to… menu. The server queues it and sends it, retrying while the service is down; the state says whether it's sent yet. Only send what the user asked for."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in sendIn) (*mcp.CallToolResult, client.Delivery, error) {
+			d, err := api.Send(ctx, in.ID, in.Integration)
+			return nil, d, err
+		})
+
 	mcp.AddTool(s, &mcp.Tool{Name: "save_search", Title: "Save a search", Annotations: &mcp.ToolAnnotations{DestructiveHint: &no, IdempotentHint: true, OpenWorldHint: &no},
 		Description: "Keep a search in the user's sidebar, like a folder with its own unread count. Saving the same query again renames it."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in saveSearchIn) (*mcp.CallToolResult, client.Search, error) {
@@ -302,6 +316,15 @@ type saveSearchIn struct {
 
 type searchIDIn struct {
 	ID int64 `json:"id" jsonschema:"a saved search id, from list_feeds"`
+}
+
+type integrationsOut struct {
+	Integrations []client.Integration `json:"integrations"`
+}
+
+type sendIn struct {
+	ID          string `json:"id" jsonschema:"the article id"`
+	Integration int64  `json:"integration" jsonschema:"the integration's id, from list_integrations"`
 }
 
 type changedOut struct {

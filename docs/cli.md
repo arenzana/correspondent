@@ -96,6 +96,7 @@ instead of moving.
 | `corr watch [--feed ID] [--folder ID] [--notify]` | new articles as they arrive, until Ctrl-C; with `--json`, one JSON object per line; `--notify` also shows desktop notifications |
 | `corr listen ID [-o FILE]` | the article read aloud: played with the system's player (afplay, mpv, ffplay or mpg123), or saved with `-o` (`-` for stdout). Uses existing audio, or makes it with your text-to-speech key (Settings → AI) |
 | `corr summary ID` | the article's short summary: the shared one, or written now by your AI (Settings → AI) |
+| `corr send [ID] [--to NAME]` | sends the article to one of your services (Settings → Integrations) and says when it's there; with no ID, lists them |
 | `corr searches` | saved searches with unread counts; `corr searches save WORDS [--name N]`, `rename ID NAME`, `remove ID` |
 | `corr version` | |
 
@@ -165,7 +166,8 @@ Tools: `list_articles` (search finds words in the text; or a saved search),
 `summarize_article` (the shared summary, or written by your AI),
 `set_article_state`, `mark_all_read` (optionally only a search's matches),
 `list_feeds` (with saved searches), `save_search`, `remove_search`,
-`find_feeds`, `subscribe`, `unsubscribe`, `update_feed`. Tools that change
+`find_feeds`, `subscribe`, `unsubscribe`, `update_feed`, `list_integrations`,
+`send_article` (to one of your services). Tools that change
 things are marked as such, and the destructive ones (`unsubscribe`,
 `mark_all_read`, `remove_search`) as destructive, so clients can ask you
 first. The server enforces the

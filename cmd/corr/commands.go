@@ -649,6 +649,81 @@ func (a *app) summary(args []string) error {
 	})
 }
 
+// send sends an article to one of the reader's services (added in
+// Settings on the web), and waits a moment to say how it went. With no
+// article, it lists the services.
+func (a *app) send(args []string) error {
+	var to string
+	_, pos, err := flags("send", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&to, "to", "", "the service's name (needed when there's more than one)")
+	})
+	if err != nil {
+		return err
+	}
+	list, err := a.api.Integrations(a.ctx)
+	if err != nil {
+		return err
+	}
+	if len(pos) == 0 {
+		return emit(a.asJSON, list, func(w io.Writer) {
+			if len(list) == 0 {
+				line(w, "No services yet: add one in Settings → Integrations on the web.")
+			}
+			for _, i := range list {
+				line(w, fmt.Sprintf("%s (%s)", i.Name, i.Kind))
+			}
+		})
+	}
+	if len(pos) != 1 {
+		return usagef("send needs one article ID")
+	}
+	var target *client.Integration
+	for n, i := range list {
+		if to == "" && len(list) == 1 || strings.EqualFold(i.Name, to) || strings.EqualFold(i.Kind, to) {
+			target = &list[n]
+			break
+		}
+	}
+	switch {
+	case len(list) == 0:
+		return errors.New("no services yet: add one in Settings → Integrations on the web")
+	case target == nil && to == "":
+		return usagef("there's more than one service: choose one with --to NAME (corr send lists them)")
+	case target == nil:
+		return fmt.Errorf("no service called %q (corr send lists them)", to)
+	}
+	d, err := a.api.Send(a.ctx, pos[0], target.ID)
+	if err != nil {
+		return err
+	}
+	for _, wait := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
+		if d.State != "pending" {
+			break
+		}
+		time.Sleep(wait)
+		if all, err := a.api.Deliveries(a.ctx, pos[0]); err == nil {
+			for _, x := range all {
+				if x.IntegrationID == target.ID {
+					d = x
+				}
+			}
+		}
+	}
+	if d.State == "failed" {
+		return fmt.Errorf("%s didn't take it: %s", target.Name, d.Error)
+	}
+	return emit(a.asJSON, d, func(w io.Writer) {
+		switch {
+		case d.State == "pending":
+			line(w, fmt.Sprintf("Queued for %s; it'll be sent when the service answers.", target.Name))
+		case d.Remote != "":
+			line(w, fmt.Sprintf("Saved to %s: %s", target.Name, d.Remote))
+		default:
+			line(w, fmt.Sprintf("Saved to %s.", target.Name))
+		}
+	})
+}
+
 // searches lists saved searches, or saves, renames or removes one.
 func (a *app) searches(args []string) error {
 	if len(args) == 0 {

@@ -12,16 +12,19 @@ import (
 	"github.com/arenzana/correspondent/internal/pagefeed"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/arenzana/correspondent/internal/api"
 	"github.com/arenzana/correspondent/internal/client"
+	"github.com/arenzana/correspondent/internal/integrations"
 	"github.com/arenzana/correspondent/internal/ratelimit"
 	"github.com/arenzana/correspondent/internal/secretbox"
 	"github.com/arenzana/correspondent/internal/speech"
@@ -398,5 +401,60 @@ func TestSummaryAndSearches(t *testing.T) {
 	}
 	if _, err := run("list", "--saved", id); err == nil {
 		t.Error("a removed search still lists")
+	}
+}
+
+// TestSend sends an article to a webhook with corr send, which waits to
+// say it arrived; with no service named and two set up, it asks which.
+func TestSend(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	box, _ := secretbox.Load(filepath.Join(t.TempDir(), "keyring"))
+	integ := &integrations.Service{Store: st, Keyring: box, Log: slog.New(slog.DiscardHandler), HTTP: http.DefaultClient, PlainHTTP: true}
+	go integ.Run(ctx)
+	a := &api.API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute), Keyring: box, Integrations: integ}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	var got atomic.Int32
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got.Add(1) }))
+	t.Cleanup(hook.Close)
+
+	uid, _ := st.CreateUser(ctx, "alice", "password-alice")
+	fid, _ := st.AddFeed(ctx, uid, "https://notes.example/feed", "Notes", nil)
+	st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "1", Title: "First", URL: "https://notes.example/1", Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+	ids, _, _ := st.EntryIDs(ctx, store.Filter{UserID: uid})
+	sealed, _ := integ.Seal(uid, integrations.Secret{SigningKey: "whsec_x"})
+	st.CreateIntegration(ctx, uid, "webhook", "Hook", `{"baseUrl":"`+hook.URL+`"}`, sealed, false)
+	token, _, _ := st.CreateToken(ctx, uid, "test", store.ScopeWrite)
+
+	run := func(args ...string) error {
+		app := &app{ctx: ctx, asJSON: true}
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		if err := app.setup(srv.URL, token); err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stdout
+		os.Stdout, _ = os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		defer func() { os.Stdout = old }()
+		return app.run(args)
+	}
+	id := strconv.FormatInt(ids[0], 10)
+	if err := run("send", id); err != nil || got.Load() != 1 {
+		t.Fatalf("send: %v, %d requests", err, got.Load())
+	}
+	st.CreateIntegration(ctx, uid, "webhook", "Other", `{"baseUrl":"`+hook.URL+`"}`, sealed, false)
+	if err := run("send", id); exitCode(err) != exitUsage {
+		t.Errorf("two services, none named: %v", err)
+	}
+	if err := run("send", id, "--to", "other"); err != nil || got.Load() != 2 {
+		t.Errorf("--to other: %v, %d requests", err, got.Load())
+	}
+	if err := run("send", id, "--to", "nope"); err == nil {
+		t.Error("an unknown service")
 	}
 }
