@@ -50,4 +50,4 @@ jobs:
       - name: Vulnerabilities
         run: |
           go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-          cd ui && npm audit --audit-level=low
+          cd ui && node scripts/audit.mjs
