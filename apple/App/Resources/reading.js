@@ -6,6 +6,8 @@
   var body = document.body;
   var prose = document.querySelector('.prose');
   if (!body || !prose) return;
+  // Smooth, unless the system is set to reduce motion.
+  var motion = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
   // Bionic reading: about the first 40% of each word in bold, at least one letter.
   function boldLength(word) {
@@ -82,7 +84,7 @@
       light(i);
       var r = blocks[i].getBoundingClientRect();
       stepping = true;
-      window.scrollBy({ top: r.top + r.height / 2 - window.innerHeight * READING_LINE, behavior: 'smooth' });
+      window.scrollBy({ top: r.top + r.height / 2 - window.innerHeight * READING_LINE, behavior: motion });
       setTimeout(function () { stepping = false; }, 450);
     };
     light(nearest());
@@ -100,7 +102,7 @@
     };
     place();
     window.addEventListener('resize', place);
-    step = function (by) { window.scrollBy({ top: by * lineH, behavior: 'smooth' }); };
+    step = function (by) { window.scrollBy({ top: by * lineH, behavior: motion }); };
   }
 
   // The app sends ↓ and ↑ on the Mac; a keyboard on iPad lands here.

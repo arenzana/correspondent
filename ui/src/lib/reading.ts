@@ -3,6 +3,8 @@
 // paragraph, or one line, clear; the rest dimmed). The Apple apps carry the
 // same logic in apple/App/Resources/reading.js.
 
+import { scrollMotion } from './motion'
+
 /** How many letters of a word to bold: about 40%, at least one. */
 export function boldLength(word: string): number {
   const n = [...word].length
@@ -98,7 +100,7 @@ export function paragraphSpotlight(scroller: HTMLElement, prose: HTMLElement): {
     const r = blocks[i].getBoundingClientRect()
     const line = scroller.getBoundingClientRect().top + scroller.clientHeight * READING_LINE
     stepping = true
-    scroller.scrollBy({ top: r.top + r.height / 2 - line, behavior: 'smooth' })
+    scroller.scrollBy({ top: r.top + r.height / 2 - line, behavior: scrollMotion() })
     setTimeout(() => (stepping = false), 450)
   }
   light(nearest())

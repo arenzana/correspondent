@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scrollMotion } from '../lib/motion'
   // The admin page: accounts and invitations, the server's health, and the
   // page parsers everyone shares. Every action is checked again by the
   // server; this page only shows it to admins.
@@ -16,7 +17,7 @@
   let current = $state('accounts')
   function show(id: string) {
     current = id
-    scroller?.querySelector(`#admin-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    scroller?.querySelector(`#admin-${id}`)?.scrollIntoView({ behavior: scrollMotion(), block: 'start' })
   }
   function track() {
     if (!scroller) return

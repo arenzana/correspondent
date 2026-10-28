@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scrollMotion } from '../lib/motion'
   import { app } from '../lib/state.svelte'
   import { BarTracker, NARROW } from '../lib/bars'
   import { longDate, readingMinutes } from '../lib/time'
@@ -41,7 +42,7 @@
   /** ↓/↑ with the spotlight on: the next paragraph, or the next line. */
   export function spotlightStep(by: number) {
     if (app.prefs.spotlight === 'paragraph') paragraphs?.step(by)
-    else scroller?.scrollBy({ top: by * lineH, behavior: 'smooth' })
+    else scroller?.scrollBy({ top: by * lineH, behavior: scrollMotion() })
   }
 
   // Start each article at the top.
@@ -68,7 +69,7 @@
       app.move(1)
       return
     }
-    scroller.scrollBy({ top: (reverse ? -1 : 1) * scroller.clientHeight * 0.85, behavior: 'smooth' })
+    scroller.scrollBy({ top: (reverse ? -1 : 1) * scroller.clientHeight * 0.85, behavior: scrollMotion() })
   }
 </script>
 

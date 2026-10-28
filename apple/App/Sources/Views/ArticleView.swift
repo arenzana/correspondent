@@ -430,7 +430,8 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
             (function (by) {
               var max = document.documentElement.scrollHeight - window.innerHeight;
               if (by > 0 && window.scrollY >= max - 4) return 'end';
-              window.scrollBy({ top: by * window.innerHeight * 0.85, behavior: 'smooth' });
+              var motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+              window.scrollBy({ top: by * window.innerHeight * 0.85, behavior: motion });
               return 'ok';
             })(\(by))
             """

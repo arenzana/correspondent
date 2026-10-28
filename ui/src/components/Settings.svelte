@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scrollMotion } from '../lib/motion'
   import { app, APP_ICONS, UI_SCALES } from '../lib/state.svelte'
   import { api, type AIProvider, type SpeechProvider } from '../lib/api'
   import { deviceSubscribed, isBrave, pushSupport, subscribeDevice, unsubscribeDevice } from '../lib/push'
@@ -237,7 +238,7 @@
 
   function show(id: string) {
     current = id
-    scroller?.querySelector(`#settings-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    scroller?.querySelector(`#settings-${id}`)?.scrollIntoView({ behavior: scrollMotion(), block: 'start' })
   }
 
   // The rail follows the section being read: the last one whose heading
