@@ -65,10 +65,15 @@ func (s *Service) Discover(ctx context.Context, userID int64, raw string) ([]Can
 // must be written, so the AI is never asked about a page twice.
 type GetAI func() (*pagefeed.Suggester, error)
 
+// ErrParserShared refuses a reader's rebuild of a parser that still reads
+// its page and that other readers follow: it would change their feeds too.
+var ErrParserShared = errors.New("other readers follow this page and its parser still finds articles; ask your admin to rebuild it")
+
 // DiscoverAI finds a parser for a page with no feed, writing one with the
 // reader's AI only when the server has none that still reads the page (or
-// rebuild is set). The AI's parser is saved for every reader.
-func (s *Service) DiscoverAI(ctx context.Context, userID int64, raw string, getAI GetAI, rebuild bool) (Candidate, error) {
+// rebuild is set). The AI's parser is saved for every reader. A rebuild
+// replaces a working parser others follow only when force is set (admins).
+func (s *Service) DiscoverAI(ctx context.Context, userID int64, raw string, getAI GetAI, rebuild, force bool) (Candidate, error) {
 	raw = resolveBuiltin(raw)
 	resp, err := s.get(ctx, raw)
 	if err != nil {
@@ -79,6 +84,10 @@ func (s *Service) DiscoverAI(ctx context.Context, userID int64, raw string, getA
 	// one that still reads the page.
 	if c, ok := s.existing(ctx, page); ok && (!rebuild || c.builtin) {
 		return c, nil
+	} else if ok && !force {
+		if err := s.othersKeep(ctx, userID, page.FinalURL); err != nil {
+			return Candidate{}, err
+		}
 	}
 	ai, err := getAI()
 	if err != nil {
@@ -123,11 +132,17 @@ func (s *Service) SeedBuiltins(ctx context.Context) error {
 
 // Rebuild writes a new parser for a page whose parser stopped reading it:
 // exactly if the page allows, else with the reader's AI. Every reader of
-// the page gets the new parser.
-func (s *Service) Rebuild(ctx context.Context, userID int64, raw string, getAI GetAI) (Candidate, error) {
+// the page gets the new parser, so a reader can't replace one that still
+// works for others; an admin can (force).
+func (s *Service) Rebuild(ctx context.Context, userID int64, raw string, getAI GetAI, force bool) (Candidate, error) {
 	resp, err := s.get(ctx, raw)
 	if err != nil {
 		return Candidate{}, err
+	}
+	if _, works := s.existing(ctx, resp); works && !force {
+		if err := s.othersKeep(ctx, userID, resp.FinalURL); err != nil {
+			return Candidate{}, err
+		}
 	}
 	if r, p, err := pagefeed.Detect(resp.Body, resp.FinalURL); err == nil {
 		if _, err := s.Store.SaveParser(ctx, resp.FinalURL, r.Encode(), r.Method, userID); err != nil {
@@ -135,7 +150,23 @@ func (s *Service) Rebuild(ctx context.Context, userID int64, raw string, getAI G
 		}
 		return pageCandidate(resp.FinalURL, r.Method, p, false), nil
 	}
-	return s.DiscoverAI(ctx, userID, resp.FinalURL, getAI, true)
+	return s.DiscoverAI(ctx, userID, resp.FinalURL, getAI, true, force)
+}
+
+// othersKeep refuses to replace a page's parser that other readers follow.
+func (s *Service) othersKeep(ctx context.Context, userID int64, pageURL string) error {
+	p, err := s.Store.ParserFor(ctx, pageURL)
+	if err != nil {
+		return nil // none yet: nothing to keep
+	}
+	others, err := s.Store.ParserUsedByOthers(ctx, p.ID, userID)
+	if err != nil {
+		return err
+	}
+	if others {
+		return ErrParserShared
+	}
+	return nil
 }
 
 // existing tries the parser the server already has for a page.

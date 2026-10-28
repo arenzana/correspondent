@@ -636,7 +636,8 @@
             <p class="hint">Your own AI, used only when you ask, and shared so nothing is done twice:</p>
             <ul class="hint uses">
               <li><strong>Summaries.</strong> A short summary of an article (<kbd>Shift</kbd>+<kbd>S</kbd> or the summary
-                button). Once made, everyone here with that article can read it.</li>
+                button). Once made, everyone here with that article can read it, unless your AI is at an address you
+                entered: then it stays yours.</li>
               <li><strong>Sites without feeds.</strong> When a site you add has no feed and its articles can’t be found on
                 the page, your AI writes a parser for it, once. Checking for new articles never uses AI. It also reads
                 sites added from Reeder.</li>
@@ -680,7 +681,8 @@
               headphones in an article, or <kbd>Shift</kbd>+<kbd>L</kbd> to listen, one after another, to the unread articles in a
               list that already have audio; each counts as read when it ends. Audio is only ever made for an
               article you choose. Audio is shared: once anyone here has had an article read aloud, everyone who
-              follows it can listen without using their key. It also plays in Reeder, as the article’s audio.
+              follows it can listen without using their key. Audio from a service at an address you entered stays
+              yours. It also plays in Reeder, as the article’s audio.
             </p>
             <form class="ai" onsubmit={saveSpeech}>
               <label>

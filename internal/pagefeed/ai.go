@@ -80,6 +80,9 @@ func (c Config) Normalize() (Config, error) {
 // selectors, which are validated by applying them before they are used.
 type Suggester struct {
 	model model
+	// Shared is set for the provider's own service (no address of the
+	// reader's choosing): only what it writes is shared with other readers.
+	Shared bool
 }
 
 // model is one provider: a conversation that answers with JSON text.
@@ -120,7 +123,7 @@ func NewSuggester(c Config, key string, rt http.RoundTripper, opts ...option.Req
 		if base == "" {
 			base = defaultOpenAIBase
 		}
-		return &Suggester{model: &openAI{http: hc, base: base, key: key, model: c.Model}}, nil
+		return &Suggester{model: &openAI{http: hc, base: base, key: key, model: c.Model}, Shared: c.BaseURL == ""}, nil
 	}
 	opts = append([]option.RequestOption{
 		option.WithAPIKey(key),
@@ -131,7 +134,7 @@ func NewSuggester(c Config, key string, rt http.RoundTripper, opts ...option.Req
 	if c.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(c.BaseURL+"/"))
 	}
-	return &Suggester{model: &anthropicModel{client: anthropic.NewClient(opts...), model: c.Model, official: c.BaseURL == ""}}, nil
+	return &Suggester{model: &anthropicModel{client: anthropic.NewClient(opts...), model: c.Model, official: c.BaseURL == ""}, Shared: c.BaseURL == ""}, nil
 }
 
 // Verify checks that the key is accepted, with a request that costs nothing.

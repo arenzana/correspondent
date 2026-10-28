@@ -82,7 +82,7 @@ func newAIEnv(t *testing.T) *aiEnv {
 	f := fetch.New(fetch.Options{AllowPrivate: true})
 	log := slog.New(slog.DiscardHandler)
 	ing := &ingest.Service{Store: st, Fetch: f, Log: log, Extract: &extract.Extractor{Fetch: f}}
-	a := &API{Store: st, Ingest: ing, Log: log, Limiter: ratelimit.New(10, time.Minute), Keyring: box, AITransport: ai.Client().Transport}
+	a := &API{Store: st, Ingest: ing, Log: log, Limiter: ratelimit.New(10, time.Minute), Keyring: box, AITransport: toFake{ai.URL, ai.Client().Transport}}
 	ing.AIFor = a.AIForApps
 	e.srv = httptest.NewServer(a.Handler())
 	t.Cleanup(e.srv.Close)
@@ -207,7 +207,8 @@ func TestAIPageFeedFlow(t *testing.T) {
 		t.Error("subscribed to a page with no parser")
 	}
 
-	// Rebuilding asks the AI again and every reader gets the new parser.
+	// Rebuilding asks the AI again and every reader gets the new parser; a
+	// reader can't replace one that still works for others, an admin can.
 	id := tree.Feeds[0].ID
 	e.answer.Store(`{"item":".grid > .tile","link":"a","title":"a","date":".when","summary":"","image":"","reason":"tiles"}`)
 	if r := e.call(t, alice, "POST", fmt.Sprintf("/api/v1/feeds/%d/rebuild", id), nil); r.StatusCode != http.StatusNotFound {
@@ -217,10 +218,14 @@ func TestAIPageFeedFlow(t *testing.T) {
 		t.Errorf("rebuild without AI: %d", r.StatusCode)
 	}
 	aliceTree := decodeInto[struct{ Feeds []store.Feed }](t, e.call(t, alice, "GET", "/api/v1/tree", nil))
-	if r := e.call(t, alice, "POST", fmt.Sprintf("/api/v1/feeds/%d/rebuild", aliceTree.Feeds[0].ID), nil); r.StatusCode != 200 {
-		t.Fatalf("rebuild: %d", r.StatusCode)
+	if r := e.call(t, alice, "POST", fmt.Sprintf("/api/v1/feeds/%d/rebuild", aliceTree.Feeds[0].ID), nil); r.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("a reader's rebuild of a working parser Bob follows: %d", r.StatusCode)
 	}
 	p, _ := e.store.ParserFor(context.Background(), e.site.URL)
+	if r := e.call(t, alice, "POST", fmt.Sprintf("/api/v1/admin/parsers/%d/rebuild", p.ID), nil); r.StatusCode != 200 { // alice is the admin
+		t.Fatalf("admin rebuild: %d", r.StatusCode)
+	}
+	p, _ = e.store.ParserFor(context.Background(), e.site.URL)
 	if !strings.Contains(p.Rules, ".grid > .tile") || e.aiHits.Load() != 2 {
 		t.Errorf("parser %q after %d AI requests", p.Rules, e.aiHits.Load())
 	}

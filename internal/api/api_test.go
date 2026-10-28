@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
@@ -131,4 +132,20 @@ func TestUnauthenticated(t *testing.T) {
 			t.Errorf("%s: %d, want 401", p, r.StatusCode)
 		}
 	}
+}
+
+// toFake sends requests for a provider's own service to a test server, so
+// a test takes the official path, whose summaries and audio are shared.
+type toFake struct {
+	fake string
+	rt   http.RoundTripper
+}
+
+func (t toFake) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Host == "api.openai.com" {
+		u, _ := url.Parse(t.fake)
+		r = r.Clone(r.Context())
+		r.URL.Scheme, r.URL.Host, r.Host = u.Scheme, u.Host, u.Host
+	}
+	return t.rt.RoundTrip(r)
 }

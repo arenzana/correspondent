@@ -162,13 +162,13 @@ func (a *API) makeAudio(w http.ResponseWriter, r *http.Request) {
 	existing := r.URL.Query().Get("make") == "0"
 	// Audio already linked plays as is, unless the text changed and the
 	// reader can make new audio of it.
-	if e.Audio != "" && (!ok || existing || strings.HasPrefix(e.Audio, hash+"-")) {
+	if e.Audio != "" && (!ok || existing || strings.HasPrefix(e.Audio, hash+"-") || strings.HasPrefix(e.Audio, privateAudio(uid)+hash+"-")) {
 		if _, err := os.Stat(filepath.Join(a.audioDir(), e.Audio)); err == nil {
 			reply(w, map[string]any{"url": audioPath(id)})
 			return
 		}
 	}
-	if file := a.findAudio(hash, voice); file != "" {
+	if file := a.findAudio(uid, hash, voice); file != "" {
 		if e.Audio != file {
 			if err := a.Store.SetAudio(r.Context(), uid, id, file); err != nil {
 				a.internal(w, err)
@@ -215,6 +215,9 @@ func (a *API) makeAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	file := hash + "-" + voice + ".mp3"
+	if !cfg.Shared() {
+		file = privateAudio(uid) + file
+	}
 	if err := a.saveAudio(file, mp3); err != nil {
 		a.internal(w, err)
 		return
@@ -227,12 +230,20 @@ func (a *API) makeAudio(w http.ResponseWriter, r *http.Request) {
 	reply(w, map[string]any{"url": audioPath(id)})
 }
 
-// findAudio returns the file of existing audio of a text, in the given
-// voice if there is one, else in any voice; "" if there's none.
-func (a *API) findAudio(hash, voice string) string {
+// privateAudio prefixes audio made through an address the reader chose:
+// it plays only for them. Shared files start with the text's hash, which
+// is hex, so the shared "any voice" match below never finds a private one.
+func privateAudio(uid int64) string { return fmt.Sprintf("u%d-", uid) }
+
+// findAudio returns the file of existing audio of a text: the reader's own
+// in the given voice, else shared in that voice, else shared in any voice;
+// "" if there's none.
+func (a *API) findAudio(uid int64, hash, voice string) string {
 	if voice != "" {
-		if _, err := os.Stat(filepath.Join(a.audioDir(), hash+"-"+voice+".mp3")); err == nil {
-			return hash + "-" + voice + ".mp3"
+		for _, f := range []string{privateAudio(uid) + hash + "-" + voice + ".mp3", hash + "-" + voice + ".mp3"} {
+			if _, err := os.Stat(filepath.Join(a.audioDir(), f)); err == nil {
+				return f
+			}
 		}
 	}
 	matches, _ := filepath.Glob(filepath.Join(a.audioDir(), hash+"-*.mp3"))
@@ -248,7 +259,7 @@ func (a *API) sharedAudio(ctx context.Context, uid int64, e *store.Entry) {
 	if e.Audio != "" || e.Content == "" {
 		return
 	}
-	if file := a.findAudio(speech.ScriptHash(speech.Script(e.Title, e.Author, e.Content)), ""); file != "" {
+	if file := a.findAudio(uid, speech.ScriptHash(speech.Script(e.Title, e.Author, e.Content)), ""); file != "" {
 		if a.Store.SetAudio(ctx, uid, e.ID, file) == nil {
 			e.Audio, e.HasAudio = file, true
 		}

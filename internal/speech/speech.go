@@ -90,6 +90,11 @@ func ScriptHash(script string) string {
 	return hex.EncodeToString(sum[:])[:20]
 }
 
+// Shared reports whether audio made with this config may be shared with
+// other readers: only from a provider's own service, not from an address
+// the reader chose, which could return anything.
+func (c Config) Shared() bool { return c.BaseURL == "" }
+
 // VoiceKey identifies the voice a config speaks with.
 func (c Config) VoiceKey() string {
 	h := sha256.New()

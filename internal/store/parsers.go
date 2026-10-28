@@ -59,6 +59,14 @@ func (s *Store) parser(ctx context.Context, where string, arg any) (*Parser, err
 	return &p, err
 }
 
+// ParserUsedByOthers reports whether readers other than userID follow a
+// page through this parser.
+func (s *Store) ParserUsedByOthers(ctx context.Context, parserID, userID int64) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM feeds WHERE parser_id = ? AND user_id <> ?`, parserID, userID).Scan(&n)
+	return n > 0, err
+}
+
 // SaveParser stores the parser for a page, replacing the old one (which no
 // longer read the page, or the caller wouldn't have written a new one).
 // Every feed of that page, for every reader, uses the new rules.

@@ -41,7 +41,7 @@ func TestReadAloud(t *testing.T) {
 	t.Cleanup(func() { st.Close() })
 	box, _ := secretbox.Load(filepath.Join(t.TempDir(), "keyring"))
 	a := &API{Store: st, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute), Keyring: box,
-		AITransport: tts.Client().Transport, DataDir: t.TempDir(), PublicURL: "https://rss.example"}
+		AITransport: toFake{tts.URL, tts.Client().Transport}, DataDir: t.TempDir(), PublicURL: "https://rss.example"}
 	srv := httptest.NewServer(a.Handler())
 	t.Cleanup(srv.Close)
 	e := &aiEnv{srv: srv, store: st}
@@ -61,7 +61,7 @@ func TestReadAloud(t *testing.T) {
 	if r := e.call(t, alice, "POST", "/api/v1/entries/"+aliceEntry+"/audio", nil); r.StatusCode != http.StatusConflict {
 		t.Errorf("without setup: %d", r.StatusCode)
 	}
-	setup := map[string]string{"provider": "openai", "baseUrl": tts.URL, "key": "sk-wrong-key-0123456789xx"}
+	setup := map[string]string{"provider": "openai", "key": "sk-wrong-key-0123456789xx"} // OpenAI's own service: shared
 	if r := e.call(t, alice, "PUT", "/api/v1/speech", setup); r.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("wrong key accepted: %d", r.StatusCode)
 	}
@@ -131,6 +131,31 @@ func TestReadAloud(t *testing.T) {
 		t.Errorf("disabled account's link: %d", r.StatusCode)
 	}
 	st.SetDisabled(ctx, uid, false)
+
+	// Dana's speech is at an address she chose: her audio of a new article
+	// stays hers, and Bob, with the same article, isn't offered it.
+	dana := e.login(t, "dana")
+	tides := func(user string) string {
+		uid, _ := st.UserIDByName(ctx, user)
+		fid, _ := st.AddFeed(ctx, uid, "https://harbour.example/feed", "Harbour", nil)
+		st.UpsertEntries(ctx, fid, []store.NewEntry{{GUID: "h", Title: "Tides", Content: "<p>Tides turn twice a day.</p>",
+			Enclosures: "[]", PublishedAt: time.Now()}}, time.Time{})
+		ids, _, _ := st.EntryIDs(ctx, store.Filter{UserID: uid, FeedID: fid})
+		return itoa(ids[0])
+	}
+	danaTides, bobTides := tides("dana"), tides("bob")
+	if r := e.call(t, dana, "PUT", "/api/v1/speech", map[string]string{"provider": "openai", "baseUrl": tts.URL, "key": "sk-speech-key-0123456789"}); r.StatusCode != 200 {
+		t.Fatalf("dana's setup: %d", r.StatusCode)
+	}
+	if r := e.call(t, dana, "POST", "/api/v1/entries/"+danaTides+"/audio", nil); r.StatusCode != 200 {
+		t.Fatalf("dana's audio: %d", r.StatusCode)
+	}
+	if r := e.call(t, dana, "POST", "/api/v1/entries/"+danaTides+"/audio?make=0", nil); r.StatusCode != 200 {
+		t.Errorf("dana doesn't find her own audio: %d", r.StatusCode)
+	}
+	if r := e.call(t, bob, "POST", "/api/v1/entries/"+bobTides+"/audio?make=0", nil); r.StatusCode != http.StatusNotFound {
+		t.Errorf("audio from a reader-chosen address was shared: %d", r.StatusCode)
+	}
 
 	// The sweep keeps audio entries still use.
 	if n, _ := a.SweepAudio(ctx); n != 0 {

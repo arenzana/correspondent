@@ -271,7 +271,7 @@ struct SettingsView: View {
         section("AI") {
             VStack(alignment: .leading, spacing: 12) {
                 setup("AI model", app.me?.ai, uses: "Summaries, and parsers for sites without feeds.")
-                setup("Read aloud", app.me?.speech, uses: "Articles in a natural voice, shared with everyone here once made.")
+                setup("Read aloud", app.me?.speech, uses: "Articles in a natural voice, shared with everyone here once made (unless made through an address you entered).")
                 webButton("Change on the web")
             }
         }

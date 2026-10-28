@@ -436,7 +436,7 @@ func (a *API) rebuildParser(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
 	defer cancel()
-	c, err := a.Ingest.Rebuild(ctx, uid, p.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) })
+	c, err := a.Ingest.Rebuild(ctx, uid, p.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) }, true) // admins may replace one others follow
 	if err != nil {
 		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
 		return

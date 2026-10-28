@@ -435,7 +435,7 @@ func (a *API) entry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sharedAudio(r.Context(), userID(r), e)
-	a.sharedSummary(r.Context(), e)
+	a.sharedSummary(r.Context(), userID(r), e)
 	a.proxyEntry(e)
 	var encl []store.Enclosure
 	json.Unmarshal([]byte(e.Enclosures), &encl)
@@ -534,7 +534,7 @@ func (a *API) discoverAI(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
 	defer cancel()
-	c, err := a.Ingest.DiscoverAI(ctx, uid, in.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) }, in.Rebuild)
+	c, err := a.Ingest.DiscoverAI(ctx, uid, in.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) }, in.Rebuild, false)
 	if err != nil {
 		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
 		return
@@ -562,7 +562,7 @@ func (a *API) rebuildFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Minute)
 	defer cancel()
-	_, err = a.Ingest.Rebuild(ctx, uid, f.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) })
+	_, err = a.Ingest.Rebuild(ctx, uid, f.URL, func() (*pagefeed.Suggester, error) { return a.AIForApps(ctx, uid) }, false)
 	if err != nil {
 		fail(w, http.StatusUnprocessableEntity, sentence(err.Error()))
 		return

@@ -43,11 +43,24 @@ func summaryHash(title, text string) string {
 	return hex.EncodeToString(sum[:])[:20]
 }
 
-// sharedSummary adds an article's summary, if anyone has had one made.
-func (a *API) sharedSummary(ctx context.Context, e *store.Entry) {
-	if s, ok, err := a.Store.Summary(ctx, summaryHash(e.Title, summaryText(e))); err == nil && ok {
+// sharedSummary adds an article's summary: the reader's own, or one
+// shared by someone who had it made.
+func (a *API) sharedSummary(ctx context.Context, uid int64, e *store.Entry) {
+	if s, ok, err := a.findSummary(ctx, uid, summaryHash(e.Title, summaryText(e))); err == nil && ok {
 		e.Summary = s
 	}
+}
+
+// Summaries written through the provider's own service are shared with
+// everyone who has the article; ones through an address the reader chose
+// stay theirs, since that server could write anything.
+func privateSummaryKey(uid int64, hash string) string { return fmt.Sprintf("u%d:%s", uid, hash) }
+
+func (a *API) findSummary(ctx context.Context, uid int64, hash string) (string, bool, error) {
+	if s, ok, err := a.Store.Summary(ctx, privateSummaryKey(uid, hash)); err != nil || ok {
+		return s, ok, err
+	}
+	return a.Store.Summary(ctx, hash)
 }
 
 // summarize returns an article's summary, made with the reader's AI if no
@@ -76,7 +89,7 @@ func (a *API) summarize(w http.ResponseWriter, r *http.Request) {
 	mu, _ := summarizing.LoadOrStore(hash, &sync.Mutex{})
 	mu.(*sync.Mutex).Lock()
 	defer mu.(*sync.Mutex).Unlock()
-	if s, ok, err := a.Store.Summary(r.Context(), hash); err != nil {
+	if s, ok, err := a.findSummary(r.Context(), uid, hash); err != nil {
 		a.internal(w, err)
 		return
 	} else if ok {
@@ -109,7 +122,11 @@ func (a *API) summarize(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, sentence(err.Error()))
 		return
 	}
-	if err := a.Store.SaveSummary(r.Context(), hash, s); err != nil {
+	key := hash
+	if !ai.Shared {
+		key = privateSummaryKey(uid, hash)
+	}
+	if err := a.Store.SaveSummary(r.Context(), key, s); err != nil {
 		a.internal(w, err)
 		return
 	}

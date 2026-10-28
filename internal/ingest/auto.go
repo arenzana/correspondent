@@ -25,14 +25,14 @@ func (s *Service) SubscribeAuto(ctx context.Context, userID int64, raw, title st
 	switch {
 	case errors.Is(err, ErrNoFeed):
 		var c Candidate
-		if c, err = s.DiscoverAI(ctx, userID, raw, getAI, false); err != nil {
+		if c, err = s.DiscoverAI(ctx, userID, raw, getAI, false, false); err != nil {
 			return nil, fmt.Errorf("%w, and %w", ErrNoFeed, err)
 		}
 		cands = []Candidate{c}
 	case err == nil && cands[0].Page && !cands[0].Shared && cands[0].Method == pagefeed.MethodLinks && s.AIFor != nil:
 		// A link pattern is the weakest exact reading; with no one to look
 		// at the result, prefer a parser from the reader's AI when set up.
-		if c, aerr := s.DiscoverAI(ctx, userID, raw, getAI, true); aerr == nil {
+		if c, aerr := s.DiscoverAI(ctx, userID, raw, getAI, true, false); aerr == nil {
 			cands = []Candidate{c}
 		}
 	}
