@@ -225,6 +225,7 @@ struct WireView: View {
                 headline("No articles match “\(app.query)”.")
                 Button("Clear search") { Task { await app.search("") } }.buttonStyle(QuietButton()).padding(.top, 6)
             } else if app.unreadFilter {
+                CaughtUp().padding(.leading, -6).padding(.bottom, 12)
                 headline("All caught up.")
                 note("New articles will appear here as your feeds update.")
                 Button("Show today’s articles") { Task { await app.go(.today) } }.buttonStyle(QuietButton()).padding(.top, 6)

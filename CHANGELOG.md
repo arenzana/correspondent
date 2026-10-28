@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.3] - 2026-10-28
+
+### Changed
+
+- "All caught up" has a small drawing: the paper read, a cup of coffee
+  still steaming (the steam stays still with reduced motion). On the web
+  and in the apps.
+
 ## [0.23.2] - 2026-10-28
 
 ### Fixed

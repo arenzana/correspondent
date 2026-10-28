@@ -5,6 +5,7 @@
   // relies on colour alone.
   import { BarTracker, NARROW } from '../lib/bars'
   import { app } from '../lib/state.svelte'
+  import CaughtUp from './CaughtUp.svelte'
   import { clock, dayKey, dayLabel } from '../lib/time'
   import { api, type Entry } from '../lib/api'
   import { swipe } from '../lib/swipe'
@@ -323,11 +324,11 @@
       </div>
     {:else if !app.loading && app.entries.length === 0}
       <div class="state">
-        <span class="spine-end" aria-hidden="true"></span>
         {#if app.query}
           <h2>No articles match “{app.query}”.</h2>
           <button class="btn" onclick={() => { app.query = ''; app.load() }}>Clear search</button>
         {:else if app.unreadFilter}
+          <CaughtUp />
           <h2>All caught up.</h2>
           <p>New articles will appear here as your feeds update.</p>
           <button class="btn" onclick={() => app.go({ kind: 'view', view: 'today' })}>Show today's articles</button>
@@ -848,26 +849,24 @@
     font-size: calc(12.5px * var(--ui-scale));
     background: var(--sheet);
   }
-  /* Where the list ends, the spine ends in a short terminal bar. */
-  .spine-end {
-    display: block;
-    width: 12px;
-    height: 1.5px;
-    background: var(--ring);
-  }
-
   .state {
     position: relative;
     padding: 56px 24px calc(24px + env(safe-area-inset-bottom)) calc(var(--spine-x) + 26px);
     background: var(--sheet);
     min-height: 100%;
   }
-  .state .spine-end {
+  /* The spine ends in a short bar beside the headline. */
+  .state h2::before {
+    content: '';
     position: absolute;
-    left: calc(var(--spine-x) - 5px);
-    top: 66px;
+    left: -31px;
+    top: 10px;
+    width: 12px;
+    height: 1.5px;
+    background: var(--ring);
   }
   .state h2 {
+    position: relative;
     margin: 0 0 6px;
     font-family: var(--font-read);
     font-size: calc(22px * var(--ui-scale));
