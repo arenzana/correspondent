@@ -7,6 +7,15 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.5] - 2026-10-28
+
+### Fixed
+
+- A service added, changed or removed on the web shows in the apps' Send
+  to menu at once, without restarting them: the server tells open readers
+  (a new `integrations` live event), and the apps also look again when
+  they come back to the front. Other open tabs follow too.
+
 ## [0.23.4] - 2026-10-28
 
 ### Fixed

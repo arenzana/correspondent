@@ -293,6 +293,52 @@ func TestStateEventsReachOpenReaders(t *testing.T) {
 	}
 }
 
+// TestIntegrationEventsReachOpenReaders: removing (or adding, or changing)
+// a service tells the user's open readers, so their Send to menus follow.
+func TestIntegrationEventsReachOpenReaders(t *testing.T) {
+	e := newEnv(t)
+	a := &API{Store: e.store, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute)}
+	srv := httptest.NewServer(a.Handler())
+	t.Cleanup(srv.Close)
+	e.srv = srv
+	c, _ := e.user(t, "alice")
+	uid, _ := e.store.UserIDByName(context.Background(), "alice")
+	i, err := e.store.CreateIntegration(context.Background(), uid, "webhook", "Hook", "{}", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/events", nil)
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	got := make(chan string, 1)
+	go func() {
+		r := bufio.NewReader(resp.Body)
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return
+			}
+			if name, ok := strings.CutPrefix(strings.TrimSpace(line), "event: "); ok {
+				got <- name
+				return
+			}
+		}
+	}()
+	expect(t, e.do(t, c, "DELETE", fmt.Sprintf("/api/v1/integrations/%d", i.ID), "", true), 204)
+	select {
+	case name := <-got:
+		if name != "integrations" {
+			t.Fatalf("got event %q", name)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no event")
+	}
+}
+
 func TestPushSubscriptionAPI(t *testing.T) {
 	e := newEnv(t)
 	a := &API{Store: e.store, Log: slog.New(slog.DiscardHandler), Limiter: ratelimit.New(10, time.Minute),

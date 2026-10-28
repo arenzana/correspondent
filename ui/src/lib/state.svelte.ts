@@ -385,6 +385,7 @@ class AppState {
       }
     })
     this.events.addEventListener('resync', () => this.resyncStates())
+    this.events.addEventListener('integrations', () => this.loadIntegrations())
   }
 
   // ---------------------------------------------------------------- offline

@@ -162,6 +162,7 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		a.internal(w, err)
 		return
 	}
+	a.NotifyIntegrations(uid)
 	out := map[string]any{"integration": viewOf(i)}
 	if kind.ID == integrations.Webhook {
 		out["signingKey"] = sec.SigningKey // shown this once
@@ -234,6 +235,7 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 		a.result(w, err)
 		return
 	}
+	a.NotifyIntegrations(uid)
 	i, _ = a.Store.Integration(r.Context(), uid, id)
 	out := map[string]any{"integration": viewOf(*i)}
 	if i.Kind == integrations.Webhook && in.NewKey {
@@ -247,7 +249,11 @@ func (a *API) deleteIntegration(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	a.result(w, a.Store.DeleteIntegration(r.Context(), userID(r), id))
+	err := a.Store.DeleteIntegration(r.Context(), userID(r), id)
+	if err == nil {
+		a.NotifyIntegrations(userID(r))
+	}
+	a.result(w, err)
 }
 
 // testIntegration checks saved credentials again, without saving anything.

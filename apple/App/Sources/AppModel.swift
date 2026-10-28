@@ -861,6 +861,9 @@ final class AppModel {
     func resumed() async {
         await flushOutbox()
         await catchUp()
+        // Services added on the web meanwhile (the live event covers the
+        // rest of the time).
+        await loadIntegrations()
     }
 
     /// Follows the server's live events; reconnects after a drop.
@@ -894,6 +897,8 @@ final class AppModel {
             await refreshTree()
         case "refresh", "resync":
             await catchUp()
+        case "integrations":
+            await loadIntegrations()
         default: break
         }
     }

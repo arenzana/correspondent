@@ -16,6 +16,7 @@ import (
 //	event: refresh   new articles arrived
 //	event: state     {"action":"read","ids":["…"]}; read, unread, star or unstar
 //	event: resync    this reader fell behind; reload counts and visible state
+//	event: integrations  the services articles can be sent to changed
 
 type event struct {
 	name string
@@ -31,6 +32,12 @@ func (a *API) NotifyState(userID int64, action string, ids []int64) {
 	}
 	data, _ := json.Marshal(map[string]any{"action": action, "ids": strs})
 	a.hub.publish(userID, event{name: "state", data: data})
+}
+
+// NotifyIntegrations tells a user's open readers that their services
+// changed, so the apps' Send to menus show a new one at once.
+func (a *API) NotifyIntegrations(userID int64) {
+	a.hub.publish(userID, event{name: "integrations", data: []byte("{}")})
 }
 
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
