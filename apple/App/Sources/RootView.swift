@@ -118,7 +118,11 @@ struct WideLayout: View {
         .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme) }
         .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
         .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
+        #if !os(macOS)
+        // The Mac's key monitor (watchKeys) takes every key there; a second
+        // path for the same keys didn't know when a field was being typed in.
         .onKeyPress { press in keys(press) }
+        #endif
         #if os(macOS)
         .onAppear { keyMonitor = watchKeys() }
         .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
@@ -141,6 +145,8 @@ struct WideLayout: View {
     /// The web's keyboard shortcuts (iPad with a keyboard; the Mac uses the monitor below).
     private func keys(_ press: KeyPress) -> KeyPress.Result {
         if press.key == .escape { return escape() ? .handled : .ignored }
+        // Settings has fields to type in: its letters are words, not commands.
+        if settings { return .ignored }
         return shortcut(press.characters) ? .handled : .ignored
     }
 
@@ -194,8 +200,10 @@ struct WideLayout: View {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard let window = event.window, window.isKeyWindow, window.sheetParent == nil, window.attachedSheet == nil,
                   event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            // Typing in a field keeps its letters, and anywhere in Settings.
+            // (Not every text input client: the article's web view is one.)
             if let text = window.firstResponder as? NSText, text.isEditable { return event }
-            if searching { return event }
+            if searching || settings { return event }
             // With the spotlight on, ↓ and ↑ move it, as on the web.
             if app.article != nil, app.prefs.spotlight != "off", event.keyCode == 125 || event.keyCode == 126 {
                 NotificationCenter.default.post(name: .spotlightStep, object: event.keyCode == 125 ? 1 : -1)
