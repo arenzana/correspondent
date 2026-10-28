@@ -53,6 +53,12 @@
    * tell: Chrome turns it on with the very key being handled.)
    */
   let clicked: Element | null = null
+
+  // Panes squeezed to nothing or slid off-screen stay out of Tab order and
+  // away from screen readers, the way the narrow layout's hidden ones are.
+  let width = $state(window.innerWidth)
+  const navHidden = $derived(width >= 700 && (width >= 1100 ? !app.prefs.sidebar || app.focusMode : !app.navOpen))
+  const listHidden = $derived(width >= 700 && app.focusMode)
   function control(t: EventTarget | null): boolean {
     const el = t as HTMLElement | null
     const pressable = !!el && (['BUTTON', 'A', 'AUDIO', 'VIDEO', 'SUMMARY'].includes(el.tagName) || el.getAttribute('role') === 'button')
@@ -127,7 +133,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} onpointerdowncapture={(e) => (clicked = (e.target as Element).closest('button, a, audio, video, summary, [role=button]'))} onpopstate={() => app.onPopState()} onhashchange={() => app.readInvite()} />
+<svelte:window bind:innerWidth={width} {onkeydown} onpointerdowncapture={(e) => (clicked = (e.target as Element).closest('button, a, audio, video, summary, [role=button]'))} onpopstate={() => app.onPopState()} onhashchange={() => app.readInvite()} />
 <svelte:document
   onvisibilitychange={() => {
     if (document.visibilityState === 'visible' && app.user) app.refreshTree()
@@ -154,7 +160,7 @@
     style:--list-w="{live.list ?? listWidth}px"
   >
     <a class="skip" href="#reader">Skip to article</a>
-    <div class="nav">
+    <div class="nav" inert={navHidden}>
       <Sidebar />
       <span class="handle nav-handle">
         <Resizer label="Resize feeds" value={live.nav ?? navWidth} min={200} max={420} fallback={NAV_DEFAULT}
@@ -172,7 +178,7 @@
     {:else if app.page === 'admin'}
       <div class="list manage-pane">{@render brand()}<Admin />{@render tools()}</div>
     {:else}
-    <div class="list">
+    <div class="list" inert={listHidden}>
       {@render brand()}
       <Wire />
       {@render tools()}
