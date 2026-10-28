@@ -127,6 +127,24 @@ function saveDeviceSizes(prefs: Prefs) {
   }
 }
 
+/** Settings changed here that the server doesn't have yet. */
+function pendingPrefs(): Partial<Prefs> {
+  try {
+    return JSON.parse(localStorage.getItem('correspondent:prefs-pending') ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+function savePendingPrefs(p: Partial<Prefs>) {
+  try {
+    if (Object.keys(p).length) localStorage.setItem('correspondent:prefs-pending', JSON.stringify(p))
+    else localStorage.removeItem('correspondent:prefs-pending')
+  } catch {
+    /* private mode: they're still sent while the tab is open */
+  }
+}
+
 function loadLocalPrefs(): Prefs {
   try {
     return { ...defaultPrefs, ...JSON.parse(localStorage.getItem('correspondent:prefs') ?? '{}') }
@@ -253,7 +271,9 @@ class AppState {
       this.commit = me.commit
       // This browser's own sizes win; the first time, it starts from the account's.
       const sizes = deviceSizes()
-      this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>), ...(sizes ?? {}) }
+      // Changes this browser hadn't sent yet go over the account's, and out.
+      this.prefsPatch = pendingPrefs()
+      this.prefs = { ...defaultPrefs, ...(me.prefs as Partial<Prefs>), ...this.prefsPatch, ...(sizes ?? {}) }
       if (!sizes) saveDeviceSizes(this.prefs)
       this.applyPrefs()
       this.readHash()
@@ -264,6 +284,7 @@ class AppState {
       this.syncedAt = (await offline.getMeta<number>('syncedAt').catch(() => undefined)) ?? null
       this.outboxCount = (await offline.pending().catch(() => [])).length
       void this.flushNow()
+      if (this.online) void this.sendPrefs()
       // Refresh the offline copy as soon as the first screen is up.
       void this.syncOffline()
     } catch {
@@ -313,6 +334,7 @@ class AppState {
       for (const k of await caches.keys()) if (k.startsWith('correspondent-') || k.startsWith('images-')) await caches.delete(k)
     try {
       localStorage.removeItem('correspondent:prefs')
+      localStorage.removeItem('correspondent:prefs-pending')
     } catch {
       /* private mode: nothing was kept */
     }
@@ -363,6 +385,7 @@ class AppState {
   private watchConnection() {
     window.addEventListener('online', () => {
       this.online = true
+      void this.sendPrefs()
       if (this.events?.readyState === EventSource.CLOSED) this.listen()
       void this.flushNow().then(() => this.syncOffline())
       if (this.loadError || !this.entries.length) void this.load()
@@ -565,15 +588,33 @@ class AppState {
     }
     if (Object.keys(shared).length === 0) return
     this.prefsPatch = { ...this.prefsPatch, ...shared }
+    savePendingPrefs(this.prefsPatch)
     clearTimeout(this.prefsTimer)
-    this.prefsTimer = setTimeout(() => {
-      const changes = this.prefsPatch
-      this.prefsPatch = {}
-      api.patchPrefs(changes).catch(() => {})
-    }, 400)
+    this.prefsTimer = setTimeout(() => void this.sendPrefs(), 400)
   }
   private prefsTimer: ReturnType<typeof setTimeout> | undefined
   private prefsPatch: Partial<Prefs> = {}
+
+  /**
+   * Sends the settings changed since the last send. Until the server has
+   * them they're also kept in this browser, so a change made offline, or
+   * just before the tab closed, is sent later rather than lost.
+   */
+  private async sendPrefs() {
+    clearTimeout(this.prefsTimer)
+    const changes = this.prefsPatch
+    if (!Object.keys(changes).length) return
+    this.prefsPatch = {}
+    try {
+      await api.patchPrefs(changes)
+      savePendingPrefs(this.prefsPatch)
+    } catch (e) {
+      // Kept for later unless the server refused them outright; newer
+      // changes made meanwhile win.
+      if (isNetworkError(e)) this.prefsPatch = { ...changes, ...this.prefsPatch }
+      savePendingPrefs(this.prefsPatch)
+    }
+  }
 
   /** When the Sun theme will next change, for the settings popover. */
   sunNext = $state<{ theme: 'day' | 'evening' | 'night'; at: Date } | null>(null)

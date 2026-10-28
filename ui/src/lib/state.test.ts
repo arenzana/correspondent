@@ -721,6 +721,22 @@ describe('preferences', () => {
   })
 })
 
+describe('settings saved while offline', () => {
+  it('keeps a change the server didn\'t get, and sends it later', async () => {
+    vi.useFakeTimers()
+    vi.mocked(api.patchPrefs).mockRejectedValueOnce(networkDown())
+    app.setPrefs({ theme: 'night' })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(JSON.parse(localStorage.getItem('correspondent:prefs-pending') ?? '{}')).toEqual({ theme: 'night' })
+
+    vi.mocked(api.patchPrefs).mockClear().mockResolvedValue(undefined)
+    await (app as unknown as { sendPrefs(): Promise<void> }).sendPrefs()
+    expect(api.patchPrefs).toHaveBeenCalledWith({ theme: 'night' })
+    expect(localStorage.getItem('correspondent:prefs-pending')).toBeNull()
+    vi.useRealTimers()
+  })
+})
+
 describe('a session that ends elsewhere', () => {
   it('signs out once on a 401, keeping only this browser\'s sizes', async () => {
     vi.mocked(api.logout).mockResolvedValue(undefined)
