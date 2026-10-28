@@ -61,16 +61,13 @@ sboms:
 
 # Keyless signature over the checksums (verifying it verifies every archive).
 # Sigstore's log sometimes answers slowly; cosign's own retry then meets its
-# first attempt ("409 an equivalent entry already exists"). Signing again
-# from the start uses a new key, so the retry here records a fresh entry.
+# first attempt; scripts/sign-blob.sh signs again from the start.
 signs:
-  - cmd: sh
+  - cmd: ./scripts/sign-blob.sh
     artifacts: checksum
     output: true
     signature: '${artifact}.sigstore.json'
     args:
-      - -c
-      - 'for try in 1 2 3; do cosign sign-blob --bundle="$0" "$1" --yes && exit 0; echo "signing failed (try $try); trying again" >&2; sleep $((try * 15)); done; exit 1'
       - ${signature}
       - ${artifact}
 

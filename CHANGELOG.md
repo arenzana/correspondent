@@ -7,6 +7,13 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.4] - 2026-10-28
+
+### Fixed
+
+- The command-line tool's release: signing its checksums retries again
+  without losing its arguments, which kept 0.23.3 from publishing `corr`.
+
 ## [0.23.3] - 2026-10-28
 
 ### Changed
