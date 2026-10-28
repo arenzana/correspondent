@@ -67,5 +67,15 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
           TAGS: ${{ steps.meta.outputs.tags }}
+        # Sigstore's log sometimes answers slowly; cosign's own retry then
+        # meets its first attempt ("409 an equivalent entry already
+        # exists"). Signing again from the start uses a new key, so a retry
+        # here always records a fresh entry.
         run: |
-          for tag in $TAGS; do cosign sign --yes "${tag}@${DIGEST}"; done
+          for tag in $TAGS; do
+            for try in 1 2 3; do
+              cosign sign --yes "${tag}@${DIGEST}" && continue 2
+              echo "signing failed (try $try); trying again"; sleep $((try * 15))
+            done
+            exit 1
+          done
