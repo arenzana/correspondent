@@ -267,7 +267,7 @@ func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := a.ClientIP.Of(r)
-	if !a.Limiter.Allow(ip) {
+	if !a.Limiter.Attempt(ip) {
 		fail(w, http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again.")
 		return
 	}
@@ -287,10 +287,10 @@ func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	cred, err := a.WebAuthn.FinishDiscoverableLogin(handler, x.data, r)
 	if err != nil || who == nil {
-		a.Limiter.Fail(ip)
 		fail(w, http.StatusUnauthorized, "That passkey isn't one this server knows.")
 		return
 	}
+	a.Limiter.Forgive(ip)
 	raw, _ := json.Marshal(cred)
 	if err := a.Store.UsePasskey(r.Context(), who.id, cred.ID, raw); err != nil && !errors.Is(err, store.ErrNotFound) {
 		a.internal(w, err)

@@ -111,7 +111,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) clientLogin(w http.ResponseWriter, r *http.Request) {
 	ip := s.ClientIP.Of(r)
-	if s.Limiter != nil && !s.Limiter.Allow(ip) {
+	if s.Limiter != nil && !s.Limiter.Attempt(ip) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		fmt.Fprint(w, "Error=TooManyAttempts\n")
@@ -120,13 +120,13 @@ func (s *Server) clientLogin(w http.ResponseWriter, r *http.Request) {
 	user, pass := r.Form.Get("Email"), r.Form.Get("Passwd")
 	u, err := s.Store.CheckPassword(r.Context(), user, pass, true)
 	if err != nil {
-		if s.Limiter != nil {
-			s.Limiter.Fail(ip)
-		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, "Error=BadAuthentication\n")
 		return
+	}
+	if s.Limiter != nil {
+		s.Limiter.Forgive(ip)
 	}
 	// While legacy auth is on, answer exactly as FreshRSS did, so a client
 	// that signs in again gets the token it already has.

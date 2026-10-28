@@ -118,15 +118,15 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := userID(r)
 	key := "password:" + strconv.FormatInt(uid, 10)
-	if !a.Limiter.Allow(key) {
+	if !a.Limiter.Attempt(key) {
 		fail(w, http.StatusTooManyRequests, "Too many attempts. Wait a minute and try again.")
 		return
 	}
 	if !a.Store.CheckUserPassword(r.Context(), uid, in.Current) {
-		a.Limiter.Fail(key)
 		fail(w, http.StatusBadRequest, "Your current password isn't right.")
 		return
 	}
+	a.Limiter.Forgive(key)
 	if len(in.New) < minPass {
 		fail(w, http.StatusBadRequest, "Use at least 10 characters.")
 		return
@@ -155,7 +155,7 @@ func (a *API) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := a.ClientIP.Of(r)
-	if !a.Limiter.Allow(ip) {
+	if !a.Limiter.Attempt(ip) {
 		fail(w, http.StatusTooManyRequests, "Too many attempts. Wait a minute and try again.")
 		return
 	}
@@ -168,9 +168,11 @@ func (a *API) acceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid, err := a.Store.AcceptInvite(r.Context(), r.PathValue("token"), strings.TrimSpace(in.Username), in.Password)
+	if !errors.Is(err, store.ErrNotFound) {
+		a.Limiter.Forgive(ip) // only a wrong link counts against the address
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		a.Limiter.Fail(ip)
 		fail(w, http.StatusNotFound, "This link has expired or was already used. Ask for a new one.")
 		return
 	case errors.Is(err, store.ErrUsernameTaken):
@@ -505,7 +507,7 @@ func (a *API) revokeToken(w http.ResponseWriter, r *http.Request) {
 // login), throttled like signing in. Disabled accounts get none.
 func (a *API) tokenLogin(w http.ResponseWriter, r *http.Request) {
 	ip := a.ClientIP.Of(r)
-	if !a.Limiter.Allow(ip) {
+	if !a.Limiter.Attempt(ip) {
 		fail(w, http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again.")
 		return
 	}
@@ -519,10 +521,10 @@ func (a *API) tokenLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		a.Limiter.Fail(ip)
 		fail(w, http.StatusUnauthorized, "That username and password don't match.")
 		return
 	}
+	a.Limiter.Forgive(ip)
 	if in.Scope == "" {
 		in.Scope = store.ScopeWrite
 	}

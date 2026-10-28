@@ -34,6 +34,34 @@ func (l *Limiter) Allow(key string) bool {
 	return len(l.recent(key, now)) < l.Max
 }
 
+// Attempt reports whether key may try to sign in, and counts the try at
+// once, before the slow password check: checking with Allow and counting
+// with Fail afterwards lets a burst of parallel guesses all through.
+// Forgive takes the count back when the sign-in succeeds.
+func (l *Limiter) Attempt(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	l.sweep(now)
+	recent := l.recent(key, now)
+	if len(recent) >= l.Max {
+		return false
+	}
+	l.failures[key] = append(recent, now)
+	return true
+}
+
+// Forgive takes back the latest attempt counted for key.
+func (l *Limiter) Forgive(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n := len(l.failures[key]); n > 1 {
+		l.failures[key] = l.failures[key][:n-1]
+	} else {
+		delete(l.failures, key)
+	}
+}
+
 // Fail records a failed attempt.
 func (l *Limiter) Fail(key string) {
 	l.mu.Lock()

@@ -228,7 +228,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := a.ClientIP.Of(r)
-	if !a.Limiter.Allow(ip) {
+	if !a.Limiter.Attempt(ip) {
 		fail(w, http.StatusTooManyRequests, "Too many sign-in attempts. Wait a minute and try again.")
 		return
 	}
@@ -242,10 +242,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		a.Limiter.Fail(ip)
 		fail(w, http.StatusUnauthorized, "That username and password don't match.")
 		return
 	}
+	a.Limiter.Forgive(ip)
 	if !a.startSession(w, r, u.ID) {
 		return
 	}

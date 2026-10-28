@@ -3,6 +3,8 @@ package ratelimit
 import (
 	"net/http/httptest"
 	"net/netip"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -42,5 +44,36 @@ func TestClientIP(t *testing.T) {
 		if got := c.Of(r); got != tc.want {
 			t.Errorf("remote %s xff %q: got %s, want %s", tc.remote, tc.xff, got, tc.want)
 		}
+	}
+}
+
+// A burst of parallel sign-ins gets only Max tries between them, not one
+// each: the try is counted when it's let in, not after the password check.
+func TestAttemptCountsBeforeTheCheck(t *testing.T) {
+	l := New(10, time.Minute)
+	var admitted atomic.Int32
+	var wg sync.WaitGroup
+	for range 500 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if l.Attempt("1.2.3.4") {
+				admitted.Add(1)
+				time.Sleep(10 * time.Millisecond) // the password check
+			}
+		}()
+	}
+	wg.Wait()
+	if n := admitted.Load(); n != 10 {
+		t.Fatalf("admitted %d of a parallel burst, want 10", n)
+	}
+
+	// A successful sign-in takes its try back.
+	l2 := New(2, time.Minute)
+	for range 5 {
+		if !l2.Attempt("k") {
+			t.Fatal("successful sign-ins used up the allowance")
+		}
+		l2.Forgive("k")
 	}
 }
