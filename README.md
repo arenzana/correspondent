@@ -20,7 +20,9 @@ clients are concerned.
   kept on the device, and changes made offline sync when you reconnect.
 - **Full articles.** For feeds that publish only titles or summaries, fetch
   the article from its page, per article or for every new one in a feed;
-  new feeds that turn out to be summaries switch on by themselves.
+  new feeds that turn out to be summaries switch on by themselves. Link
+  blogs' posts keep their commentary rather than the article they link to,
+  and a feed's own text stays whenever the page has nothing more to add.
 - **Sites without feeds.** Add a page that lists articles (a lab's research
   page, a company blog) and Correspondent reads it like a feed. It finds the
   articles exactly where it can (microformats, structured data, link

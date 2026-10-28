@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -219,6 +220,35 @@ func LooksPartial(html string) bool {
 		return true
 	}
 	return len(text) < partialMaxTeaser && ellipsisEnd.MatchString(string(text))
+}
+
+// Covers reports how much of text a appears in text b: the share of a's
+// four-word runs found in b, near 1 when b contains a and near 0 when b is
+// a different text. A text too short to judge counts as covered.
+func Covers(a, b string) float64 {
+	as := shingles(a)
+	if len(as) < 8 {
+		return 1
+	}
+	bs := shingles(b)
+	n := 0
+	for s := range as {
+		if bs[s] {
+			n++
+		}
+	}
+	return float64(n) / float64(len(as))
+}
+
+func shingles(text string) map[string]bool {
+	words := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) // "don't" and "don’t" alike
+	})
+	out := map[string]bool{}
+	for i := 0; i+4 <= len(words); i++ {
+		out[strings.Join(words[i:i+4], " ")] = true
+	}
+	return out
 }
 
 // SearchText is an article's words as plain text, for search and for

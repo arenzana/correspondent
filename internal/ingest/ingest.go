@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -249,6 +250,38 @@ func (s *Service) Subscribe(ctx context.Context, userID int64, url, title string
 	return id, nil
 }
 
+// minCommentary is the least text, links aside, that makes a link post's
+// feed text commentary worth keeping. Aggregators (Hacker News, Lobsters)
+// also point items at other sites, with no more than the item's links and
+// counts, and their readers want the article itself.
+const minCommentary = 100
+
+// linkPost reports whether an item is a link blog's post about another
+// site's article (permalink is its own page; see feed.permalink) with
+// commentary of its own: fetching its address would replace the commentary
+// with the article it's about.
+func linkPost(permalink, feedHTML string) bool {
+	return permalink != "" && len([]rune(strings.TrimSpace(urlPattern.ReplaceAllString(content.PlainText(feedHTML), "")))) >= minCommentary
+}
+
+// keepFeedText reports whether a feed's own text should stay rather than
+// the article extracted from its page. Extraction can pick the wrong part
+// of a page (Ars Technica's pages extract as the article's second half),
+// so a summary long enough to be the article's opening must appear in what
+// was extracted; a shorter one (a standfirst, an aggregator's links) need
+// not. When the feed carries the whole article, extraction can only lose
+// its structure (Noahpinion's section headings) or add the page's extras
+// (MacStories' membership offers), so it must contain the feed's text and
+// add substantially to it.
+func keepFeedText(feedHTML string, r *extract.Result) bool {
+	text := content.PlainText(feedHTML)
+	covers := content.Covers(text, r.Text)
+	if content.LooksPartial(feedHTML) {
+		return covers < 0.3 && len([]rune(text)) >= 400
+	}
+	return covers < 0.8 || len([]rune(r.Text)) < len([]rune(text))*3/2
+}
+
 var urlPattern = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"']+`)
 
 // redact replaces any URL in a log message with a placeholder.
@@ -280,7 +313,7 @@ func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []s
 	n := 0
 	for i := range items {
 		it := &items[i]
-		if known[it.GUID] || it.URL == "" || n >= fullPerPoll {
+		if known[it.GUID] || it.URL == "" || n >= fullPerPoll || linkPost(it.Permalink, it.Content) {
 			continue
 		}
 		n++
@@ -293,6 +326,9 @@ func (s *Service) fetchFullArticles(ctx context.Context, f store.Feed, items []s
 			r, err := s.Extract.Article(actx, it.URL)
 			if err != nil {
 				it.FullError = err.Error()
+				return
+			}
+			if keepFeedText(it.Content, r) {
 				return
 			}
 			it.FullText, it.FeedContent, it.Content = true, it.Content, r.HTML
@@ -324,11 +360,14 @@ func (s *Service) Backfill(ctx context.Context, f store.Feed) {
 	sem := make(chan struct{}, fullConcurrency)
 	var wg sync.WaitGroup
 	for _, e := range entries {
+		if linkPost(e.Permalink, e.Content) {
+			continue
+		}
 		sem <- struct{}{}
 		wg.Add(1)
 		go func() {
 			defer func() { <-sem; wg.Done() }()
-			if _, err := s.FullArticle(ctx, f.UserID, e); err != nil {
+			if _, err := s.fullArticle(ctx, f.UserID, e, true); err != nil {
 				s.Log.Info("full text", "entry", e.ID, "error", redact(err.Error()))
 			}
 		}()
@@ -340,8 +379,20 @@ func (s *Service) Backfill(ctx context.Context, f store.Feed) {
 }
 
 // FullArticle fetches one entry's full article and stores it, or records
-// why it couldn't.
+// why it couldn't. A reader asked for it, so it replaces the feed's text
+// whatever that is.
 func (s *Service) FullArticle(ctx context.Context, userID int64, e store.Entry) (*extract.Result, error) {
+	return s.fullArticle(ctx, userID, e, false)
+}
+
+// errFeedText is a fetched article not used because the feed's own text is
+// the better one (see keepFeedText).
+var errFeedText = errors.New("kept the feed's text, which the page's article doesn't improve on")
+
+// fullArticle fetches an entry's full article and stores it; auto (a feed's
+// switch rather than a reader's request) keeps the feed's text when it's
+// already the whole article. e.Content must be the feed's text when auto.
+func (s *Service) fullArticle(ctx context.Context, userID int64, e store.Entry, auto bool) (*extract.Result, error) {
 	if s.Extract == nil {
 		return nil, errors.New("full articles are not available")
 	}
@@ -351,6 +402,9 @@ func (s *Service) FullArticle(ctx context.Context, userID int64, e store.Entry) 
 	if err != nil {
 		s.Store.SetFullError(context.WithoutCancel(ctx), userID, e.ID, err.Error())
 		return nil, err
+	}
+	if auto && keepFeedText(e.Content, r) {
+		return nil, errFeedText
 	}
 	return r, s.Store.SetFullText(ctx, userID, e.ID, r.HTML, content.Excerpt(r.Text, 320), r.ImageURL)
 }

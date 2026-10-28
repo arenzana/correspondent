@@ -150,3 +150,16 @@ func TestLooksPartial(t *testing.T) {
 		}
 	}
 }
+
+func TestCovers(t *testing.T) {
+	a := "The salinity of the Southern Ocean rose sharply after the sea ice declined in 2016, researchers said."
+	if c := Covers(a, "Intro. "+strings.ReplaceAll(a, "'", "’")+" More text follows here."); c != 1 {
+		t.Errorf("contained text covers %v", c)
+	}
+	if c := Covers(a, "Those impacts could include storm frequency and ocean heat loss identified by a study."); c > 0.1 {
+		t.Errorf("other text covers %v", c)
+	}
+	if c := Covers("Too short.", "anything"); c != 1 {
+		t.Errorf("short text covers %v", c)
+	}
+}

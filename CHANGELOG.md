@@ -7,6 +7,22 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-28
+
+### Fixed
+
+- Link blogs (Daring Fireball, Lex on Tech): a post about another site's
+  article no longer has its commentary replaced by that article when full
+  articles are on. Such posts are recognised by their own page in the
+  feed, and the ones already stored get their commentary back on the next
+  refresh. Aggregators with no commentary (Hacker News) still get the
+  linked article.
+- Full articles never replace a feed's text with the wrong part of a page
+  (Ars Technica's pages extract as an article's second half), and a feed
+  that already carries the whole article keeps it unless the page adds
+  substantially more, so its own headings and layout stay. "Load the full
+  article" still fetches it on request.
+
 ## [0.22.0] - 2026-10-28
 
 ### Added

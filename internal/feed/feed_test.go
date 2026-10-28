@@ -106,3 +106,41 @@ func TestSponsoredItems(t *testing.T) {
 		t.Errorf("sponsored = %v, want [true true false]", got)
 	}
 }
+
+func TestLinkPostPermalinks(t *testing.T) {
+	atom := `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Links</title>
+<link rel="alternate" type="text/html" href="https://www.links.example/"/>
+<entry><title>About Apple's news</title><id>tag:links.example,2026:/linked//1</id>
+<link rel="alternate" type="text/html" href="https://www.apple.com/newsroom/x"/>
+<link rel="shorturl" type="text/html" href="http://lnk.example/a"/>
+<link rel="related" type="text/html" href="https://links.example/linked/2026/10/27/x"/>
+<content type="html">&lt;p&gt;Commentary.&lt;/p&gt;</content></entry>
+<entry><title>An article</title><id>tag:links.example,2026:/2</id>
+<link rel="alternate" type="text/html" href="https://links.example/2026/10/article"/>
+<content type="html">&lt;p&gt;Words.&lt;/p&gt;</content></entry>
+</feed>`
+	p, err := Parse([]byte(atom), "https://links.example/feeds/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Items[0].Permalink; got != "https://links.example/linked/2026/10/27/x" {
+		t.Errorf("rel=related permalink %q", got)
+	}
+	if got := p.Items[1].Permalink; got != "" {
+		t.Errorf("own article has permalink %q", got)
+	}
+
+	rss := `<rss version="2.0"><channel><title>Lex</title><link>https://lex.example/</link>
+<item><title>Linked</title><link>https://news.example/story?code=1</link><guid>https://lex.example/linked</guid><description>Hm.</description></item>
+<item><title>Opaque</title><link>https://news.example/other</link><guid isPermaLink="false">urn:7</guid><description>Hm.</description></item>
+</channel></rss>`
+	if p, err = Parse([]byte(rss), "https://lex.example/feed"); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Items[0].Permalink; got != "https://lex.example/linked" {
+		t.Errorf("GUID permalink %q", got)
+	}
+	if got := p.Items[1].Permalink; got != "" {
+		t.Errorf("no own page, permalink %q", got)
+	}
+}

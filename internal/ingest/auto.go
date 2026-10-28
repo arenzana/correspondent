@@ -68,7 +68,7 @@ func (s *Service) autoFullText(ctx context.Context, f store.Feed) {
 	}
 	linked, partial := 0, 0
 	for _, e := range entries {
-		if e.URL == "" {
+		if e.URL == "" || linkPost(e.Permalink, e.Content) {
 			continue
 		}
 		linked++

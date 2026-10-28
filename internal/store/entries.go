@@ -23,6 +23,7 @@ type Entry struct {
 	FeedID      int64  `json:"feedId"`
 	GUID        string `json:"-"`
 	URL         string `json:"url"`
+	Permalink   string `json:"permalink,omitempty"` // a link post's own page; URL is the article it's about
 	Title       string `json:"title"`
 	Author      string `json:"author"`
 	Content     string `json:"content,omitempty"`
@@ -49,6 +50,7 @@ type Entry struct {
 type NewEntry struct {
 	GUID        string
 	URL         string
+	Permalink   string // a link post's own page, when URL is another site's article
 	Title       string
 	Author      string
 	Content     string
@@ -114,6 +116,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			if _, err := tx.ExecContext(ctx, `UPDATE entries SET last_seen_at = ? WHERE id = ?`, now.Unix(), id); err != nil {
 				return 0, 0, err
 			}
+			if it.Permalink != "" {
+				if err := notePermalink(ctx, tx, id, it.Permalink); err != nil {
+					return 0, 0, err
+				}
+			}
 		}
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -133,11 +140,11 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO entries (id, feed_id, guid, url, title, author, content, excerpt, image_url,
 				                     enclosures, content_hash, published_at, updated_at, read_at, last_seen_at,
-				                     feed_content, full_error, sponsored, search_text)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				                     feed_content, full_error, sponsored, search_text, permalink)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				s.nextID(now), feedID, it.GUID, it.URL, it.Title, it.Author, it.Content, it.Excerpt,
 				it.ImageURL, it.Enclosures, it.ContentHash, pub.Unix(), now.Unix(), readAt, now.Unix(),
-				feedContent, it.FullError, it.Sponsored, searchText(it.Content))
+				feedContent, it.FullError, it.Sponsored, searchText(it.Content), it.Permalink)
 			if err != nil {
 				return 0, 0, fmt.Errorf("insert %q: %w", it.GUID, err)
 			}
@@ -170,6 +177,27 @@ func (s *Store) UpsertEntries(ctx context.Context, feedID int64, items []NewEntr
 		}
 	}
 	return inserted, updated, tx.Commit()
+}
+
+// notePermalink records a link post's own page the first time it's seen.
+// A link post stored before link posts were recognised may show the
+// article it links to, fetched as its full article; its commentary, kept
+// as the feed's text, goes back in its place.
+func notePermalink(ctx context.Context, tx *sql.Tx, id int64, permalink string) error {
+	var (
+		known    string
+		feedHTML sql.NullString
+	)
+	if err := tx.QueryRowContext(ctx, `SELECT permalink, feed_content FROM entries WHERE id = ?`, id).Scan(&known, &feedHTML); err != nil || known != "" {
+		return err
+	}
+	if !feedHTML.Valid {
+		_, err := tx.ExecContext(ctx, `UPDATE entries SET permalink = ? WHERE id = ?`, permalink, id)
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE entries SET permalink = ?, content = feed_content, search_text = ?, feed_content = NULL
+		WHERE id = ?`, permalink, searchText(feedHTML.String), id)
+	return err
 }
 
 type State string
@@ -292,11 +320,11 @@ func ftsQuery(q string) string {
 
 const entryColumns = `e.id, e.feed_id, e.guid, e.url, e.title, e.author, e.excerpt, e.image_url, e.enclosures,
 	e.published_at, e.updated_at, COALESCE(e.read_at, 0), COALESCE(e.starred_at, 0),
-	e.feed_content IS NOT NULL, e.full_error, COALESCE(e.audio, ''), e.sponsored`
+	e.feed_content IS NOT NULL, e.full_error, COALESCE(e.audio, ''), e.sponsored, e.permalink`
 
 func scanEntry(sc interface{ Scan(...any) error }, e *Entry, extra ...any) error {
 	dest := []any{&e.ID, &e.FeedID, &e.GUID, &e.URL, &e.Title, &e.Author, &e.Excerpt, &e.ImageURL,
-		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError, &e.Audio, &e.Sponsored}
+		&e.Enclosures, &e.PublishedAt, &e.UpdatedAt, &e.ReadAt, &e.StarredAt, &e.FullText, &e.FullError, &e.Audio, &e.Sponsored, &e.Permalink}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return err
 	}
@@ -773,7 +801,7 @@ func (s *Store) RevertFullText(ctx context.Context, userID, entryID int64) error
 // show the feed's own content, for fetching full articles after the
 // feed's switch is turned on.
 func (s *Store) WithoutFullText(ctx context.Context, feedID int64, limit int) ([]Entry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+entryColumns+` FROM entries e
+	rows, err := s.db.QueryContext(ctx, `SELECT `+entryColumns+`, e.content FROM entries e
 		WHERE e.feed_id = ? AND e.feed_content IS NULL AND e.url <> ''
 		ORDER BY e.read_at IS NOT NULL, e.id DESC LIMIT ?`, feedID, limit)
 	if err != nil {
@@ -783,7 +811,7 @@ func (s *Store) WithoutFullText(ctx context.Context, feedID int64, limit int) ([
 	var out []Entry
 	for rows.Next() {
 		var e Entry
-		if err := scanEntry(rows, &e); err != nil {
+		if err := scanEntry(rows, &e, &e.Content); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

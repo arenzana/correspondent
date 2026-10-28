@@ -376,3 +376,25 @@ func TestSkipSponsored(t *testing.T) {
 		t.Errorf("all = %d, want 4: skipped posts stay in All", len(all))
 	}
 }
+
+// A link post stored showing the article it links to, before link posts
+// were recognised, gets its commentary back when next seen with its
+// permalink.
+func TestPermalinkRestoresCommentary(t *testing.T) {
+	st := open(t)
+	ctx := context.Background()
+	uid, feedID, _ := fixture(t, st, "links", 0)
+	item := NewEntry{GUID: "g", URL: "https://news.example/a", Title: "Link", Content: "<p>The linked article.</p>",
+		FullText: true, FeedContent: "<p>My commentary.</p>", Enclosures: "[]", ContentHash: "h", PublishedAt: time.Now()}
+	if _, _, err := st.UpsertEntries(ctx, feedID, []NewEntry{item}, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	item.Permalink, item.FullText = "https://links.example/link", false
+	if _, _, err := st.UpsertEntries(ctx, feedID, []NewEntry{item}, time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	list, _, _ := st.Entries(ctx, Filter{UserID: uid}, true)
+	if len(list) != 1 || list[0].Content != "<p>My commentary.</p>" || list[0].FullText || list[0].Permalink != item.Permalink {
+		t.Fatalf("got %+v", list)
+	}
+}

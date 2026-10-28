@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	gfatom "github.com/mmcdole/gofeed/atom"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
@@ -38,7 +39,9 @@ func Parse(body []byte, feedURL string) (*Parsed, error) {
 	if bytes.Contains(bytes.ToUpper(firstBytes(body, 2048)), []byte("<!DOCTYPE HTML")) {
 		return nil, ErrNotFeed
 	}
-	f, err := gofeed.NewParser().Parse(bytes.NewReader(body))
+	parser := gofeed.NewParser()
+	parser.AtomTranslator = relatedLinks{}
+	f, err := parser.Parse(bytes.NewReader(body))
 	if err != nil {
 		if errors.Is(err, gofeed.ErrFeedTypeNotDetected) {
 			return nil, ErrNotFeed
@@ -95,10 +98,11 @@ func normalize(it *gofeed.Item, base string) store.NewEntry {
 		}
 	}
 	e := store.NewEntry{
-		URL:     link,
-		Title:   content.PlainText(it.Title),
-		Content: body.HTML,
-		Excerpt: content.Excerpt(excerpt, 320),
+		URL:       link,
+		Permalink: permalink(it, link, base),
+		Title:     content.PlainText(it.Title),
+		Content:   body.HTML,
+		Excerpt:   content.Excerpt(excerpt, 320),
 	}
 	if e.Title == "" {
 		e.Title = content.Excerpt(body.Text, 90)
@@ -151,6 +155,53 @@ func normalize(it *gofeed.Item, base string) store.NewEntry {
 	}
 	e.ContentHash = hash(e.Title, e.URL, e.Content, e.Author, e.Enclosures)
 	return e
+}
+
+// permalink returns an item's own page on the feed's site when its link
+// is another site's article, as on link blogs: Daring Fireball gives its
+// page as an Atom rel="related" link, Lex on Tech as the item's GUID. It is
+// "" for an ordinary item.
+func permalink(it *gofeed.Item, link, base string) string {
+	site := hostname(base)
+	if site == "" || link == "" || hostname(link) == site {
+		return ""
+	}
+	for _, c := range append([]string{it.GUID}, it.Links...) {
+		c = absolute(base, strings.TrimSpace(c))
+		if (strings.HasPrefix(c, "https://") || strings.HasPrefix(c, "http://")) && c != link && hostname(c) == site {
+			return c
+		}
+	}
+	return ""
+}
+
+// relatedLinks translates Atom as gofeed does, adding entries' rel="related"
+// links to their Links, which gofeed leaves out: a link blog's own page for
+// a post about another site's article (see permalink).
+type relatedLinks struct{ gofeed.DefaultAtomTranslator }
+
+func (t relatedLinks) Translate(feed any) (*gofeed.Feed, error) {
+	f, err := t.DefaultAtomTranslator.Translate(feed)
+	if err != nil {
+		return nil, err
+	}
+	for i, entry := range feed.(*gfatom.Feed).Entries {
+		for _, l := range entry.Links {
+			if l.Rel == "related" && i < len(f.Items) {
+				f.Items[i].Links = append(f.Items[i].Links, l.Href)
+			}
+		}
+	}
+	return f, nil
+}
+
+// hostname is an address's host, without "www.".
+func hostname(s string) string {
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 }
 
 // Discover returns feed URLs advertised by an HTML page via <link rel=alternate>.
