@@ -148,6 +148,12 @@ func (s *Store) UserByID(ctx context.Context, id int64) (*User, error) {
 	return &u, err
 }
 
+// Active reports whether the account exists and isn't disabled.
+func (s *Store) Active(ctx context.Context, id int64) bool {
+	var one int
+	return s.db.QueryRowContext(ctx, `SELECT 1 FROM users WHERE id = ? AND disabled_at IS NULL`, id).Scan(&one) == nil
+}
+
 func (s *Store) UserIDByName(ctx context.Context, username string) (int64, error) {
 	var id int64
 	err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE username = ?`, username).Scan(&id)

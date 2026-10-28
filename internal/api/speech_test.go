@@ -121,6 +121,16 @@ func TestReadAloud(t *testing.T) {
 	if r, _ := http.Get(srv.URL + path[:len(path)-8] + "AAAA.mp3"); r.StatusCode != http.StatusNotFound {
 		t.Errorf("forged link: %d", r.StatusCode)
 	}
+	// A disabled account's links stop working, and work again when re-enabled.
+	other, _ := st.CreateUser(ctx, "carol", "password-carol-1")
+	st.SetRole(ctx, other, store.RoleAdmin) // alice is the first admin; one must stay
+	if err := st.SetDisabled(ctx, uid, true); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := http.Get(srv.URL + path); r.StatusCode != http.StatusNotFound {
+		t.Errorf("disabled account's link: %d", r.StatusCode)
+	}
+	st.SetDisabled(ctx, uid, false)
 
 	// The sweep keeps audio entries still use.
 	if n, _ := a.SweepAudio(ctx); n != 0 {

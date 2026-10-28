@@ -291,7 +291,7 @@ func (a *API) audio(w http.ResponseWriter, r *http.Request) {
 // credential, sealed by the server and naming one reader's entry.
 func (a *API) audioLink(w http.ResponseWriter, r *http.Request) {
 	uid, id, ok := a.openAudioLink(strings.TrimSuffix(r.PathValue("token"), ".mp3"))
-	if !ok {
+	if !ok || !a.Store.Active(r.Context(), uid) { // a disabled account's links stop working
 		fail(w, http.StatusNotFound, "No such audio.")
 		return
 	}
