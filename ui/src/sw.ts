@@ -139,7 +139,9 @@ async function handle(req: Request, strategy: Strategy): Promise<Response> {
   if (strategy === 'shell') {
     try {
       const res = await fetch(req)
-      if (res.ok) await cache.put(SHELL, res.clone())
+      // Only the app's page is the shell: a picture opened in its own tab is
+      // a navigation too, and kept as the shell it'd open offline instead.
+      if (res.ok && (res.headers.get('Content-Type') ?? '').startsWith('text/html')) await cache.put(SHELL, res.clone())
       return res
     } catch {
       return (await cache.match(SHELL)) ?? new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } })
