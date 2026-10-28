@@ -78,3 +78,41 @@ func TestBcryptLengthLimit(t *testing.T) {
 		t.Fatal("password over bcrypt's 72-byte limit accepted (it would be silently truncated)")
 	}
 }
+
+// Rotating a credential signs out what was signed in with it: a new app
+// password ends Reeder sessions; a reset ends everything, tokens included.
+func TestRotationSignsOut(t *testing.T) {
+	st, ctx := open(t), context.Background()
+	admin, _ := st.CreateUser(ctx, "ada", "password-ada-1")
+	uid, _ := st.CreateUser(ctx, "u", "password-123")
+	web, _ := st.CreateSession(ctx, uid, "web", time.Hour)
+	reeder, _ := st.CreateSession(ctx, uid, "greader", time.Hour)
+	token, _, _ := st.CreateToken(ctx, uid, "corr", "write")
+
+	if err := st.SetAPIPassword(ctx, uid, "new-app-password"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SessionUser(ctx, reeder, "greader"); err == nil {
+		t.Error("Reeder session survived a new app password")
+	}
+	if _, err := st.SessionUser(ctx, web, "web"); err != nil {
+		t.Error("a new app password signed out the web")
+	}
+
+	reeder, _ = st.CreateSession(ctx, uid, "greader", time.Hour)
+	link, err := st.CreateInvite(ctx, InviteReset, uid, RoleUser, "", admin, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AcceptInvite(ctx, link, "", "password-456"); err != nil {
+		t.Fatal(err)
+	}
+	for kind, tok := range map[string]string{"web": web, "greader": reeder} {
+		if _, err := st.SessionUser(ctx, tok, kind); err == nil {
+			t.Errorf("%s session survived a reset", kind)
+		}
+	}
+	if _, _, err := st.TokenUser(ctx, token); err == nil {
+		t.Error("API token survived a reset")
+	}
+}

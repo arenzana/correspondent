@@ -337,7 +337,12 @@ func (s *Store) AcceptInvite(ctx context.Context, token, username, password stri
 			if err := checkAffected(tx.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ? AND disabled_at IS NULL`, string(hash), id)); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND kind = 'web'`, id); err != nil {
+			// A reset is how an account is taken back: nothing signed in
+			// before it keeps working, Reeder sessions and API tokens included.
+			if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, id); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM api_tokens WHERE user_id = ?`, id); err != nil {
 				return err
 			}
 		} else {

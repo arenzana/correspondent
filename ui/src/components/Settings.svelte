@@ -66,10 +66,13 @@
   async function saveApiPassword(e: SubmitEvent) {
     e.preventDefault()
     try {
+      const replacing = app.hasApiPassword
       await api.setApiPassword(apiPassword)
       app.hasApiPassword = true
       apiPassword = ''
-      apiMessage = 'Saved. Use it as the password in Reeder.'
+      apiMessage = replacing
+        ? 'Saved. Apps signed in with the old password are signed out; sign them in again with this one.'
+        : 'Saved. Use it as the password in Reeder.'
     } catch (err) {
       apiMessage = (err as Error).message
     }

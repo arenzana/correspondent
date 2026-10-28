@@ -78,14 +78,21 @@ func (s *Store) Speech(ctx context.Context, userID int64) (sealed []byte, config
 }
 
 // SetAPIPassword sets the separate password used by Reeder and other Google
-// Reader clients. The web password never authenticates the API.
+// Reader clients. The web password never authenticates the API. Clients
+// signed in with the old one are signed out: changing it is how a reader
+// shuts out a lost device.
 func (s *Store) SetAPIPassword(ctx context.Context, userID int64, password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE users SET api_hash = ? WHERE id = ?`, string(hash), userID)
-	return err
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE users SET api_hash = ? WHERE id = ?`, string(hash), userID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND kind = 'greader'`, userID)
+		return err
+	})
 }
 
 // dummyHash keeps failed logins for unknown users as slow as for known ones.
