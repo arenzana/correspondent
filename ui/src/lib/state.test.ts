@@ -25,6 +25,7 @@ vi.mock('./api', async (importOriginal) => ({
     saveSearch: vi.fn(),
     renameSearch: vi.fn(),
     deleteSearch: vi.fn(),
+    logout: vi.fn(),
   },
 }))
 
@@ -74,7 +75,7 @@ describe('optimistic mutations', () => {
   })
 
   it('rolls back and explains when the server refuses', async () => {
-    vi.mocked(api.setState).mockRejectedValue(new ApiError(503, 'Server unavailable.'))
+    vi.mocked(api.setState).mockRejectedValue(new ApiError(422, 'Server unavailable.'))
     await app.setRead(['1'], true)
     expect(app.entries[0].read).toBe(false)
     expect(app.counts.unread).toBe(2)
@@ -686,5 +687,59 @@ describe('preferences', () => {
     expect(Object.keys(sent)).not.toContain('measure')
     expect(Object.keys(sent)).not.toContain('readSize')
     vi.useRealTimers()
+  })
+})
+
+describe('a session that ends elsewhere', () => {
+  it('signs out once on a 401, keeping only this browser\'s sizes', async () => {
+    vi.mocked(api.logout).mockResolvedValue(undefined)
+    localStorage.setItem('correspondent:prefs', JSON.stringify({ place: { lat: 40.4, lon: -3.7 } }))
+    localStorage.setItem('correspondent:sizes', JSON.stringify({ readSize: 22 }))
+    app.user = 'reader'
+    ;(app as unknown as { watchSignOut(): void }).watchSignOut()
+    window.dispatchEvent(new CustomEvent('correspondent:signed-out'))
+    window.dispatchEvent(new CustomEvent('correspondent:signed-out'))
+    await vi.waitFor(() => expect(localStorage.getItem('correspondent:prefs')).toBeNull())
+    expect(api.logout).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('correspondent:sizes')).not.toBeNull()
+  })
+})
+
+describe('live updates', () => {
+  it('reconnects after the server closes the stream, and catches up once back', async () => {
+    vi.useFakeTimers()
+    const made: FakeSource[] = []
+    class FakeSource {
+      static CLOSED = 2
+      readyState = 0
+      listeners: Record<string, (() => void)[]> = {}
+      constructor() {
+        made.push(this)
+      }
+      addEventListener(name: string, fn: () => void) {
+        ;(this.listeners[name] ??= []).push(fn)
+      }
+      close() {
+        this.readyState = 2
+      }
+      fire(name: string) {
+        for (const fn of this.listeners[name] ?? []) fn()
+      }
+    }
+    vi.stubGlobal('EventSource', FakeSource)
+    const resync = vi.spyOn(app, 'resyncStates').mockResolvedValue(undefined)
+    app.user = 'reader'
+    ;(app as unknown as { listen(): void }).listen()
+
+    made[0].readyState = 2 // a 502 while the server restarts: closed for good
+    made[0].fire('error')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(made).toHaveLength(2)
+    made[1].fire('open')
+    expect(resync).toHaveBeenCalled()
+
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    resync.mockRestore()
   })
 })

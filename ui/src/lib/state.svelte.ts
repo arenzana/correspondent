@@ -13,9 +13,11 @@ import { APP_ICONS, type AppIcon } from './icons'
 
 /**
  * A failure to reach the server at all, as opposed to the server saying no:
- * fetch rejects with a TypeError ("Failed to fetch", "Load failed", …).
+ * fetch rejects with a TypeError ("Failed to fetch", "Load failed", …), or
+ * the proxy in front answers for a server that's down or restarting.
  */
-const isNetworkError = (e: unknown) => e instanceof TypeError && !(e instanceof ApiError)
+const isNetworkError = (e: unknown) =>
+  (e instanceof TypeError && !(e instanceof ApiError)) || (e instanceof ApiError && [502, 503, 504].includes(e.status))
 
 export type View = 'unread' | 'today' | 'starred' | 'all'
 export type Source =
@@ -258,6 +260,7 @@ class AppState {
       await Promise.all([this.refreshTree(), this.load()])
       this.listen()
       this.watchConnection()
+      this.watchSignOut()
       this.syncedAt = (await offline.getMeta<number>('syncedAt').catch(() => undefined)) ?? null
       this.outboxCount = (await offline.pending().catch(() => [])).length
       void this.flushNow()
@@ -283,20 +286,66 @@ class AppState {
     await this.boot()
   }
 
+  /**
+   * The server answered 401: this session ended (signed out on another
+   * device, or expired). Go back to signing in rather than failing every
+   * action, and leave nothing behind, once.
+   */
+  private watchingSignOut = false
+  private watchSignOut() {
+    if (this.watchingSignOut) return
+    this.watchingSignOut = true
+    window.addEventListener('correspondent:signed-out', () => {
+      if (this.user && !this.signingOut) void this.signOut()
+    })
+  }
+
+  private signingOut = false
   async signOut() {
+    this.signingOut = true
     await api.logout().catch(() => {})
-    // Leave nothing readable behind on a shared device.
+    // Leave nothing readable behind on a shared device: the offline copy,
+    // audio, cached pages and pictures, and the saved settings (they hold
+    // the rough location of the Sun theme). This browser's sizes stay.
     await offline.clear().catch(() => {})
     await audio.clearAudio().catch(() => {})
-    if ('caches' in window) for (const k of await caches.keys()) if (k.startsWith('correspondent-')) await caches.delete(k)
+    if ('caches' in window)
+      for (const k of await caches.keys()) if (k.startsWith('correspondent-') || k.startsWith('images-')) await caches.delete(k)
+    try {
+      localStorage.removeItem('correspondent:prefs')
+    } catch {
+      /* private mode: nothing was kept */
+    }
     location.hash = ''
     location.reload()
   }
 
   private events: EventSource | undefined
+  /**
+   * Live updates. The browser reconnects by itself after a dropped
+   * connection, but gives up for good on an error reply (a 502 while the
+   * server restarts), so then this tries again, waiting longer each time,
+   * and catches up on what it missed once back.
+   */
+  private retryEvents: ReturnType<typeof setTimeout> | undefined
+  private eventsDelay = 2000
   private listen() {
+    clearTimeout(this.retryEvents)
     this.events?.close()
+    const reconnecting = this.eventsDelay > 2000
     this.events = new EventSource('/api/v1/events')
+    this.events.addEventListener('open', () => {
+      if (reconnecting) {
+        void this.resyncStates()
+        void this.onNewEntries()
+      }
+      this.eventsDelay = 2000
+    })
+    this.events.addEventListener('error', () => {
+      if (this.events?.readyState !== EventSource.CLOSED || !this.user) return
+      this.retryEvents = setTimeout(() => this.listen(), this.eventsDelay)
+      this.eventsDelay = Math.min(this.eventsDelay * 2, 60_000)
+    })
     this.events.addEventListener('refresh', () => this.onNewEntries())
     this.events.addEventListener('state', (e) => {
       try {
@@ -314,6 +363,7 @@ class AppState {
   private watchConnection() {
     window.addEventListener('online', () => {
       this.online = true
+      if (this.events?.readyState === EventSource.CLOSED) this.listen()
       void this.flushNow().then(() => this.syncOffline())
       if (this.loadError || !this.entries.length) void this.load()
     })
