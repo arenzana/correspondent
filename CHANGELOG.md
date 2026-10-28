@@ -7,6 +7,56 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-10-28
+
+### Security
+
+- Summaries and audio made through an address a reader entered (their own
+  OpenAI-compatible server) stay that reader's; only those from a
+  provider's own service are shared. A reader can no longer rebuild a page
+  parser that still works for others; admins still can.
+- A new app password signs out Reeder sessions made with the old one; an
+  admin's password reset signs out everything, API tokens included.
+- Sign-in limits count each try as it's let in, so parallel guesses can't
+  get past them.
+- The image proxy won't decode an image that would take more than 100 MB,
+  and decodes two at a time.
+- A feed can only be filed in its own reader's folders.
+- A disabled account's audio links stop working.
+- golang.org/x/net 0.62.0 (GO-2026-6866, GO-2026-6860).
+
+### Fixed
+
+- Web:
+  - A session ended elsewhere returns to signing in.
+  - Live updates come back after a server restart.
+  - The offline copy opens when the server is down behind its proxy.
+  - New articles slot into the list without moving rows already read.
+  - An article arriving while the list loads is no longer missed (or
+    marked read unseen by Mark all read).
+  - Escape in the reading settings leaves the article open.
+  - Space on a control reached with the keyboard presses it.
+  - Shortcuts are off behind any dialog.
+  - Hidden panes are out of Tab order.
+  - Settings changed offline are sent later rather than lost.
+  - The offline copy downloads only new or changed articles.
+  - Only the app's page is kept as the offline shell.
+  - Signing out also clears cached pictures and saved settings.
+- Apple apps:
+  - Lists keep their place when articles arrive, and no longer mix when
+    switching quickly.
+  - Signing out unregisters notifications, stops audio and resets the
+    list.
+  - The Mac app starts once and has one window.
+  - The offline copy is written far less often.
+  - Widgets refresh with the counts.
+  - iPhone tabs show their own lists.
+  - Add feed works from the Search tab.
+  - Escape in a Mac sheet closes the sheet.
+  - Saved searches work offline.
+  - Smaller fixes, and VoiceOver labels.
+- Scripted scrolling follows Reduce Motion everywhere.
+
 ## [0.21.2] - 2026-10-28
 
 ### Security
