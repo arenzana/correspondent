@@ -250,6 +250,21 @@ extension ClientTests {
         #expect(early.phase == .night && minutesApart(early.next, "2026-06-22T04:44:00Z") < 5)
     }
 
+    /// The local day, not the UTC one: San Francisco's sunset falls on the
+    /// next UTC day, Tokyo's sunrise on the day before.
+    @Test func followsTheLocalDay() {
+        let sf = Sun.theme(date("2026-06-22T00:30:00Z"), lat: 37.77, lon: -122.42) // 17:30 local
+        #expect(sf.phase == .day && minutesApart(sf.next, "2026-06-22T02:35:00Z") < 5)
+        #expect(Sun.theme(date("2026-06-22T02:50:00Z"), lat: 37.77, lon: -122.42).phase == .evening)
+        let start = date("2026-06-20T21:00:00Z") // 06:00 in Tokyo
+        let tokyo = Sun.theme(start, lat: 35.68, lon: 139.69)
+        #expect(tokyo.phase == .day && minutesApart(tokyo.next, "2026-06-21T09:00:00Z") < 5)
+        for h in 0..<48 {
+            let t = start.addingTimeInterval(Double(h) * 3600)
+            for lon in [-122.42, -3.7, 139.69, 179] { #expect(Sun.theme(t, lat: 35, lon: lon).next > t) }
+        }
+    }
+
     @Test func handlesPolarSeasonsAndRounding() {
         #expect(Sun.theme(date("2026-06-21T23:00:00Z"), lat: 69.65, lon: 18.96).phase == .day)
         let polar = Sun.theme(date("2026-12-21T12:00:00Z"), lat: 69.65, lon: 18.96)

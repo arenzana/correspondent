@@ -74,6 +74,10 @@ targets:
         ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
         # Read and write: importing and exporting OPML.
         ENABLE_USER_SELECTED_FILES: readwrite
+        # The Sun theme's rough position, asked for when it's chosen.
+        ENABLE_RESOURCE_ACCESS_LOCATION: YES
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: The Sun theme uses your rough location, to the nearest 11 km, to know when the sun sets where you are.
+        INFOPLIST_KEY_NSLocationUsageDescription: The Sun theme uses your rough location, to the nearest 11 km, to know when the sun sets where you are.
   Share:
     type: app-extension
     platform: iOS

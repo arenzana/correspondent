@@ -138,6 +138,7 @@ final class AppModel {
             await load()
             if env["CORR_OPEN_FIRST"] != nil, let first = entries.first { await select(first.id) }
             if env["CORR_RIBBON"] == "offline" { ribbon = .offline } else if env["CORR_RIBBON"] == "back" { ribbon = .backOnline }
+            if let theme = env["CORR_THEME"] { setTheme(theme) }
             listen()
             return
         }
@@ -228,17 +229,26 @@ final class AppModel {
         return Theme.resolve(prefs.theme, scheme: scheme, place: prefs.place)
     }
 
-    /// Picks a theme. Sun needs a rough position: the one the web saved, or
-    /// one estimated from the time zone (saved as estimated, as the web does).
+    /// Picks a theme. Sun needs a rough position: asked for once, as on
+    /// the web; refusing falls back to one estimated from the time zone
+    /// (saved as estimated, so choosing Sun again asks again).
     func setTheme(_ id: String) {
-        if id == "sun", prefs.place == nil {
-            let e = Sun.estimate()
-            let place = Prefs.Place(lat: e.lat, lon: e.lon, estimated: true)
-            setPrefs({ $0.theme = id; $0.place = place }, ["theme": id, "place": ["lat": place.lat, "lon": place.lon, "estimated": true] as [String: any Sendable]])
-        } else {
-            setPrefs({ $0.theme = id }, ["theme": id])
-        }
+        setPrefs({ $0.theme = id }, ["theme": id])
         sunPhase = id == "sun" ? Theme.sun(place: prefs.place).phase : nil
+        guard id == "sun", prefs.place?.estimated ?? true else { return }
+        Task {
+            let place: Prefs.Place
+            if let found = await Locator.place() {
+                place = found
+            } else if let saved = prefs.place {
+                place = saved
+            } else {
+                let e = Sun.estimate()
+                place = Prefs.Place(lat: e.lat, lon: e.lon, estimated: true)
+            }
+            setPrefs({ $0.place = place }, ["place": ["lat": place.lat, "lon": place.lon, "estimated": place.estimated] as [String: any Sendable]])
+            sunPhase = prefs.theme == "sun" ? Theme.sun(place: prefs.place).phase : nil
+        }
     }
 
     /// Sizes belong to the device, not the account: a phone, a laptop and

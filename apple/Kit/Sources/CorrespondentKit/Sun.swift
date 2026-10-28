@@ -28,10 +28,18 @@ public enum Sun {
         return c
     }
 
-    /// When the sun crosses the given zenith angle on date's UTC day (NOAA equations).
+    /// The UTC midnight of the calendar day `date` falls on at this
+    /// longitude's local solar time. Its sunrise and sunset bracket that
+    /// day's noon, so they belong to the day the reader is living, wherever
+    /// they are: by the UTC day, an evening in San Francisco is already tomorrow.
+    private static func solarDay(_ date: Date, lon: Double) -> Date {
+        utc.startOfDay(for: date.addingTimeInterval(lon * 240)) // 4 minutes a degree
+    }
+
+    /// When the sun crosses the given zenith angle on date's local solar day (NOAA equations).
     private static func solarEvent(_ date: Date, lat: Double, lon: Double, zenith: Double) -> Times {
-        let midnight = utc.startOfDay(for: date)
-        let dayOfYear = Double(utc.ordinality(of: .day, in: .year, for: date) ?? 1)
+        let midnight = solarDay(date, lon: lon)
+        let dayOfYear = Double(utc.ordinality(of: .day, in: .year, for: midnight) ?? 1)
         let g = (2 * Double.pi / 365) * (dayOfYear - 1) // fractional year at noon
 
         let eqTime = 229.18 * (0.000075 + 0.001868 * cos(g) - 0.032077 * sin(g) - 0.014615 * cos(2 * g) - 0.040849 * sin(2 * g))
@@ -57,8 +65,8 @@ public enum Sun {
     public static func theme(_ now: Date, lat: Double, lon: Double) -> (phase: Phase, next: Date) {
         let sun = times(now, lat: lat, lon: lon)
         if let polar = sun.polar {
-            // Midnight sun or polar night: re-check at the next UTC midnight.
-            let next = utc.startOfDay(for: now.addingTimeInterval(day))
+            // Midnight sun or polar night: re-check at the next local midnight.
+            let next = solarDay(now, lon: lon).addingTimeInterval(day - lon * 240)
             return (polar == .day ? .day : .night, next)
         }
         let sunrise = sun.sunrise!, sunset = sun.sunset!

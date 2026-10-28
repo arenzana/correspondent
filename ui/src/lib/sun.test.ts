@@ -49,6 +49,26 @@ describe('sunTheme', () => {
     expect(minutesApart(early.next, new Date('2026-06-22T04:44:00Z'))).toBeLessThan(5)
   })
 
+  // San Francisco, 21 June 2026: sunset about 03:35 UTC on the 22nd, the
+  // next UTC day; Tokyo's sunrise about 19:25 UTC on the 20th, the day before.
+  it('follows the local day west of Greenwich, not the UTC one', () => {
+    const r = sunTheme(new Date('2026-06-22T00:30:00Z'), 37.77, -122.42) // 17:30 local
+    expect(r.theme).toBe('day')
+    expect(minutesApart(r.next, new Date('2026-06-22T02:35:00Z'))).toBeLessThan(5)
+    expect(sunTheme(new Date('2026-06-22T02:50:00Z'), 37.77, -122.42).theme).toBe('evening')
+  })
+
+  it('follows the local day east of Greenwich, and never looks back', () => {
+    const now = new Date('2026-06-20T21:00:00Z') // 06:00 in Tokyo
+    const r = sunTheme(now, 35.68, 139.69)
+    expect(r.theme).toBe('day')
+    expect(minutesApart(r.next, new Date('2026-06-21T09:00:00Z'))).toBeLessThan(5)
+    for (let h = 0; h < 48; h++) {
+      const t = new Date(now.getTime() + h * 3_600_000)
+      for (const lon of [-122.42, -3.7, 139.69, 179]) expect(sunTheme(t, 35, lon).next.getTime()).toBeGreaterThan(t.getTime())
+    }
+  })
+
   it('handles polar day and polar night', () => {
     expect(sunTheme(new Date('2026-06-21T23:00:00Z'), 69.65, 18.96).theme).toBe('day')
     const r = sunTheme(new Date('2026-12-21T12:00:00Z'), 69.65, 18.96)

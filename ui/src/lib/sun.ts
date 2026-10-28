@@ -14,10 +14,21 @@ export function sunTimes(date: Date, lat: number, lon: number): SunTimes {
   return solarEvent(date, lat, lon, 90.833) // refraction plus the sun's radius
 }
 
-/** When the sun crosses the given zenith angle on date's UTC day (NOAA equations). */
+/**
+ * The UTC midnight of the calendar day that `date` falls on at this
+ * longitude's local solar time. Its sunrise and sunset bracket that day's
+ * noon, so they belong to the day the reader is living, wherever they are:
+ * by the UTC day, an evening in San Francisco is already tomorrow.
+ */
+function solarDay(date: Date, lon: number): number {
+  const local = new Date(date.getTime() + lon * 240_000) // 4 minutes a degree
+  return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())
+}
+
+/** When the sun crosses the given zenith angle on date's local solar day (NOAA equations). */
 function solarEvent(date: Date, lat: number, lon: number, zenith: number): SunTimes {
-  const midnightUTC = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
-  const dayOfYear = (midnightUTC - Date.UTC(date.getUTCFullYear(), 0, 1)) / 86_400_000 + 1
+  const midnightUTC = solarDay(date, lon)
+  const dayOfYear = (midnightUTC - Date.UTC(new Date(midnightUTC).getUTCFullYear(), 0, 1)) / 86_400_000 + 1
   const g = ((2 * Math.PI) / 365) * (dayOfYear - 1) // fractional year at noon
 
   const eqTime =
@@ -60,9 +71,8 @@ export function sunTheme(now: Date, lat: number, lon: number): { theme: SunTheme
   const day = 86_400_000
   const sun = sunTimes(now, lat, lon)
   if (sun.polar) {
-    // Midnight sun or polar night: re-check at the next UTC midnight.
-    const tomorrow = new Date(now.getTime() + day)
-    const next = new Date(Date.UTC(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate()))
+    // Midnight sun or polar night: re-check at the next local midnight.
+    const next = new Date(solarDay(now, lon) + day - lon * 240_000)
     return { theme: sun.polar === 'day' ? 'day' : 'night', next }
   }
   const { sunrise, sunset } = sun as { sunrise: Date; sunset: Date }
