@@ -235,6 +235,63 @@ async function request<T>(method: string, path: string, body?: unknown, raw = fa
   return data as T
 }
 
+export interface IntegrationKind {
+  id: string
+  label: string
+  /** Asks for the address of the reader's own instance. */
+  selfHosted: boolean
+  secrets: ('token' | 'username' | 'password' | 'clientId' | 'clientSecret')[]
+  tags: boolean
+  help: string
+}
+
+export interface Integration {
+  id: number
+  kind: string
+  name: string
+  baseUrl?: string
+  tags: string[]
+  keyHint?: string
+  sendStarred: boolean
+  createdAt: number
+  lastOkAt: number
+  lastError: string
+}
+
+export interface IntegrationList {
+  integrations: Integration[]
+  kinds: IntegrationKind[]
+  /** False when the server can't keep credentials (no keyring). */
+  available: boolean
+  /** The admin let integrations reach their own networks: http:// addresses work. */
+  plainHttp: boolean
+}
+
+export interface IntegrationInput {
+  kind?: string
+  name: string
+  baseUrl?: string
+  tags?: string[]
+  sendStarred: boolean
+  token?: string
+  username?: string
+  password?: string
+  clientId?: string
+  clientSecret?: string
+  /** A webhook's new signing key. */
+  newKey?: boolean
+}
+
+export interface Delivery {
+  id: number
+  integrationId: number
+  state: 'pending' | 'sent' | 'failed'
+  attempts: number
+  error?: string
+  remote?: string
+  sentAt?: number
+}
+
 export interface EntryQuery {
   /** Include full article HTML (for offline reading). */
   content?: boolean
@@ -306,6 +363,19 @@ export const api = {
     rebuildParser: (id: number) => request<{ method: string; items: number; sample: string[] }>('POST', `/admin/parsers/${id}/rebuild`),
     deleteParser: (id: number) => request<void>('DELETE', `/admin/parsers/${id}`),
   },
+  integrations: () => request<IntegrationList>('GET', '/integrations'),
+  /** Checks the credentials with the service first; a webhook's signing key comes back this once. */
+  createIntegration: (input: IntegrationInput) =>
+    request<{ integration: Integration; signingKey?: string }>('POST', '/integrations', input),
+  updateIntegration: (id: number, input: IntegrationInput) =>
+    request<{ integration: Integration; signingKey?: string }>('PATCH', `/integrations/${id}`, input),
+  deleteIntegration: (id: number) => request<void>('DELETE', `/integrations/${id}`),
+  testIntegration: (id: number) => request<void>('POST', `/integrations/${id}/test`),
+  /** Queues the article for one integration; the server sends it, retrying if the service is down. */
+  send: (id: ID, integration: number) => request<{ delivery: Delivery }>('POST', `/entries/${id}/send`, { integration: String(integration) }),
+  deliveries: (id: ID) => request<{ deliveries: Delivery[] }>('GET', `/entries/${id}/deliveries`),
+  /** The article as a Markdown note (for Obsidian). */
+  markdown: (id: ID) => request<{ title: string; markdown: string }>('GET', `/entries/${id}/markdown`),
   setAI: (config: Omit<AIConfig, 'keyHint'> & { key: string }) => request<{ ai: AIConfig }>('PUT', '/ai', config),
   deleteAI: () => request<void>('DELETE', '/ai'),
   setSpeech: (config: Omit<SpeechConfig, 'keyHint'> & { key: string }) =>

@@ -58,6 +58,14 @@
       ...(app.article && (app.ai || app.article.entry.summary)
         ? [{ id: 'a-summary', label: 'Summary of this article', icon: 'summary' as IconName, group: 'Actions', hint: '⇧S', run: () => app.summarize() }]
         : []),
+      ...(app.article
+        ? [
+            ...app.integrations.map((i) => ({ id: `send-${i.id}`, label: `Send to ${i.name}`, icon: 'send' as IconName, group: 'Actions', run: () => app.sendTo(i) })),
+            ...(app.prefs.obsidian?.vault
+              ? [{ id: 'send-obsidian', label: 'Send to Obsidian', icon: 'send' as IconName, group: 'Actions', run: () => app.sendToObsidian() }]
+              : []),
+          ]
+        : []),
       { id: 'a-listen', label: `Listen to unread with audio in ${scopeName}`, icon: 'headphones', group: 'Actions', hint: '⇧L', run: () => app.listenToList() },
       { id: 'a-manage', label: 'Manage subscriptions', icon: 'rss', group: 'Actions', hint: 'g m', run: () => app.manage() },
       { id: 'a-add', label: 'Add feed…', icon: 'plus', group: 'Actions', hint: 'a', run: () => (app.addFeedOpen = true) },

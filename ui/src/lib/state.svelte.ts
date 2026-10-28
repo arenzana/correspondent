@@ -3,7 +3,7 @@
 // server refuses. Without a network, the reader works from its offline copy
 // (lib/offline) and queues changes until the connection returns.
 
-import { api, ApiError, type SavedSearch, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
+import { api, ApiError, type Integration, type SavedSearch, type AIConfig, type SpeechConfig, type Role, type Counts, type Entry, type Enclosure, type Feed, type Folder, type ID } from './api'
 import type { Spotlight } from './reading'
 import { coarse, estimateFromTimezone, sunTheme } from './sun'
 import * as offline from './offline/db'
@@ -65,6 +65,8 @@ export interface Prefs {
   navWidth: number | null
   listWidth: number | null
   appIcon: AppIcon
+  /** Where "Send to Obsidian" makes notes: the vault's name and a folder in it. */
+  obsidian: { vault: string; folder: string } | null
 }
 
 const defaultPrefs: Prefs = {
@@ -87,6 +89,7 @@ const defaultPrefs: Prefs = {
   navWidth: null,
   listWidth: null,
   appIcon: 'wire',
+  obsidian: null,
 }
 
 /** What the player is playing; local means a saved copy on this device. */
@@ -215,6 +218,9 @@ class AppState {
   shortcutsOpen = $state(false)
   addFeedOpen = $state(false)
   readingOpen = $state(false)
+  sendOpen = $state(false) // the article's Send to… menu
+  /** The reader's services articles can be sent to. */
+  integrations = $state<Integration[]>([])
   navOpen = $state(false) // drawer on medium widths
   toasts = $state<Toast[]>([])
 
@@ -265,6 +271,7 @@ class AppState {
       this.aiAvailable = me.aiAvailable
       this.ai = me.ai
       this.speech = me.speech
+      void this.loadIntegrations()
       this.role = me.role ?? 'user'
       this.passkeysAvailable = !!me.passkeysAvailable
       this.version = me.version
@@ -1501,6 +1508,75 @@ class AppState {
 
   // ---------------------------------------------------------------- toasts
 
+  // ------------------------------------------------------------ send to…
+
+  async loadIntegrations() {
+    this.integrations = await api
+      .integrations()
+      .then((r) => r.integrations)
+      .catch(() => this.integrations)
+  }
+
+  /**
+   * Sends the open article to one of the reader's services. The server
+   * queues it and sends it in a moment (retrying while the service is
+   * down); a look a few seconds later says how it went.
+   */
+  async sendTo(i: Integration) {
+    const e = this.article?.entry
+    if (!e) return
+    this.sendOpen = false
+    try {
+      await api.send(e.id, i.id)
+    } catch (err) {
+      this.toast(`Couldn't send to ${i.name}. ${(err as Error).message}`)
+      return
+    }
+    this.toast(`Sending to ${i.name}…`)
+    for (const wait of [1500, 3000, 6000]) {
+      await new Promise((ok) => setTimeout(ok, wait))
+      const d = (await api.deliveries(e.id).catch(() => null))?.deliveries.find((d) => d.integrationId === i.id)
+      if (!d || d.state === 'pending') continue
+      if (d.state === 'sent') {
+        const remote = d.remote
+        this.toast(`Saved to ${i.name}.`, remote ? { label: 'Open', run: () => window.open(remote, '_blank', 'noopener,noreferrer') } : undefined)
+      } else {
+        this.toast(`${i.name} didn't take it. ${d.error ?? ''}`.trim())
+        void this.loadIntegrations() // Settings shows why
+      }
+      return
+    }
+    this.toast(`${i.name} isn't answering; it'll be sent when it does.`)
+  }
+
+  /**
+   * Makes a note of the open article in Obsidian: the note goes on the
+   * clipboard and Obsidian is asked to create it from there (a long note
+   * in the link itself can be too long to open). The clipboard is written
+   * straight from the click, with the note still on its way, as Safari
+   * requires.
+   */
+  async sendToObsidian() {
+    const e = this.article?.entry
+    const o = this.prefs.obsidian
+    if (!e || !o?.vault) return
+    this.sendOpen = false
+    const note = api.markdown(e.id)
+    try {
+      const text = note.then((n) => new Blob([n.markdown], { type: 'text/plain' }))
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })])
+    } catch {
+      try {
+        await navigator.clipboard.writeText((await note).markdown)
+      } catch {
+        this.toast("Couldn't copy the note for Obsidian. Allow this site to use the clipboard and try again.")
+        return
+      }
+    }
+    const file = [o.folder.replace(/^\/+|\/+$/g, ''), noteName(e.title || 'Untitled')].filter(Boolean).join('/')
+    location.href = `obsidian://new?vault=${encodeURIComponent(o.vault)}&file=${encodeURIComponent(file)}&clipboard`
+  }
+
   toast(message: string, action?: Toast['action']) {
     const id = ++this.toastSeq
     this.toasts = [...this.toasts, { id, message, action }]
@@ -1510,6 +1586,12 @@ class AppState {
   dismiss(id: number) {
     this.toasts = this.toasts.filter((t) => t.id !== id)
   }
+}
+
+/** A file name Obsidian accepts: no characters it forbids in note names, not too long. */
+export function noteName(title: string): string {
+  const name = title.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim()
+  return [...name].slice(0, 100).join('').trim() || 'Untitled'
 }
 
 function inviteFromHash(): string {

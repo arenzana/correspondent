@@ -104,6 +104,7 @@
       l: () => (app.listening && app.listening.id === app.article?.entry.id ? listen?.toggle() : app.readAloud()),
       L: () => app.listenToList(),
       S: () => app.summarize(),
+      b: () => app.article && ((app.readingOpen = false), (app.sendOpen = !app.sendOpen)),
       v: () => app.article?.entry.url && window.open(app.article.entry.url, '_blank', 'noopener,noreferrer'),
       A: () => app.markAllRead(),
       r: () => { app.refreshTree(); app.load() },
@@ -115,6 +116,7 @@
       '?': () => (app.shortcutsOpen = true),
       Escape: () => {
         if (app.readingOpen) app.readingOpen = false
+        else if (app.sendOpen) app.sendOpen = false
         else if (app.focusMode) app.focusMode = false
         else if (app.navOpen) app.navOpen = false
         else if (app.pane === 'article' && window.matchMedia('(max-width: 699px)').matches) app.back()

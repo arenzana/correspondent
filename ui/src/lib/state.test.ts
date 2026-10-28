@@ -26,11 +26,14 @@ vi.mock('./api', async (importOriginal) => ({
     renameSearch: vi.fn(),
     deleteSearch: vi.fn(),
     logout: vi.fn(),
+    send: vi.fn(),
+    deliveries: vi.fn(),
+    integrations: vi.fn(),
   },
 }))
 
 const { api, ApiError } = await import('./api')
-const { app } = await import('./state.svelte')
+const { app, noteName } = await import('./state.svelte')
 const offline = await import('./offline/db')
 const networkDown = () => new TypeError('Failed to fetch')
 
@@ -805,5 +808,42 @@ describe('live updates', () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
     resync.mockRestore()
+  })
+})
+
+describe('send to…', () => {
+  const hook = { id: 4, kind: 'webhook', name: 'My hook', tags: [], sendStarred: false, createdAt: 0, lastOkAt: 0, lastError: '' }
+
+  it('names notes the way Obsidian accepts', () => {
+    expect(noteName('What: a "pilot" knows / latency?')).toBe('What a pilot knows latency')
+    expect(noteName('  ')).toBe('Untitled')
+    expect([...noteName('x'.repeat(300))].length).toBe(100)
+  })
+
+  it('queues the article, then says where it went', async () => {
+    vi.useFakeTimers()
+    app.article = { entry: entry('7'), enclosures: [] } as unknown as typeof app.article
+    vi.mocked(api.send).mockResolvedValue({ delivery: { id: 1, integrationId: 4, state: 'pending', attempts: 0 } })
+    vi.mocked(api.deliveries).mockResolvedValue({ deliveries: [{ id: 1, integrationId: 4, state: 'sent', attempts: 1, remote: 'https://x.example/1' }] })
+    const sending = app.sendTo(hook)
+    await vi.advanceTimersByTimeAsync(2000)
+    await sending
+    expect(api.send).toHaveBeenCalledWith('7', 4)
+    expect(app.toasts.at(-1)?.message).toBe('Saved to My hook.')
+    expect(app.toasts.at(-1)?.action?.label).toBe('Open')
+    vi.useRealTimers()
+  })
+
+  it('says why when the service refused it', async () => {
+    vi.useFakeTimers()
+    app.article = { entry: entry('7'), enclosures: [] } as unknown as typeof app.article
+    vi.mocked(api.send).mockResolvedValue({ delivery: { id: 1, integrationId: 4, state: 'pending', attempts: 0 } })
+    vi.mocked(api.deliveries).mockResolvedValue({ deliveries: [{ id: 1, integrationId: 4, state: 'failed', attempts: 1, error: 'The service rejected the credentials.' }] })
+    vi.mocked(api.integrations).mockResolvedValue({ integrations: [hook], kinds: [], available: true, plainHttp: false })
+    const sending = app.sendTo(hook)
+    await vi.advanceTimersByTimeAsync(2000)
+    await sending
+    expect(app.toasts.at(-1)?.message).toBe("My hook didn't take it. The service rejected the credentials.")
+    vi.useRealTimers()
   })
 })

@@ -7,6 +7,7 @@
   import Icon from './Icon.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import ReadingSettings from './ReadingSettings.svelte'
+  import SendMenu from './SendMenu.svelte'
   import { bionicHTML, paragraphSpotlight, READING_LINE } from '../lib/reading'
 
   let scroller: HTMLElement | undefined = $state()
@@ -151,10 +152,23 @@
       <div class="aa">
         <button
           class="icon-btn"
+          aria-label="Send to"
+          aria-haspopup="menu"
+          aria-expanded={app.sendOpen}
+          title="Send to… (b)"
+          onclick={() => ((app.readingOpen = false), (app.sendOpen = !app.sendOpen))}
+        >
+          <Icon name="send" />
+        </button>
+        {#if app.sendOpen}<SendMenu />{/if}
+      </div>
+      <div class="aa">
+        <button
+          class="icon-btn"
           aria-label="Reading settings"
           aria-expanded={app.readingOpen}
           title="Reading settings"
-          onclick={() => (app.readingOpen = !app.readingOpen)}
+          onclick={() => ((app.sendOpen = false), (app.readingOpen = !app.readingOpen))}
         >
           <Icon name="type" />
         </button>

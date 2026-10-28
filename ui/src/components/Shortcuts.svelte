@@ -16,6 +16,7 @@
         [['l'], 'Listen, or play and pause'],
         [['⇧', 'L'], 'Listen to unread articles with audio'],
         [['⇧', 'S'], 'Summary'],
+        [['b'], 'Send to…'],
         [['f'], 'Focused reading'],
         [['Esc'], 'Close the article'],
       ],

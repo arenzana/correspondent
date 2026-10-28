@@ -8,7 +8,7 @@
   import { relative } from '../lib/time'
   import { AUDIO_LIMIT, clearAudio } from '../lib/offline/audio'
   import { addPasskey, passkeysSupported } from '../lib/passkey'
-  import type { APIToken, Passkey, Session } from '../lib/api'
+  import type { APIToken, Integration, IntegrationKind, Passkey, Session } from '../lib/api'
   import TextControls from './TextControls.svelte'
 
   let apiPassword = $state('')
@@ -57,6 +57,99 @@
       pushMessage = (e as Error).message
     }
   }
+  // Integrations: services articles are sent to. One form adds a service
+  // (fields by kind) or edits one (empty credentials keep the saved ones).
+  let kinds = $state<IntegrationKind[]>([])
+  let integrationsOn = $state(true)
+  let plainHttp = $state(false)
+  let form = $state<{ kind: string; editing: number | null; name: string; baseUrl: string; tags: string; sendStarred: boolean;
+    token: string; username: string; password: string; clientId: string; clientSecret: string } | null>(null)
+  let integBusy = $state(false)
+  let integMessage = $state('')
+  let signingKey = $state('')
+  const formKind = $derived(kinds.find((k) => k.id === form?.kind))
+  const secretLabels: Record<string, string> = { token: 'Token', username: 'Username or email', password: 'Password', clientId: 'Client ID', clientSecret: 'Client secret' }
+  api
+    .integrations()
+    .then((r) => {
+      app.integrations = r.integrations
+      kinds = r.kinds
+      integrationsOn = r.available
+      plainHttp = r.plainHttp
+    })
+    .catch(() => {})
+
+  function startAdding(kind: string) {
+    integMessage = signingKey = ''
+    form = { kind, editing: null, name: '', baseUrl: '', tags: '', sendStarred: false, token: '', username: '', password: '', clientId: '', clientSecret: '' }
+  }
+
+  function startEditing(i: Integration) {
+    integMessage = signingKey = ''
+    form = { kind: i.kind, editing: i.id, name: i.name, baseUrl: i.baseUrl ?? '', tags: i.tags.join(', '), sendStarred: i.sendStarred,
+      token: '', username: '', password: '', clientId: '', clientSecret: '' }
+  }
+
+  async function saveIntegration(e: SubmitEvent) {
+    e.preventDefault()
+    if (!form) return
+    integBusy = true
+    integMessage = ''
+    const f = form
+    const input = { kind: f.kind, name: f.name, baseUrl: f.baseUrl || undefined, sendStarred: f.sendStarred,
+      tags: f.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      token: f.token, username: f.username, password: f.password, clientId: f.clientId, clientSecret: f.clientSecret }
+    try {
+      const r = f.editing ? await api.updateIntegration(f.editing, input) : await api.createIntegration(input)
+      await app.loadIntegrations()
+      form = null
+      if (r.signingKey) signingKey = r.signingKey
+      integMessage = f.editing ? 'Saved.' : `Connected ${r.integration.name}. Send an article with Send to… (b) in any article.`
+    } catch (err) {
+      integMessage = (err as Error).message
+    } finally {
+      integBusy = false
+    }
+  }
+
+  async function setStarredRule(i: Integration, on: boolean) {
+    try {
+      await api.updateIntegration(i.id, { name: i.name, baseUrl: i.baseUrl, tags: i.tags, sendStarred: on })
+      await app.loadIntegrations()
+    } catch (err) {
+      integMessage = (err as Error).message
+    }
+  }
+
+  async function testIntegration(i: Integration) {
+    integMessage = `Checking ${i.name}…`
+    try {
+      await api.testIntegration(i.id)
+      integMessage = `${i.name} works.`
+    } catch (err) {
+      integMessage = (err as Error).message
+    }
+    await app.loadIntegrations()
+  }
+
+  async function removeIntegration(i: Integration) {
+    try {
+      await api.deleteIntegration(i.id)
+      await app.loadIntegrations()
+      integMessage = `Removed ${i.name}.`
+    } catch (err) {
+      integMessage = (err as Error).message
+    }
+  }
+
+  let obsidianVault = $state(app.prefs.obsidian?.vault ?? '')
+  let obsidianFolder = $state(app.prefs.obsidian?.folder ?? 'Correspondent')
+  function saveObsidian(e: SubmitEvent) {
+    e.preventDefault()
+    const vault = obsidianVault.trim()
+    app.setPrefs({ obsidian: vault ? { vault, folder: obsidianFolder.trim() } : null })
+  }
+
   // Released versions link to their notes; builds between releases to the changelog.
   const releaseURL = $derived(
     /^\d+\.\d+\.\d+$/.test(app.version)
@@ -191,6 +284,7 @@
     { id: 'reading', label: 'Reading' },
     { id: 'feeds', label: 'Feeds' },
     ...(app.aiAvailable ? [{ id: 'ai', label: 'AI' }] : []),
+    { id: 'integrations', label: 'Integrations' },
     { id: 'apps', label: 'Apps & sync' },
     { id: 'about', label: 'About' },
   ])
@@ -730,6 +824,122 @@
         </section>
       {/if}
 
+      <section id="settings-integrations">
+        <h2>Integrations</h2>
+        <div class="card" data-terms="send integration webhook readwise reader instapaper raindrop wallabag linkding karakeep hoarder read later bookmark service">
+          <h3>Send articles to</h3>
+          <p class="hint">
+            Send any article to a read-later service, your own Wallabag, Linkding or Karakeep, or a webhook: <kbd>b</kbd>
+            or the send button in an article. This server sends it and tries again if the service is down. Each service can
+            also get every article you star, from here or from Reeder.
+          </p>
+          {#if !integrationsOn}
+            <p class="hint">This server can’t keep credentials, so integrations are off.</p>
+          {:else}
+            {#if app.integrations.length}
+              <ul class="list">
+                {#each app.integrations as i (i.id)}
+                  <li>
+                    <span class="item"><strong>{i.name}</strong>
+                      <small>
+                        {kinds.find((k) => k.id === i.kind)?.label ?? i.kind}{#if i.baseUrl}, {i.baseUrl}{/if}{#if i.keyHint}, {i.keyHint.length <= 4 ? `key ending ${i.keyHint}` : i.keyHint}{/if}.
+                        {#if i.lastError}<span class="danger">{i.lastError}</span>{:else if i.lastOkAt}Last sent {relative(i.lastOkAt)}.{/if}
+                      </small></span>
+                    <span class="row-actions">
+                      <button class="link" onclick={() => startEditing(i)}>Edit</button>
+                      <button class="link" onclick={() => testIntegration(i)}>Test</button>
+                      <button class="link danger" onclick={() => removeIntegration(i)}>Remove</button>
+                    </span>
+                  </li>
+                  <li class="sub">
+                    <label class="toggle">
+                      <span><strong>Send articles I star to {i.name}</strong></span>
+                      <input type="checkbox" role="switch" checked={i.sendStarred} onchange={(e) => setStarredRule(i, e.currentTarget.checked)} />
+                    </label>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if signingKey}
+              <div class="fresh" role="status">
+                <p><strong>The webhook’s signing key.</strong> It’s shown this once: copy it to the receiver, which checks
+                  each request’s <code>Correspondent-Signature</code> header with it.</p>
+                <div class="linkrow"><code class="secret">{signingKey}</code>
+                  <button class="btn" onclick={() => navigator.clipboard.writeText(signingKey)}>Copy</button></div>
+              </div>
+            {/if}
+            {#if form && formKind}
+              <form class="ai" onsubmit={saveIntegration}>
+                <p class="hint wide">{formKind.help}</p>
+                <label>
+                  <span>Name</span>
+                  <input class="field" bind:value={form.name} autocomplete="off" placeholder={formKind.label} />
+                </label>
+                {#if formKind.selfHosted}
+                  <label class="wide">
+                    <span>{formKind.id === 'webhook' ? 'Address to POST to' : `Your ${formKind.label}’s address`}</span>
+                    <input class="field" type="url" bind:value={form.baseUrl} autocomplete="off" spellcheck="false" required
+                      placeholder={plainHttp ? 'https://… or http://… on your network' : 'https://…'} />
+                  </label>
+                {/if}
+                {#each formKind.secrets as f (f)}
+                  <label class={f === 'token' ? 'wide' : ''}>
+                    <span>{secretLabels[f]}{#if f === 'password' && formKind.id === 'instapaper'} <small>(if your account has one)</small>{/if}</span>
+                    <input class="field" type={f === 'username' || f === 'clientId' ? 'text' : 'password'} bind:value={form[f]}
+                      autocomplete="off" spellcheck="false" required={!form.editing && f !== 'password'}
+                      placeholder={form.editing ? 'Saved; type to replace' : ''} />
+                  </label>
+                {/each}
+                {#if formKind.tags}
+                  <label class="wide">
+                    <span>Tags <small>(optional, separated by commas)</small></span>
+                    <input class="field" bind:value={form.tags} autocomplete="off" placeholder="rss, later" />
+                  </label>
+                {/if}
+                <label class="toggle wide">
+                  <span><strong>Send articles I star</strong></span>
+                  <input type="checkbox" role="switch" bind:checked={form.sendStarred} />
+                </label>
+                <div class="actions-row wide">
+                  <button class="btn primary" disabled={integBusy}>{integBusy ? 'Checking…' : form.editing ? 'Save' : 'Connect'}</button>
+                  <button type="button" class="btn" onclick={() => (form = null)}>Cancel</button>
+                </div>
+              </form>
+            {:else}
+              <div class="actions-row">
+                {#each kinds as k (k.id)}
+                  <button class="btn" onclick={() => startAdding(k.id)}>{k.label}</button>
+                {/each}
+              </div>
+            {/if}
+            <p class="hint">Credentials are checked with the service, stored encrypted, and never shown again.</p>
+            {#if integMessage}<p class="msg" role="status">{integMessage}</p>{/if}
+          {/if}
+        </div>
+
+        <div class="card" data-terms="obsidian note notes vault markdown">
+          <h3>Obsidian</h3>
+          <p class="hint">
+            Send to… → Obsidian makes a note of the article in your vault, on this device: its text in Markdown, with the
+            title, source, author and dates as properties. The note goes through the clipboard, so allow it if asked.
+          </p>
+          <form class="ai" onsubmit={saveObsidian}>
+            <label>
+              <span>Vault name</span>
+              <input class="field" bind:value={obsidianVault} autocomplete="off" spellcheck="false" placeholder="My vault" />
+            </label>
+            <label>
+              <span>Folder <small>(optional)</small></span>
+              <input class="field" bind:value={obsidianFolder} autocomplete="off" spellcheck="false" placeholder="Correspondent" />
+            </label>
+            <div class="actions-row wide">
+              <button class="btn primary">Save</button>
+              {#if app.prefs.obsidian}<button type="button" class="btn" onclick={() => { obsidianVault = ''; app.setPrefs({ obsidian: null }) }}>Remove</button>{/if}
+            </div>
+          </form>
+        </div>
+      </section>
+
       <section id="settings-apps">
         <h2>Apps &amp; sync</h2>
         <div class="card">
@@ -1224,6 +1434,17 @@
   }
   .link.danger {
     color: var(--danger);
+  }
+  .item .danger {
+    color: var(--danger);
+  }
+  /* An integration's rule, under it. */
+  .list li.sub {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .list li.sub .toggle {
+    flex: 1;
   }
   .token-form {
     display: grid;
