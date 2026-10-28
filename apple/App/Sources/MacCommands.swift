@@ -12,6 +12,8 @@ struct MacCommands: Commands {
     @Environment(\.openURL) private var openURL
 
     var body: some Commands {
+        // One window: a second would run the same lists and commands twice.
+        CommandGroup(replacing: .newItem) {}
         CommandGroup(after: .newItem) {
             Button("Add a Feed…") { NotificationCenter.default.post(name: .addFeed, object: nil) }
                 .keyboardShortcut("n", modifiers: [.command, .shift])

@@ -127,7 +127,12 @@ final class AppModel {
 
     // MARK: Session
 
+    /// Once per launch: a Mac window that's closed and opened again (from
+    /// the Dock) runs its .task again, and would start everything twice.
+    private var booted = false
     func boot() async {
+        guard !booted else { return }
+        booted = true
         defer { booting = false }
         #if DEBUG
         // Tests and screenshots start signed in: CORR_SERVER and CORR_TOKEN.
@@ -169,6 +174,9 @@ final class AppModel {
     }
 
     func signOut() async {
+        // This device stops getting this account's notifications, while the
+        // token still lets it ask.
+        if let device = Notifications.shared.token { try? await client?.unregisterDevice(device) }
         try? await client?.signOut()
         account?.forget()
         await offline?.clear()
@@ -177,10 +185,17 @@ final class AppModel {
         liveTask?.cancel()
         account = nil
         client = nil
+        me = nil
         tree = Tree()
         entries = []
         article = nil
         selectedID = nil
+        // The next account starts on its own Unread, not this one's list.
+        source = .unread
+        query = ""
+        cursor = ""
+        boundary = "0"
+        pending = 0
     }
 
     private func start(account: Account, token: String) {
@@ -216,7 +231,10 @@ final class AppModel {
     // MARK: Preferences
 
     /// Checks the Sun theme every minute; a change of phase redraws the app.
+    private var watchingSun = false
     private func watchSun() {
+        guard !watchingSun else { return } // start() runs at each sign-in
+        watchingSun = true
         Task { [weak self] in
             while let self {
                 let phase = prefs.theme == "sun" ? Theme.sun(place: prefs.place).phase : nil
@@ -364,21 +382,27 @@ final class AppModel {
         loadError = ""
         pending = 0
         defer { if seq == loadSeq { loading = false } }
+        // The newest article known as the request goes out: one arriving
+        // meanwhile may be missing from the reply, so the boundary (which
+        // mark all read never reaches past) stops before it.
+        let known = tree.counts.newest
         do {
             let page = try await client.entries(query(for: source))
             guard seq == loadSeq else { return }
             entries = page.entries
             cursor = page.cursor
-            // The boundary: the newest article seen, so mark all read never reaches past it.
-            let newest = ([tree.counts.newest] + page.entries.map(\.id)).max { Self.n($0) < Self.n($1) } ?? "0"
+            let newest = ([known] + page.entries.map(\.id)).max { Self.n($0) < Self.n($1) } ?? "0"
             boundary = newest
+            if Self.n(tree.counts.newest) > Self.n(boundary) { Task { await catchUp() } } // arrived while loading
             online = true
             await offline?.save(entries: page.entries)
         } catch {
             guard seq == loadSeq else { return }
             if isOffline(error), let store = offline {
                 online = false
-                entries = await store.list(source, unreadOnly: unreadFilter, search: query.isEmpty ? nil : query, folders: folderFeeds)
+                // A saved search's own words too, as the server would use them.
+                let words = query(for: source).search ?? ""
+                entries = await store.list(source, unreadOnly: unreadFilter, search: words.isEmpty ? nil : words, folders: folderFeeds)
                 cursor = ""
             } else {
                 loadError = error.localizedDescription
@@ -389,11 +413,14 @@ final class AppModel {
 
     func loadMore() async {
         guard let client, !cursor.isEmpty, !loading else { return }
+        let seq = loadSeq
         loading = true
-        defer { loading = false }
+        // A newer load owns the flag by then; clearing it would let a scroll
+        // fetch the old list's next page into the new one.
+        defer { if seq == loadSeq { loading = false } }
         var q = query(for: source)
         q.cursor = cursor
-        if let page = try? await client.entries(q) {
+        if let page = try? await client.entries(q), seq == loadSeq {
             let have = Set(entries.map(\.id))
             entries += page.entries.filter { !have.contains($0.id) }
             cursor = page.cursor
@@ -835,14 +862,19 @@ final class AppModel {
     func listen() {
         liveTask?.cancel()
         liveTask = Task { [weak self] in
+            // Waits longer after each connection that fails at once (a 429,
+            // a server down), up to a minute; one that held resets it.
+            var wait = 5.0
             while !Task.isCancelled {
                 guard let self, let client = self.client else { return }
+                let began = Date()
                 do {
                     for try await ev in client.events() {
                         await self.apply(ev)
                     }
                 } catch {}
-                try? await Task.sleep(for: .seconds(5))
+                wait = Date().timeIntervalSince(began) > 30 ? 5 : min(wait * 2, 60)
+                try? await Task.sleep(for: .seconds(wait))
                 await self.catchUp()
             }
         }
@@ -868,19 +900,22 @@ final class AppModel {
     func catchUp() async {
         await refreshTree()
         guard let client, Self.n(tree.counts.newest) > Self.n(boundary), source != .starred else { return }
-        guard let page = try? await client.entries(query(for: source)) else { return }
-        let newer = page.entries.filter { Self.n($0.id) > Self.n(boundary) }
+        // The list may change while the page is fetched (another list chosen,
+        // or reloaded): then the page is for something else, and dropped.
+        let seq = loadSeq, asked = source
+        guard let page = try? await client.entries(query(for: asked)), seq == loadSeq, source == asked else { return }
+        let have = Set(entries.map(\.id))
+        let newer = page.entries.filter { Self.n($0.id) > Self.n(boundary) && !have.contains($0.id) }
         if newer.isEmpty { return }
         if entries.isEmpty { await load(); return }
         guard atTop, query.isEmpty else { pending = newer.count; return }
-        let have = Set(entries.map(\.id))
-        let inPage = Set(page.entries.map(\.id))
-        // The fresh page in its order, then anything loaded beyond it.
-        entries = page.entries.filter { have.contains($0.id) || Self.n($0.id) > Self.n(boundary) }
-            + entries.filter { !inPage.contains($0.id) }
+        entries = placeArrivals(entries, page: page.entries, added: newer)
         boundary = newer.map(\.id).max { Self.n($0) < Self.n($1) } ?? boundary
         pending = 0
     }
+
+    /// Writes the offline copy now, before the system may suspend the app.
+    func saveOffline() async { await offline?.flush() }
 
     /// Keeps unread and starred articles, with their text, for reading offline.
     func syncOffline() async {
@@ -969,7 +1004,7 @@ final class AppModel {
     static let refreshTask = "org.arenzana.correspondent.refresh"
 
     /// The unread count on the app icon (iOS asks first) or the Dock.
-    private var lastWidgetCount = -1
+    private var lastWidgetState = ""
 
     var showBadge: Bool = UserDefaults.standard.bool(forKey: "showBadge") {
         didSet {
@@ -1005,8 +1040,10 @@ final class AppModel {
 
     func updateBadge() async {
         let n = showBadge ? tree.counts.unread : 0
-        if n != lastWidgetCount {
-            lastWidgetCount = n
+        // Widgets show the count and the newest headlines, badge or not.
+        let shown = "\(tree.counts.unread) \(tree.counts.newest)"
+        if shown != lastWidgetState {
+            lastWidgetState = shown
             WidgetCenter.shared.reloadAllTimelines()
         }
         #if os(iOS)

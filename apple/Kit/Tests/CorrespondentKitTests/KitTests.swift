@@ -136,6 +136,16 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     #expect(got == [LiveEvent(name: "state", action: "star", ids: ["9"]), LiveEvent(name: "refresh", action: "", ids: [])])
 }
 
+/// Arrivals go into the list by its order; rows read here, which the
+/// unread page leaves out, stay where they were.
+@Test func placesArrivalsInTheList() {
+    func e(_ id: Int64, read: Bool = false) -> Entry { Entry(id: String(id), feedId: 1, title: "T\(id)", publishedAt: 1_790_000_000 + id, read: read) }
+    let list = [e(3, read: true), e(2, read: true), e(1)]
+    #expect(placeArrivals(list, page: [e(5), e(1)], added: [e(5)]).map(\.id) == ["5", "3", "2", "1"])
+    #expect(placeArrivals([e(9), e(6)], page: [e(9), e(7), e(6)], added: [e(7)]).map(\.id) == ["9", "7", "6"])
+    #expect(placeArrivals([e(2)], page: [e(2, read: true)], added: []).first?.read == true) // refreshed
+}
+
 @Test func keepsAnOfflineCopy() async throws {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let store = OfflineStore(account: "isma@rss.example.org", directory: dir)
@@ -155,6 +165,9 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
     #expect(await store.list(.folder(1), unreadOnly: true, search: nil, folders: folders).map(\.id) == ["1"])
 
     await store.patch(["1"], read: true)
+    // Writes wait a moment, so a burst is one write; flush writes now.
+    #expect(await OfflineStore(account: "isma@rss.example.org", directory: dir).entry("1") == nil)
+    await store.flush()
     // A fresh store reads the same file back.
     let again = OfflineStore(account: "isma@rss.example.org", directory: dir)
     #expect(await again.entry("1")?.read == true)

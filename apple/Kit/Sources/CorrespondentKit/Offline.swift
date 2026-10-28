@@ -30,7 +30,28 @@ public actor OfflineStore {
         }
     }
 
+    /// Writes the copy a moment later: the whole file is rewritten, text and
+    /// all, so a burst of changes (opening an article saves, marks it read,
+    /// refreshes the counts) becomes one write. flush() writes at once.
+    private var writing: Task<Void, Never>?
     private func persist() {
+        guard writing == nil else { return }
+        writing = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            if Task.isCancelled { return }
+            await self?.write()
+        }
+    }
+
+    /// Writes now anything not yet written (the app is going to the background).
+    public func flush() {
+        guard writing != nil else { return }
+        write()
+    }
+
+    private func write() {
+        writing?.cancel()
+        writing = nil
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(snapshot) {
             try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -84,7 +105,7 @@ public actor OfflineStore {
             case .unread: if e.read { return false }
             case .starred: if !e.starred { return false }
             case .today: if e.published < startOfDay { return false }
-            case .all, .search: break
+            case .all, .search: if unreadOnly && e.read { return false }
             case .feed(let id): if e.feedId != id || (unreadOnly && e.read) { return false }
             case .folder(let id): if !(folders[id]?.contains(e.feedId) ?? false) || (unreadOnly && e.read) { return false }
             }
@@ -98,6 +119,8 @@ public actor OfflineStore {
 
     /// Forget everything (sign-out).
     public func clear() {
+        writing?.cancel()
+        writing = nil
         snapshot = Snapshot()
         try? FileManager.default.removeItem(at: url)
     }

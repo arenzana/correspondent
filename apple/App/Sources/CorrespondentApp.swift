@@ -55,6 +55,7 @@ struct CorrespondentApp: App {
                     }
                 }
                 .onOpenURL { url in Task { await handle(url) } }
+                .onChange(of: app.account == nil) { _, signedOut in if signedOut { player.stop() } }
                 .onChange(of: IntentRouter.shared.pending) { _, url in
                     guard let url else { return }
                     IntentRouter.shared.pending = nil
@@ -62,7 +63,7 @@ struct CorrespondentApp: App {
                 }
                 .onChange(of: phase) { _, now in
                     if now == .active, app.account != nil { Task { await app.resumed() } }
-                    if now == .background { app.scheduleRefresh() }
+                    if now == .background { app.scheduleRefresh(); Task { await app.saveOffline() } }
                 }
                 #if os(macOS)
                 .frame(minWidth: 980, minHeight: 620)
