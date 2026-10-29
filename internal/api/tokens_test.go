@@ -61,11 +61,15 @@ func TestAPITokens(t *testing.T) {
 		t.Errorf("read-only write: %d", r.StatusCode)
 	}
 
-	// No token, however scoped, changes the account itself.
+	// No token, however scoped, changes the account itself: not the CLI's,
+	// not the Apple apps' (this one, from /tokens/login, is how they sign in).
 	for _, req := range [][3]string{
 		{"PUT", "/api/v1/password", `{"current":"password-alice","new":"stolen-password-1"}`},
 		{"POST", "/api/v1/tokens", `{"name":"more","scope":"write"}`},
 		{"PUT", "/api/v1/ai", `{"provider":"anthropic","key":"x"}`},
+		{"DELETE", "/api/v1/ai", ``},
+		{"PUT", "/api/v1/speech", `{"provider":"openai","key":"x"}`},
+		{"DELETE", "/api/v1/speech", ``},
 		{"PUT", "/api/v1/api-password", `{"password":"stolen-password-1"}`},
 		{"POST", "/api/v1/passkeys", ``},
 	} {
