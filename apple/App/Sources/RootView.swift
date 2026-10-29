@@ -142,7 +142,7 @@ struct WideLayout: View {
             #endif
         }
         .sheet(isPresented: $searching) { SearchView().environment(\.theme, theme).environment(app).environment(player).frame(minWidth: 520, minHeight: 480) }
-        .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme) }
+        .sheet(isPresented: $showingKeys) { ShortcutsView().environment(\.theme, theme).environment(app) }
         .sheet(isPresented: $managing) { ManageView().environment(\.theme, theme).environment(app) }
         .onReceive(NotificationCenter.default.publisher(for: .manage)) { _ in managing = true }
         #if !os(macOS)
@@ -174,6 +174,10 @@ struct WideLayout: View {
         if press.key == .escape { return escape() ? .handled : .ignored }
         // Settings has fields to type in: its letters are words, not commands.
         if settings { return .ignored }
+        let held = press.modifiers.intersection([.command, .control, .option])
+        if app.prefs.emacsKeys, held == .control || held == .option {
+            return emacs(String(press.key.character), meta: held == .option) ? .handled : .ignored
+        }
         return shortcut(press.characters) ? .handled : .ignored
     }
 
@@ -214,9 +218,38 @@ struct WideLayout: View {
         return true
     }
 
+    /// Emacs's keys, with Control or Meta (Option) held. False when the key
+    /// isn't one of them.
+    private func emacs(_ key: String, meta: Bool) -> Bool {
+        switch (meta, key) {
+        case (false, "n"): Task { await app.move(1) }
+        case (false, "p"): Task { await app.move(-1) }
+        case (true, "n"): Task { await app.move(1, unread: true) }
+        case (true, "p"): Task { await app.move(-1, unread: true) }
+        case (false, "v"): page(1)
+        case (true, "v"): page(-1)
+        case (true, "<"): edge(-1)
+        case (true, ">"): edge(1)
+        case (false, "s"): searching = true
+        case (false, "g"): _ = escape()
+        default: return false
+        }
+        return true
+    }
+
+    /// The beginning (-1) or the end (1): of the article when one is open,
+    /// otherwise of the list.
+    private func edge(_ to: Int) {
+        if app.article != nil {
+            NotificationCenter.default.post(name: .edge, object: to)
+        } else if let e = to < 0 ? app.entries.first : app.entries.last {
+            Task { await app.select(e.id) }
+        }
+    }
+
     /// Space: a page down the article, or the next article from its end.
     private func page(_ by: Int) {
-        if app.article == nil { Task { await app.move(1) } } else { NotificationCenter.default.post(name: .page, object: by) }
+        if app.article == nil { Task { await app.move(by) } } else { NotificationCenter.default.post(name: .page, object: by) }
     }
 
     #if os(macOS)
@@ -225,12 +258,15 @@ struct WideLayout: View {
     /// Command, Control or Option held, or in a sheet.
     private func watchKeys() -> Any? {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard let window = event.window, window.isKeyWindow, window.sheetParent == nil, window.attachedSheet == nil,
-                  event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return event }
+            guard let window = event.window, window.isKeyWindow, window.sheetParent == nil, window.attachedSheet == nil else { return event }
             // Typing in a field keeps its letters, and anywhere in Settings.
             // (Not every text input client: the article's web view is one.)
             if let text = window.firstResponder as? NSText, text.isEditable { return event }
             if searching || settings { return event }
+            let held = event.modifierFlags.intersection([.command, .control, .option])
+            if app.prefs.emacsKeys, held == .control || held == .option,
+               emacs(event.charactersIgnoringModifiers ?? "", meta: held == .option) { return nil }
+            guard held.isEmpty else { return event }
             // With the spotlight on, ↓ and ↑ move it, as on the web.
             if app.article != nil, app.prefs.spotlight != "off", event.keyCode == 125 || event.keyCode == 126 {
                 NotificationCenter.default.post(name: .spotlightStep, object: event.keyCode == 125 ? 1 : -1)
@@ -257,7 +293,7 @@ struct WideLayout: View {
     private var collapsedLeading: some View {
         HStack(spacing: 6) {
             Button { toggleSidebar() } label: { Image(systemName: "sidebar.left") }.iconButton()
-                .accessibilityLabel("Show the sidebar")
+                .accessibilityLabel("Show the sidebar").keyHint("[", "Show the sidebar")
             Mark(size: 24)
         }
     }
@@ -266,13 +302,14 @@ struct WideLayout: View {
     private var collapsedFooter: some View {
         HStack(spacing: 2) {
             Button { NotificationCenter.default.post(name: .addFeed, object: nil) } label: { Image(systemName: "plus") }.iconButton()
-                .accessibilityLabel("Add a feed")
+                .accessibilityLabel("Add a feed").keyHint("a", "Add a feed")
             Spacer()
             Button { settings = true } label: { Image(systemName: "slider.horizontal.3") }.iconButton()
-                .accessibilityLabel("Settings")
+                .accessibilityLabel("Settings").keyHint(",", "Settings")
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(theme.fog)
+        // The list's own paper: the sidebar's grey went with the sidebar.
+        .background(theme.sheet)
         .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
     }
 

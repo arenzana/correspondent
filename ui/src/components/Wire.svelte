@@ -10,6 +10,7 @@
   import { api, type Entry } from '../lib/api'
   import { swipe } from '../lib/swipe'
   import Icon from './Icon.svelte'
+  import KeyHint from './KeyHint.svelte'
   import FeedIcon from './FeedIcon.svelte'
 
   let scroller: HTMLElement | undefined = $state()
@@ -280,11 +281,13 @@
       {#if app.entries.some((e) => e.audio && !e.read)}
         <button class="icon-btn" aria-label="Listen to the unread articles that have audio" title="Listen to the unread articles that have audio (Shift+L)" onclick={() => app.listenToList()}>
           <Icon name="headphones" />
+          <KeyHint keys="L" />
         </button>
       {/if}
       {#if canMarkAll}
         <button class="icon-btn" aria-label="Mark all read" title="Mark all read (Shift+A)" onclick={() => app.markAllRead()}>
           <Icon name="checkAll" />
+          <KeyHint keys="A" />
         </button>
       {/if}
     </div>

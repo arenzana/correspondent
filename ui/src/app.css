@@ -238,6 +238,7 @@ a {
 }
 
 .icon-btn {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 32px;
@@ -286,6 +287,34 @@ kbd {
   border-bottom-width: 2px;
   color: var(--slate);
   background: var(--sheet);
+}
+
+/* Show shortcuts: a button's key on a tiny keycap at its corner, out of the
+   layout. They're for keyboards, so touch screens and phones go without. */
+.keycap {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  padding: 1px 3px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  color: var(--slate);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: calc(9px * var(--ui-scale));
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.keycap.inline {
+  position: static;
+  opacity: 0.75;
+}
+@media (hover: none), (max-width: 699px) {
+  .keycap {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

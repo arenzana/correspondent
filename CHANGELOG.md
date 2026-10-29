@@ -7,6 +7,27 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-29
+
+### Added
+
+- Settings, Reading: **Show shortcuts** puts each key on the button it
+  presses (Star `s`, Summary `S`, the lists' `g u`, `g t`…), and every
+  such button names its key in its tooltip. On the web, the Mac and
+  iPad; not on phones.
+- Settings, Reading: **Emacs keys** adds Emacs's bindings beside the
+  single letters: Control-N and Control-P for the next and previous
+  article, Meta-N and Meta-P for unread ones, Control-V and Meta-V to
+  page, Meta-< and Meta-> for the beginning and end of the article (or
+  of the list when no article is open), Control-S to search, Control-G
+  to close. Meta is Option on a Mac. The shortcuts sheet (`?`) lists
+  them while they're on.
+
+### Fixed
+
+- On the Mac, with the sidebar hidden, the bar under the list is the
+  list's white instead of the sidebar's grey.
+
 ## [0.24.2] - 2026-10-29
 
 ### Changed

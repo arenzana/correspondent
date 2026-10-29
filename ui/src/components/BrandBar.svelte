@@ -4,6 +4,7 @@
   import { app } from '../lib/state.svelte'
   import { receive, send } from '../lib/dock.svelte'
   import Icon from './Icon.svelte'
+  import KeyHint from './KeyHint.svelte'
   import Mark from './Mark.svelte'
 </script>
 
@@ -18,6 +19,7 @@
     onclick={() => app.setPrefs({ sidebar: !app.prefs.sidebar })}
   >
     <Icon name={app.prefs.sidebar ? 'back' : 'chevron'} size={18} />
+    <KeyHint keys="[" />
   </button>
 </header>
 

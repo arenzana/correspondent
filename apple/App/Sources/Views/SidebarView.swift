@@ -31,7 +31,7 @@ struct SidebarView: View {
                 Spacer(minLength: 0)
                 if let onCollapse {
                     Button(action: onCollapse) { Image(systemName: "sidebar.left") }.iconButton()
-                        .accessibilityLabel("Hide the sidebar")
+                        .accessibilityLabel("Hide the sidebar").keyHint("[", "Hide the sidebar")
                 }
             }
             .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 14)
@@ -41,6 +41,7 @@ struct SidebarView: View {
                     Image(systemName: "magnifyingglass").font(.system(size: 13))
                     Text("Search or jump to…").font(Typeface.ui.font(14))
                     Spacer()
+                    if KeyHint.shown(app.prefs) { KeyCap(key: app.prefs.emacsKeys ? "/  C-s" : "/") }
                 }
                 .foregroundStyle(theme.slate)
                 .padding(.horizontal, 12).frame(height: 36)
@@ -52,10 +53,10 @@ struct SidebarView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
-                    row(.unread, "Unread", "tray", app.tree.counts.unread)
-                    row(.today, "Today", "sun.max", app.tree.counts.today)
-                    row(.starred, "Starred", "star", app.tree.counts.starred)
-                    row(.all, "All articles", "square.3.layers.3d", 0)
+                    row(.unread, "Unread", "tray", app.tree.counts.unread, key: "g u")
+                    row(.today, "Today", "sun.max", app.tree.counts.today, key: "g t")
+                    row(.starred, "Starred", "star", app.tree.counts.starred, key: "g s")
+                    row(.all, "All articles", "square.3.layers.3d", 0, key: "g a")
                     Divider().overlay(theme.rule.opacity(0.6)).padding(.vertical, 8).padding(.horizontal, 12)
 
                     if !app.tree.searches.isEmpty {
@@ -102,12 +103,12 @@ struct SidebarView: View {
 
             HStack(spacing: 2) {
                 Button { adding = true } label: { Image(systemName: "plus") }.iconButton()
-                    .accessibilityLabel("Add a feed")
+                    .accessibilityLabel("Add a feed").keyHint("a", "Add a feed")
                 Button { NotificationCenter.default.post(name: .manage, object: nil) } label: { Image(systemName: "list.bullet.rectangle") }.iconButton()
-                    .accessibilityLabel("Manage subscriptions")
+                    .accessibilityLabel("Manage subscriptions").keyHint("g m", "Manage subscriptions")
                 Spacer()
                 Button(action: onSettings) { Image(systemName: "slider.horizontal.3") }.iconButton()
-                    .accessibilityLabel("Settings")
+                    .accessibilityLabel("Settings").keyHint(",", "Settings")
             }
             .padding(.horizontal, 10).padding(.vertical, 8)
             .overlay(alignment: .top) { Rectangle().fill(theme.rule.opacity(0.6)).frame(height: 1) }
@@ -202,7 +203,7 @@ struct SidebarView: View {
             .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 2)
     }
 
-    private func row(_ s: Source, _ label: String, _ icon: String, _ count: Int) -> some View {
+    private func row(_ s: Source, _ label: String, _ icon: String, _ count: Int, key: String? = nil) -> some View {
         Button {
             Task { await app.go(s); onChoose() }
         } label: {
@@ -210,6 +211,7 @@ struct SidebarView: View {
                 Image(systemName: icon).font(.system(size: 14)).frame(width: 18).foregroundStyle(app.source == s ? theme.accent : theme.slate)
                 Text(label).font(Typeface.ui.font(15, weight: app.source == s ? 560 : 450)).foregroundStyle(theme.ink).lineLimit(1)
                 Spacer()
+                if let key, KeyHint.shown(app.prefs) { KeyCap(key: key) }
                 Count(n: count)
             }
             .padding(.horizontal, 12).frame(height: 34)

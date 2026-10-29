@@ -93,6 +93,52 @@ extension View {
     }
 }
 
+extension View {
+    /// The key that does what this control does: in its tooltip always, and
+    /// on it, in a keycap, while Settings shows shortcuts.
+    func keyHint(_ key: String, _ what: String) -> some View {
+        modifier(KeyHint(key: key, what: what))
+    }
+}
+
+struct KeyHint: ViewModifier {
+    @Environment(AppModel.self) private var app
+    @Environment(\.theme) private var theme
+    var key: String
+    var what: String
+
+    func body(content: Content) -> some View {
+        content
+            .help("\(what) (\(key))")
+            .overlay(alignment: .bottomTrailing) {
+                if KeyHint.shown(app.prefs) { KeyCap(key: key).offset(x: 2, y: 2).allowsHitTesting(false) }
+            }
+    }
+
+    /// Keycaps show where there's a keyboard: not on iPhone, whatever the
+    /// Mac or the web chose for the account.
+    @MainActor static func shown(_ prefs: Prefs) -> Bool {
+        #if os(iOS)
+        prefs.keyHints && UIDevice.current.userInterfaceIdiom != .phone
+        #else
+        prefs.keyHints
+        #endif
+    }
+}
+
+/// A key, small, as on a keyboard.
+struct KeyCap: View {
+    @Environment(\.theme) private var theme
+    var key: String
+    var body: some View {
+        Text(key).font(.system(size: 9.5, weight: .semibold, design: .monospaced)).foregroundStyle(theme.slate)
+            .padding(.horizontal, 3).frame(minWidth: 13, minHeight: 13)
+            .background(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(theme.sheet))
+            .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).stroke(theme.rule))
+            .accessibilityHidden(true)
+    }
+}
+
 struct IconButtonStyle: ButtonStyle {
     @Environment(\.theme) private var theme
     func makeBody(configuration: Configuration) -> some View {
@@ -107,10 +153,17 @@ struct IconButtonStyle: ButtonStyle {
 
 /// The keyboard shortcuts, as the web's sheet (?).
 struct ShortcutsView: View {
+    @Environment(AppModel.self) private var app
     @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
 
-    private let groups: [(String, [(String, String)])] = [
+    private var groups: [(String, [(String, String)])] { Self.letters + (app.prefs.emacsKeys ? [Self.emacs] : []) }
+
+    static let emacs: (String, [(String, String)]) =
+        ("Emacs (Meta is Option)", [("C-n  C-p", "Next, previous article"), ("M-n  M-p", "Next, previous unread"), ("C-v  M-v", "Page down, up"),
+                   ("M-<  M->", "Beginning, end of the article (or the list)"), ("C-s", "Search or jump to"), ("C-g", "Close")])
+
+    private static let letters: [(String, [(String, String)])] = [
         ("Reading", [("j  k", "Next, previous article"), ("n  p", "Next, previous unread"), ("Space", "Page down; at the end, the next article"),
                      ("↓  ↑", "Move the spotlight, when it's on"), ("v", "Open the original"), ("f", "Focused reading"), ("Esc", "Close")]),
         ("Article", [("s", "Star"), ("m", "Mark read or unread"), ("S", "Summary"), ("b", "Send to…"), ("l", "Read aloud"), ("L", "Listen to the list")]),

@@ -2,7 +2,8 @@
   import { app } from '../lib/state.svelte'
   import Modal from './Modal.svelte'
 
-  const groups: { title: string; keys: [string[], string][] }[] = [
+  type Group = { title: string; keys: [string[], string][] }
+  const groups: Group[] = [
     {
       title: 'Reading',
       keys: [
@@ -47,13 +48,26 @@
       ],
     },
   ]
+  // With Emacs keys on, Control (C-) and Meta, Option or Alt (M-), too.
+  const emacs: Group = {
+    title: 'Emacs',
+    keys: [
+      [['C-n', 'C-p'], 'Next or previous article'],
+      [['M-n', 'M-p'], 'Next or previous unread'],
+      [['C-v', 'M-v'], 'Scroll down or up'],
+      [['M-<', 'M->'], 'Beginning or end'],
+      [['C-s'], 'Search'],
+      [['C-g'], 'Close, like Esc'],
+    ],
+  }
+  const shown = $derived(app.prefs.emacsKeys ? [...groups, emacs] : groups)
 </script>
 
 <Modal label="Keyboard shortcuts" onclose={() => (app.shortcutsOpen = false)} width={720}>
   <div class="sheet">
     <h2>Keyboard shortcuts</h2>
     <div class="cols">
-      {#each groups as g (g.title)}
+      {#each shown as g (g.title)}
         <section>
           <h3>{g.title}</h3>
           <dl>
@@ -104,7 +118,7 @@
   }
   dl div {
     display: grid;
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: 72px 1fr;
     align-items: center;
     gap: 10px;
   }

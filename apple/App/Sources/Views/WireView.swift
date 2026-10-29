@@ -93,11 +93,11 @@ struct WireView: View {
             }
             if app.entries.contains(where: { $0.audio && !$0.read }) {
                 Button { Task { await player.playList(app.entries, from: app.selectedID) } } label: { Image(systemName: "headphones") }
-                    .iconButton().accessibilityLabel("Listen to the unread articles that have audio")
+                    .iconButton().accessibilityLabel("Listen to the unread articles that have audio").keyHint("L", "Listen to the list")
             }
             if app.source != .starred {
                 Button { Task { await app.markAllRead() } } label: { Image(systemName: "checkmark.circle") }
-                    .iconButton().accessibilityLabel("Mark all read")
+                    .iconButton().accessibilityLabel("Mark all read").keyHint("A", "Mark all read")
             }
         }
         .padding(.leading, 18).padding(.trailing, 12).padding(.vertical, 12)

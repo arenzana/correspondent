@@ -28,7 +28,7 @@ struct SettingsView: View {
     /// The sections, with the words each answers to (as the web's settings search).
     private static let sections: [(title: String, words: String)] = [
         ("Appearance", "theme sun sunrise sunset day evening night dark light system app icon wire byline morse"),
-        ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip"),
+        ("Reading", "text size interface larger smaller density compact comfortable system font typeface serif sans bionic spotlight focus paragraph line dim line length unread only mark read opened sponsored skip keyboard shortcuts keys emacs"),
         ("Feeds", "feeds subscriptions manage folders rename move pause delete failing address opml import export full pages"),
         ("AI", "ai model anthropic openai claude key summaries parser read aloud speech voice tts elevenlabs deepgram"),
         ("Integrations", "send integration webhook readwise reader instapaper raindrop wallabag linkding karakeep obsidian vault note read later"),
@@ -205,8 +205,23 @@ struct SettingsView: View {
                        isOn: app.prefs.markOnOpen) { v in app.setPrefs({ $0.markOnOpen = v }, ["markOnOpen": v]) }
                 toggle("Skip sponsored posts", "Posts titled “Sponsor:” and the like arrive already read, here and in Reeder.",
                        isOn: app.prefs.skipSponsored) { v in app.setPrefs({ $0.skipSponsored = v }, ["skipSponsored": v]) }
+                if keyboard {
+                    toggle("Show shortcuts", "Keys appear on the buttons they press, and in their tooltips.",
+                           isOn: app.prefs.keyHints) { v in app.setPrefs({ $0.keyHints = v }, ["keyHints": v]) }
+                    toggle("Emacs keys", "Control-N and Control-P move through articles, Meta-< and Meta-> go to the beginning and the end, Control-G closes. Meta is Option. The single letters keep working.",
+                           isOn: app.prefs.emacsKeys) { v in app.setPrefs({ $0.emacsKeys = v }, ["emacsKeys": v]) }
+                }
             }
         }
+    }
+
+    /// Keyboard settings, where there's usually a keyboard.
+    private var keyboard: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom != .phone
+        #else
+        true
+        #endif
     }
 
     private var feeds: some View {

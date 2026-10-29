@@ -108,6 +108,8 @@ extension Notification.Name {
     static let sidebar = Notification.Name("org.arenzana.correspondent.sidebar")
     /// Pages the article: the object is 1 (down) or -1 (up).
     static let page = Notification.Name("org.arenzana.correspondent.page")
+    /// Scrolls the article to its beginning (-1) or end (1).
+    static let edge = Notification.Name("org.arenzana.correspondent.edge")
     static let shortcuts = Notification.Name("org.arenzana.correspondent.shortcuts")
     static let openSettings = Notification.Name("org.arenzana.correspondent.openSettings")
     static let manage = Notification.Name("org.arenzana.correspondent.manage")

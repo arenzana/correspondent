@@ -139,27 +139,27 @@ struct ArticleView: View {
             Spacer()
             Button { Task { await app.toggleStar(e.id) } } label: { Image(systemName: e.starred ? "star.fill" : "star") }
                 .iconButton().foregroundStyle(e.starred ? theme.seal : theme.slate)
-                .accessibilityLabel(e.starred ? "Unstar" : "Star")
+                .accessibilityLabel(e.starred ? "Unstar" : "Star").keyHint("s", e.starred ? "Unstar" : "Star")
             Button { Task { await app.toggleRead(e.id) } } label: { Image(systemName: e.read ? "circle" : "largecircle.fill.circle") }
-                .iconButton().accessibilityLabel(e.read ? "Mark unread" : "Mark read")
+                .iconButton().accessibilityLabel(e.read ? "Mark unread" : "Mark read").keyHint("m", e.read ? "Mark unread" : "Mark read")
             if app.speechConfigured || e.audio {
-                listenButton(e).iconButton()
+                listenButton(e).iconButton().keyHint("l", "Read aloud")
             }
             Button { Task { await app.summarize() } } label: {
                 Image(systemName: "text.alignleft").symbolEffect(.pulse, isActive: app.summarizing)
             }
-            .iconButton().accessibilityLabel("Summary")
-            sendMenu.iconButton()
+            .iconButton().accessibilityLabel("Summary").keyHint("S", "Summary")
+            sendMenu.iconButton().keyHint("b", "Send to…")
             Button { textControls = true } label: { Image(systemName: "textformat.size") }
                 .iconButton().accessibilityLabel("Text size and typeface")
                 .popover(isPresented: $textControls) { TextControls().environment(\.theme, theme).environment(app).padding(20).frame(width: 300) }
             Button { NotificationCenter.default.post(name: .focus, object: nil) } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }
-                .iconButton().accessibilityLabel("Focused reading")
+                .iconButton().accessibilityLabel("Focused reading").keyHint("f", "Focused reading")
             Button { Task { await app.loadFullArticle() } } label: { Image(systemName: "doc.text") }
                 .iconButton().accessibilityLabel("Load the full article").disabled(e.fullText)
             if let url = URL(string: e.url), !e.url.isEmpty {
                 Button { openURL(url) } label: { Image(systemName: "arrow.up.forward.square") }
-                    .iconButton().accessibilityLabel("Open original")
+                    .iconButton().accessibilityLabel("Open original").keyHint("v", "Open original")
             }
         }
         .padding(.horizontal, 10).frame(height: 52)
@@ -467,6 +467,14 @@ final class WebDelegate: NSObject, WKNavigationDelegate, WKScriptMessageHandler 
                     if case .success(let r) = result, r as? String == "end" { self?.onEnd() }
                 }
             }
+        })
+        observers.append(center.addObserver(forName: .edge, object: nil, queue: .main) { [weak web] note in
+            let to = note.object as? Int ?? 1
+            let js = """
+            window.scrollTo({ top: \(to) < 0 ? 0 : document.documentElement.scrollHeight,
+              behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+            """
+            MainActor.assumeIsolated { web?.evaluateJavaScript(js, in: nil, in: .defaultClient) { _ in } }
         })
     }
 

@@ -701,6 +701,19 @@
             <small>Posts titled "Sponsor:", "[Sponsor]" and the like, or tagged as sponsored, arrive already read, here and in Reeder, and don't notify you. They stay in All.</small></span>
           <input type="checkbox" role="switch" checked={app.prefs.skipSponsored} onchange={(e) => app.setPrefs({ skipSponsored: e.currentTarget.checked })} />
         </label>
+        <div class="card" data-terms="keyboard shortcuts keys emacs control meta">
+          <h3>Keyboard</h3>
+          <label class="toggle">
+            <span><strong>Show shortcuts</strong>
+              <small>Keys appear on the buttons they press.</small></span>
+            <input type="checkbox" role="switch" checked={app.prefs.keyHints} onchange={(e) => app.setPrefs({ keyHints: e.currentTarget.checked })} />
+          </label>
+          <label class="toggle">
+            <span><strong>Emacs keys</strong>
+              <small>Control-N and -P move through articles, Meta-&lt; and Meta-&gt; go to the beginning and end, Control-G closes. The single letters keep working.</small></span>
+            <input type="checkbox" role="switch" checked={app.prefs.emacsKeys} onchange={(e) => app.setPrefs({ emacsKeys: e.currentTarget.checked })} />
+          </label>
+        </div>
 
       </section>
 

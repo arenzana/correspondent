@@ -18,6 +18,7 @@
   import BrandBar from './components/BrandBar.svelte'
   import ToolBar from './components/ToolBar.svelte'
   import { dock } from './lib/dock.svelte'
+  import { emacsAction, type EmacsAction } from './lib/keys'
 
   const NAV_DEFAULT = 264
   const listDefault = () => Math.round(Math.min(440, Math.max(360, window.innerWidth * 0.3)))
@@ -65,6 +66,37 @@
     return pressable && el !== clicked
   }
 
+  /** Esc, and C-g: the innermost thing open closes. */
+  function quit() {
+    if (app.readingOpen) app.readingOpen = false
+    else if (app.sendOpen) app.sendOpen = false
+    else if (app.focusMode) app.focusMode = false
+    else if (app.navOpen) app.navOpen = false
+    else if (app.pane === 'article' && window.matchMedia('(max-width: 699px)').matches) app.back()
+    else if (app.article) app.closeArticle()
+  }
+
+  /** M-< and M->: the article's top or end, or the list's first or last article. */
+  function edge(end: boolean) {
+    if (app.article) return article?.scrollToEdge(end)
+    const e = end ? app.entries.at(-1) : app.entries[0]
+    if (e) app.select(e.id)
+  }
+
+  // With Emacs keys on; the single letters keep working beside them.
+  const emacsActions: Record<EmacsAction, () => void> = {
+    next: () => app.move(1),
+    prev: () => app.move(-1),
+    nextUnread: () => app.move(1, true),
+    prevUnread: () => app.move(-1, true),
+    pageDown: () => (app.article ? article?.pageDown() : app.move(1)),
+    pageUp: () => (app.article ? article?.pageDown(true) : app.move(-1)),
+    top: () => edge(false),
+    bottom: () => edge(true),
+    search: () => (app.paletteOpen = true),
+    quit,
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (!app.user) return
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -73,7 +105,16 @@
       return
     }
     // Shortcuts never fire while typing or while a dialog owns the keyboard.
-    if (typing(e.target) || overlayOpen() || e.metaKey || e.ctrlKey || e.altKey) return
+    if (typing(e.target) || overlayOpen()) return
+    const emacs = app.prefs.emacsKeys ? emacsAction(e) : null
+    if (emacs) {
+      e.preventDefault()
+      pendingG = false
+      clearTimeout(gTimer)
+      emacsActions[emacs]()
+      return
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return
     if (e.key === ' ' && control(e.target)) return
 
     if (pendingG) {
@@ -114,14 +155,7 @@
       ',': () => app.openSettings(),
       '/': () => (app.paletteOpen = true),
       '?': () => (app.shortcutsOpen = true),
-      Escape: () => {
-        if (app.readingOpen) app.readingOpen = false
-        else if (app.sendOpen) app.sendOpen = false
-        else if (app.focusMode) app.focusMode = false
-        else if (app.navOpen) app.navOpen = false
-        else if (app.pane === 'article' && window.matchMedia('(max-width: 699px)').matches) app.back()
-        else if (app.article) app.closeArticle()
-      },
+      Escape: quit,
       g: () => {
         pendingG = true
         gTimer = setTimeout(() => (pendingG = false), 1200)

@@ -67,6 +67,10 @@ export interface Prefs {
   appIcon: AppIcon
   /** Where "Send to Obsidian" makes notes: the vault's name and a folder in it. */
   obsidian: { vault: string; folder: string } | null
+  /** Show shortcuts: keys on the buttons they press. */
+  keyHints: boolean
+  /** Emacs-style Control and Meta keys, on top of the single letters. */
+  emacsKeys: boolean
 }
 
 const defaultPrefs: Prefs = {
@@ -90,6 +94,8 @@ const defaultPrefs: Prefs = {
   listWidth: null,
   appIcon: 'wire',
   obsidian: null,
+  keyHints: false,
+  emacsKeys: false,
 }
 
 /** What the player is playing; local means a saved copy on this device. */

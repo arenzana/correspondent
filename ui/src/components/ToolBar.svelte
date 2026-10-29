@@ -4,22 +4,27 @@
   import { app } from '../lib/state.svelte'
   import { receive, send } from '../lib/dock.svelte'
   import Icon from './Icon.svelte'
+  import KeyHint from './KeyHint.svelte'
 </script>
 
 <footer class="foot" in:receive={{ key: 'toolbar' }} out:send={{ key: 'toolbar' }}>
   <button class="icon-btn" aria-label="Add feed" title="Add feed (a)" onclick={() => (app.addFeedOpen = true)}>
     <Icon name="plus" />
+    <KeyHint keys="a" />
   </button>
   <button class="icon-btn" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onclick={() => (app.shortcutsOpen = true)}>
     <Icon name="keyboard" />
+    <KeyHint keys="?" />
   </button>
   <button class="icon-btn" aria-label="Manage subscriptions" title="Manage subscriptions (g m)"
     aria-pressed={app.page === 'manage'} onclick={() => app.manage()}>
     <Icon name="rss" />
+    <KeyHint keys="g m" />
   </button>
   <span class="spacer"></span>
-  <button class="icon-btn" aria-label="Settings" title="Settings" onclick={() => app.openSettings()}>
+  <button class="icon-btn" aria-label="Settings" title="Settings (,)" onclick={() => app.openSettings()}>
     <Icon name="settings" />
+    <KeyHint keys="," />
   </button>
 </footer>
 

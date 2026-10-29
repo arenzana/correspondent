@@ -265,6 +265,10 @@ public struct Prefs: Codable, Hashable, Sendable {
     public var bionic = false
     /// off, paragraph or line: one paragraph or line clear, the rest dimmed.
     public var spotlight = "off"
+    /// Buttons show the keys that press them.
+    public var keyHints = false
+    /// Emacs's keys too (Control-N, Meta-<…), beside the single letters.
+    public var emacsKeys = false
     /// serif (Newsreader) or sans (Schibsted Grotesk).
     public var readFont: String
     /// wire, byline or morse: the app's icon, as the web app's.
@@ -324,6 +328,8 @@ public struct Prefs: Codable, Hashable, Sendable {
         uiFont = (try? c.decodeIfPresent(String.self, forKey: .uiFont)) ?? "grotesk"
         sidebar = (try? c.decodeIfPresent(Bool.self, forKey: .sidebar)) ?? true
         spotlight = (try? c.decodeIfPresent(String.self, forKey: .spotlight)) ?? "off"
+        keyHints = (try? c.decodeIfPresent(Bool.self, forKey: .keyHints)) ?? false
+        emacsKeys = (try? c.decodeIfPresent(Bool.self, forKey: .emacsKeys)) ?? false
         obsidian = try? c.decodeIfPresent(Obsidian.self, forKey: .obsidian)
     }
 }

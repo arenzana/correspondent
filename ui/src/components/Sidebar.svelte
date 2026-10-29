@@ -2,17 +2,18 @@
   import { app, type Source, type View } from '../lib/state.svelte'
   import type { Feed } from '../lib/api'
   import Icon, { type IconName } from './Icon.svelte'
+  import KeyHint from './KeyHint.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import Pulse from './Pulse.svelte'
   import BrandBar from './BrandBar.svelte'
   import ToolBar from './ToolBar.svelte'
   import { dock } from '../lib/dock.svelte'
 
-  const views: { view: View; label: string; icon: IconName }[] = [
-    { view: 'unread', label: 'Unread', icon: 'inbox' },
-    { view: 'today', label: 'Today', icon: 'sun' },
-    { view: 'starred', label: 'Starred', icon: 'star' },
-    { view: 'all', label: 'All articles', icon: 'layers' },
+  const views: { view: View; label: string; icon: IconName; keys: string }[] = [
+    { view: 'unread', label: 'Unread', icon: 'inbox', keys: 'g u' },
+    { view: 'today', label: 'Today', icon: 'sun', keys: 'g t' },
+    { view: 'starred', label: 'Starred', icon: 'star', keys: 'g s' },
+    { view: 'all', label: 'All articles', icon: 'layers', keys: 'g a' },
   ]
 
   let collapsed = $state<Record<number, boolean>>(loadCollapsed())
@@ -58,9 +59,10 @@
 <nav class="sidebar" aria-label="Feeds">
   {#if !dock.docked}<BrandBar />{/if}
 
-  <button class="search" onclick={() => (app.paletteOpen = true)}>
+  <button class="search" title="Search or jump to (/)" onclick={() => (app.paletteOpen = true)}>
     <Icon name="search" size={15} />
     <span>Search or jump to…</span>
+    <KeyHint keys="/" inline />
     <kbd>⌘K</kbd>
   </button>
 
@@ -70,9 +72,10 @@
         {@const s: Source = { kind: 'view', view: v.view }}
         {@const n = viewCount(v.view)}
         <li>
-          <button class="row" aria-current={active(s) ? 'page' : undefined} onclick={() => app.go(s)}>
+          <button class="row" aria-current={active(s) ? 'page' : undefined} onclick={() => app.go(s)} title="{v.label} ({v.keys})">
             <span class="glyph"><Icon name={v.icon} size={16} /></span>
             <span class="name">{v.label}</span>
+            <KeyHint keys={v.keys} inline />
             {#if n}<span class="count">{n}</span>{/if}
           </button>
         </li>

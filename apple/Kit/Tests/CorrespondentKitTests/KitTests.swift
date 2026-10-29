@@ -100,6 +100,13 @@ final class FakeServer: URLProtocol, @unchecked Sendable {
         #expect(put.httpMethod == "PUT" && sent?["navWidth"] as? Int == 280 && sent?["place"] != nil && sent?["theme"] as? String == "evening")
     }
 
+    @Test func readsTheKeyboardPrefs() throws {
+        let off = try JSONDecoder().decode(Prefs.self, from: Data(#"{"theme":"night"}"#.utf8))
+        #expect(!off.keyHints && !off.emacsKeys)
+        let on = try JSONDecoder().decode(Prefs.self, from: Data(#"{"keyHints":true,"emacsKeys":true}"#.utf8))
+        #expect(on.keyHints && on.emacsKeys)
+    }
+
         @Test func normalizesTheServerAddress() {
         #expect(Client.serverURL("rss.arenzana.org/")?.absoluteString == "https://rss.arenzana.org")
         #expect(Client.serverURL("http://localhost:8080")?.absoluteString == "http://localhost:8080")

@@ -5,6 +5,7 @@
   import { longDate, readingMinutes } from '../lib/time'
   import { looksPartial as isPartial } from '../lib/partial'
   import Icon from './Icon.svelte'
+  import KeyHint from './KeyHint.svelte'
   import FeedIcon from './FeedIcon.svelte'
   import ReadingSettings from './ReadingSettings.svelte'
   import SendMenu from './SendMenu.svelte'
@@ -72,6 +73,11 @@
     }
     scroller.scrollBy({ top: (reverse ? -1 : 1) * scroller.clientHeight * 0.85, behavior: scrollMotion() })
   }
+
+  /** M-< and M->: the top or the end of the article. */
+  export function scrollToEdge(end: boolean) {
+    scroller?.scrollTo({ top: end ? scroller.scrollHeight : 0, behavior: scrollMotion() })
+  }
 </script>
 
 <article class="pane" aria-label="Article">
@@ -88,6 +94,7 @@
         onclick={() => (app.focusMode = !app.focusMode)}
       >
         <Icon name="focus" />
+        <KeyHint keys="f" />
       </button>
       <span class="position">{position}</span>
       <span class="spacer"></span>
@@ -99,6 +106,7 @@
         onclick={() => app.toggleStar()}
       >
         <Icon name="star" fill={a.entry.starred} />
+        <KeyHint keys="s" />
       </button>
       <button
         class="icon-btn"
@@ -107,6 +115,7 @@
         onclick={() => app.toggleRead()}
       >
         <Icon name={a.entry.read ? 'circle' : 'dot'} />
+        <KeyHint keys="m" />
       </button>
       {#if a.entry.url}
         <button
@@ -121,6 +130,7 @@
         </button>
         <a class="icon-btn" href={a.entry.url} target="_blank" rel="noopener noreferrer" aria-label="Open original" title="Open original (v)">
           <Icon name="external" />
+          <KeyHint keys="v" />
         </a>
       {/if}
       {#if app.ai || a.entry.summary}
@@ -134,6 +144,7 @@
           onclick={() => app.summarize()}
         >
           <Icon name="summary" />
+          <KeyHint keys="S" />
         </button>
       {/if}
       {#if app.speech || a.entry.audio}
@@ -147,6 +158,7 @@
           onclick={() => app.readAloud()}
         >
           <Icon name="headphones" />
+          <KeyHint keys="l" />
         </button>
       {/if}
       <div class="aa">
@@ -159,6 +171,7 @@
           onclick={() => ((app.readingOpen = false), (app.sendOpen = !app.sendOpen))}
         >
           <Icon name="send" />
+          <KeyHint keys="b" />
         </button>
         {#if app.sendOpen}<SendMenu />{/if}
       </div>
