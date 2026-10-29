@@ -35,7 +35,7 @@ Usage:
   corr auth status | logout
   corr list [--view unread|starred|today|all] [--feed ID] [--folder ID]
             [--search TEXT] [--saved ID] [--limit N] [--cursor C] [--oldest]
-  corr read ID [--full] [--html] [--keep-unread]
+  corr read ID [--full] [--html] [--keep-unread] [--no-images]
   corr mark read|unread|star|unstar ID...
   corr mark-all-read [--feed ID | --folder ID | --view today] [--search TEXT | --saved ID]
   corr feeds | folders

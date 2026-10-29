@@ -16,31 +16,68 @@ import (
 
 // Markdown converts HTML to Markdown. base resolves relative links and
 // images (proxied images are /img/… on the server).
-func Markdown(s, base string) string { return convert(s, base, false) }
+func Markdown(s, base string) string { out, _ := convert(s, base, false, false); return out }
 
 // Numbered converts HTML to Markdown for reading in a terminal: link text
 // is followed by a number, and the addresses are listed at the end, so
 // paragraphs aren't interrupted by long URLs.
-func Numbered(s, base string) string { return convert(s, base, true) }
+func Numbered(s, base string) string { out, _ := convert(s, base, true, false); return out }
 
-func convert(s, base string, numbered bool) string {
+// Picture is an image that stands on its own in the article. Pictured
+// writes it as Placeholder(i), a paragraph of its own, for the terminal to
+// draw in its place; Label is what to show if it can't.
+type Picture struct {
+	URL, Label string
+}
+
+// Placeholder is the word standing for picture i in Pictured's Markdown.
+func Placeholder(i int) string { return "CORRPICTURE" + strconv.Itoa(i) }
+
+// PlaceholderAt is the picture a line of rendered text stands for, if any.
+func PlaceholderAt(line string) (int, bool) {
+	m := placeholder.FindStringSubmatch(line)
+	if m == nil {
+		return 0, false
+	}
+	i, err := strconv.Atoi(m[1])
+	return i, err == nil
+}
+
+// Pictured is Numbered, with each image that stands on its own (not one in
+// the middle of a sentence) left as a placeholder to draw.
+func Pictured(s, base string) (string, []Picture) { return convert(s, base, true, true) }
+
+func convert(s, base string, numbered, pictures bool) (string, []Picture) {
 	nodes, err := html.ParseFragment(strings.NewReader(s), &html.Node{Type: html.ElementNode, Data: "div", DataAtom: atom.Div})
 	if err != nil {
-		return s
+		return s, nil
 	}
 	b, _ := url.Parse(base)
-	w := &writer{base: b, numbered: numbered}
+	w := &writer{base: b, numbered: numbered, pictures: pictures}
 	for _, n := range nodes {
 		w.block(n)
 	}
 	out := strings.TrimSpace(blankLines.ReplaceAllString(w.out.String(), "\n\n")) + "\n"
+	if pictures {
+		// A picture in a sentence, a list or a table is shown as its label.
+		lines := strings.Split(out, "\n")
+		for i, l := range lines {
+			if !placeholder.MatchString(l) {
+				lines[i] = inText.ReplaceAllStringFunc(l, func(m string) string {
+					n, _ := strconv.Atoi(inText.FindStringSubmatch(m)[1])
+					return w.pics[n].Label
+				})
+			}
+		}
+		out = strings.Join(lines, "\n")
+	}
 	if len(w.refs) > 0 {
 		out += "\n---\n\n**Links**\n\n"
 		for i, r := range w.refs {
 			out += fmt.Sprintf("%d. <%s>\n", i+1, r)
 		}
 	}
-	return out
+	return out, w.pics
 }
 
 // ref numbers an address, reusing the number of one seen before.
@@ -55,8 +92,11 @@ func (w *writer) ref(u string) int {
 }
 
 var (
-	blankLines = regexp.MustCompile(`\n{3,}`)
-	spaces     = regexp.MustCompile(`[ \t\r\n]+`)
+	blankLines  = regexp.MustCompile(`\n{3,}`)
+	spaces      = regexp.MustCompile(`[ \t\r\n]+`)
+	placeholder = regexp.MustCompile(`^\s*CORRPICTURE(\d+)\s*$`)
+	// A placeholder, and the link number after it when the image is a link.
+	inText = regexp.MustCompile(`CORRPICTURE(\d+)(?: \\\[\d+\\\])?`)
 )
 
 type writer struct {
@@ -65,11 +105,21 @@ type writer struct {
 	quote    int // blockquote depth
 	numbered bool
 	refs     []string
+	pictures bool
+	pics     []Picture
 }
 
 func (w *writer) para(text string) {
 	text = strings.TrimSpace(text)
 	if text == "" {
+		return
+	}
+	// Pictures with nothing else in the paragraph (a link's number aside)
+	// get a line each, outside any quotation.
+	if w.pictures && strings.TrimSpace(inText.ReplaceAllString(text, "")) == "" {
+		for _, m := range inText.FindAllStringSubmatch(text, -1) {
+			w.out.WriteString("\nCORRPICTURE" + m[1] + "\n\n")
+		}
 		return
 	}
 	prefix := strings.Repeat("> ", w.quote)
@@ -257,7 +307,12 @@ func (w *writer) inline(n *html.Node) string {
 					if alt == "" {
 						alt = "picture"
 					}
-					b.WriteString(fmt.Sprintf("_\\[%s\\]_ \\[%d\\]", alt, w.ref(src)))
+					label := fmt.Sprintf("_\\[%s\\]_ \\[%d\\]", alt, w.ref(src))
+					if w.pictures {
+						w.pics = append(w.pics, Picture{URL: src, Label: label})
+						label = Placeholder(len(w.pics) - 1)
+					}
+					b.WriteString(label)
 				} else {
 					b.WriteString("![" + alt + "](" + src + ")")
 				}

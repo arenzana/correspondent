@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"golang.org/x/term"
 
 	"github.com/arenzana/correspondent/internal/client"
@@ -211,11 +212,12 @@ func feedTitles(t client.Tree) map[int64]string {
 }
 
 func (a *app) read(args []string) error {
-	var full, asHTML, keep bool
+	var full, asHTML, keep, noImages bool
 	_, pos, err := flags("read", args, func(fs *flag.FlagSet) {
 		fs.BoolVar(&full, "full", false, "")
 		fs.BoolVar(&asHTML, "html", false, "")
 		fs.BoolVar(&keep, "keep-unread", false, "")
+		fs.BoolVar(&noImages, "no-images", false, "")
 	})
 	if err != nil {
 		return err
@@ -251,8 +253,15 @@ func (a *app) read(args []string) error {
 		if e.Author != "" {
 			doc += "_" + e.Author + "_  \n"
 		}
-		doc += time.Unix(e.PublishedAt, 0).Format("Monday, January 2, 2006") + " · <" + e.URL + ">\n\n---\n\n" + md
-		fmt.Fprint(w, renderMarkdown(doc, termWidth()))
+		doc += time.Unix(e.PublishedAt, 0).Format("Monday, January 2, 2006") + " · <" + e.URL + ">\n\n---\n\n"
+		if !stdoutTTY || noImages {
+			fmt.Fprint(w, renderMarkdown(doc+md, termWidth()))
+			return
+		}
+		// On a terminal, with the pictures drawn in.
+		text, pics := textify.Pictured(e.Content, a.cfg.Server+"/")
+		width := termWidth()
+		lipgloss.Fprint(w, placePictures(renderMarkdown(doc+text, width), pics, fetchPictures(a.ctx, pics), width))
 	})
 }
 

@@ -64,3 +64,32 @@ func TestNumbered(t *testing.T) {
 		}
 	}
 }
+
+func TestPictured(t *testing.T) {
+	got, pics := Pictured(`<figure><a href="/big"><img src="/img/a" alt="Badge"></a><figcaption>The badge</figcaption></figure>`+
+		`<p>An <img src="/img/b" alt="icon"> in a sentence.</p><blockquote><p><img src="/img/c"></p></blockquote><ul><li><img src="/img/d" alt="Dot"></li></ul>`, "https://rss.example.org/")
+	if len(pics) != 4 || pics[0].URL != "https://rss.example.org/img/a" || pics[1].Label != `_\[icon\]_ \[3\]` {
+		t.Fatalf("pictures: %+v", pics)
+	}
+	for _, want := range []string{
+		"CORRPICTURE0\n\n_The badge_",
+		`An _\[icon\]_ \[3\] in a sentence.`,
+		"\nCORRPICTURE2\n",
+		`- _\[Dot\]_ \[5\]`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	for _, s := range []string{"CORRPICTURE1", "CORRPICTURE3"} {
+		if strings.Contains(got, s) {
+			t.Errorf("%s should be its label:\n%s", s, got)
+		}
+	}
+	if i, ok := PlaceholderAt("  \x20CORRPICTURE2  "); !ok || i != 2 {
+		t.Errorf("PlaceholderAt = %d, %v", i, ok)
+	}
+	if _, ok := PlaceholderAt("see CORRPICTURE2"); ok {
+		t.Error("a placeholder in text isn't a picture's line")
+	}
+}

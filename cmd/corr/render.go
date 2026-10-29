@@ -21,7 +21,7 @@ func renderMarkdown(md string, width int) string {
 	if !stdoutTTY {
 		return md
 	}
-	r, err := glamour.NewTermRenderer(glamour.WithStyles(current.glamourStyle()), glamour.WithWordWrap(min(width-4, 92)))
+	r, err := glamour.NewTermRenderer(glamour.WithStyles(current.glamourStyle()), glamour.WithWordWrap(textMeasure(width)))
 	if err != nil {
 		return md
 	}
@@ -31,3 +31,6 @@ func renderMarkdown(md string, width int) string {
 	}
 	return out
 }
+
+// textMeasure is the width an article's text wraps at.
+func textMeasure(width int) int { return min(width-4, 92) }

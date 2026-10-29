@@ -83,6 +83,8 @@ type reader struct {
 	article *client.Entry
 	// The open article as Markdown, around where its summary goes.
 	articleHead, articleBody string
+	pics                     []textify.Picture
+	got                      []*picture // the pictures, once fetched
 	showSummary              bool
 	summarizing              bool
 	// Reading aloud: the article playing, and how to stop it.
@@ -111,6 +113,11 @@ type (
 	articleMsg struct {
 		e          client.Entry
 		head, body string // Markdown, around where the summary goes
+		pics       []textify.Picture
+	}
+	picturesMsg struct {
+		id  string
+		got []*picture
 	}
 	summaryMsg struct{ id, text string }
 	// playMsg: audio for an article is ready to play (file), or played to the end (done).
@@ -204,7 +211,8 @@ func (m *reader) openArticle(e client.Entry, full bool) tea.Cmd {
 		}
 		head += " · " + time.Unix(got.PublishedAt, 0).Format("Monday, January 2, 2006")
 		_ = width
-		return articleMsg{got, head, textify.Numbered(got.Content, m.app.cfg.Server+"/")}
+		body, pics := textify.Pictured(got.Content, m.app.cfg.Server+"/")
+		return articleMsg{got, head, body, pics}
 	}
 }
 
@@ -269,12 +277,25 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		e := msg.e
 		m.article = &e
 		m.articleHead, m.articleBody = msg.head, msg.body
+		m.pics, m.got = msg.pics, nil
 		m.showSummary = false
 		m.patch(e.ID, func(x *client.Entry) { x.Read, x.Starred, x.FullText = e.Read, e.Starred, e.FullText })
 		m.renderArticle()
 		m.vp.GotoTop()
 		m.focus = paneArticle
 		m.status = ""
+		if len(msg.pics) == 0 {
+			return m, nil
+		}
+		ctx, pics := m.ctx, msg.pics
+		return m, func() tea.Msg { return picturesMsg{e.ID, fetchPictures(ctx, pics)} }
+	case picturesMsg:
+		if m.article != nil && m.article.ID == msg.id {
+			m.got = msg.got
+			y := m.vp.YOffset()
+			m.renderArticle()
+			m.vp.SetYOffset(y)
+		}
 		return m, nil
 	case summaryMsg:
 		m.summarizing = false
@@ -890,7 +911,7 @@ func (m *reader) renderArticle() {
 		doc += "> **Summary.** " + m.article.Summary + "\n>\n> _Written by AI._\n\n"
 	}
 	doc += "---\n\n" + m.articleBody
-	m.vp.SetContent(renderMarkdown(doc, m.articleWidth()))
+	m.vp.SetContent(placePictures(renderMarkdown(doc, m.articleWidth()), m.pics, m.got, m.articleWidth()))
 }
 
 // summary shows or hides the open article's summary, asking for one (the

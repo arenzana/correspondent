@@ -7,6 +7,19 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-29
+
+### Added
+
+- `corr` shows articles' pictures: in the reader and in `corr read` on a
+  terminal, each image that stands on its own is drawn in colour, in
+  half blocks, so it shows in any terminal, tmux and the like included.
+  Pictures load after the text in the reader, so an article still opens
+  at once. Images inside a sentence, tracking pixels, and ones that
+  can't be loaded keep their label. `corr read --no-images` turns them
+  off; piped or `--json` output is unchanged. `corr read` on a terminal
+  numbers its links and lists them at the end, as the reader does.
+
 ## [0.23.6] - 2026-10-29
 
 ### Fixed

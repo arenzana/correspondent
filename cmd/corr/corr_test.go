@@ -10,6 +10,9 @@ import (
 	"errors"
 	"github.com/arenzana/correspondent/internal/content"
 	"github.com/arenzana/correspondent/internal/pagefeed"
+	"github.com/arenzana/correspondent/internal/textify"
+	"github.com/charmbracelet/x/ansi"
+	"image"
 	"io"
 	"log/slog"
 	"net/http"
@@ -456,5 +459,31 @@ func TestSend(t *testing.T) {
 	}
 	if err := run("send", id, "--to", "nope"); err == nil {
 		t.Error("an unknown service")
+	}
+}
+
+func TestPlacePictures(t *testing.T) {
+	palettes["night"].apply()
+	pics := []textify.Picture{{URL: "a", Label: `_\[Chart\]_ \[1\]`}, {URL: "b", Label: `_\[Pixel\]_ \[2\]`}}
+	rendered := "  Before.\n\n  \x1b[38;2;1;2;3mCORRPICTURE0\x1b[0m   \n\n  CORRPICTURE1\n  After."
+	if out := ansi.Strip(placePictures(rendered, pics, nil, 100)); !strings.Contains(out, "  [Chart] [1] (loading)") {
+		t.Errorf("while loading:\n%s", out)
+	}
+	if out := ansi.Strip(placePictures(rendered, pics, []*picture{nil, nil}, 100)); !strings.Contains(out, "  [Chart] [1]\n") || strings.Contains(out, "CORRPICTURE") {
+		t.Errorf("when they couldn't be had:\n%s", out)
+	}
+	wide := image.NewRGBA(image.Rect(0, 0, 800, 200))
+	got := []*picture{{img: wide, w: 800, h: 200}, {img: image.NewRGBA(image.Rect(0, 0, 1, 1)), w: 1, h: 1}}
+	out := placePictures(rendered, pics, got, 60)
+	lines := strings.Split(ansi.Strip(out), "\n")
+	// 60 columns wrap text at 56: a 4:1 picture is 54 columns (after the
+	// indent) by 54/4/2 lines, and the pixel is left out.
+	want := []string{"  Before.", ""}
+	for range 6 {
+		want = append(want, "  "+strings.Repeat("▀", 54))
+	}
+	want = append(want, "", "  After.")
+	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Errorf("drawn:\n%s", strings.Join(lines, "\n"))
 	}
 }
