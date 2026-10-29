@@ -321,6 +321,9 @@ var (
 		`(next|previous) (article|post|story): |\[\s*read: |.{0,30}unlimited access to |` +
 		`get .{0,60}delivered to your (email )?inbox` +
 		`)`)
+	// A pointer to another of the site's stories, set in the text: the
+	// label, then a link ("Read more: “A headline”").
+	crossLabel = regexp.MustCompile(`(?i)^\W*(read more|read next|read also|also read|more|related|see also|recommended|don['’]?t miss|further reading|editor['’]?s pick|(related|recommended|more) (stories|story|articles|article|reading))\s*[:：]`)
 	// Affiliate disclosures, wherever they are.
 	affiliate = regexp.MustCompile(`(?i)(we (may|might) (earn|receive|get) (a )?(small )?(commission|share of)|` +
 		`income earning .{0,20}affiliate links|we use affiliate links|contains affiliate links)`)
@@ -350,7 +353,8 @@ func isMaterial(n *html.Node) bool {
 }
 
 // websiteMaterial finds the website's material among an article's blocks:
-// matching blocks at either end, affiliate disclosures anywhere, and a
+// matching blocks at either end, affiliate disclosures and links to the
+// site's other stories anywhere, and a
 // trailing section (a "Related articles" heading and its list) whose
 // heading is the website's and whose blocks are all short.
 func websiteMaterial(blocks []*html.Node) []bool {
@@ -360,6 +364,11 @@ func websiteMaterial(blocks []*html.Node) []bool {
 		text := strings.Join(strings.Fields(textOf(b)), " ")
 		edge := i < edgeBlocks || i >= n-edgeBlocks
 		if edge && isMaterial(b) || len([]rune(text)) <= materialChars && affiliate.MatchString(text) {
+			drop[i] = true
+		}
+		// The last block keeps its "Read more": that's the onward link
+		// of a summary.
+		if i < n-1 && crossLink(b, text) {
 			drop[i] = true
 		}
 	}
@@ -426,13 +435,23 @@ func navigation(n *html.Node) bool {
 	return items >= 3
 }
 
-// linkList reports whether a block is a list made of links: the shape of
-// "related articles".
-func linkList(n *html.Node) bool {
-	if n.DataAtom != atom.Ul && n.DataAtom != atom.Ol {
+// crossLink reports whether a paragraph only points to another story:
+// a label like "Read more:", and the rest of it a link.
+func crossLink(n *html.Node, text string) bool {
+	if n.DataAtom != atom.P || len([]rune(text)) > materialChars {
 		return false
 	}
-	all, linked := len(strings.TrimSpace(textOf(n))), 0
+	at := crossLabel.FindStringIndex(text)
+	if at == nil {
+		return false
+	}
+	rest := len(strings.Trim(text[at[1]:], " \"“”'‘’«»"))
+	return rest > 0 && linkedChars(n)*10 >= rest*8
+}
+
+// linkedChars is the length of a block's link text.
+func linkedChars(n *html.Node) int {
+	linked := 0
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.DataAtom == atom.A {
@@ -444,5 +463,15 @@ func linkList(n *html.Node) bool {
 		}
 	}
 	walk(n)
+	return linked
+}
+
+// linkList reports whether a block is a list made of links: the shape of
+// "related articles".
+func linkList(n *html.Node) bool {
+	if n.DataAtom != atom.Ul && n.DataAtom != atom.Ol {
+		return false
+	}
+	all, linked := len(strings.TrimSpace(textOf(n))), linkedChars(n)
 	return all > 0 && linked*10 >= all*8
 }

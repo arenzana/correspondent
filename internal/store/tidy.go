@@ -12,7 +12,7 @@ import (
 const SettingTidied = "content.tidied"
 
 // TidyVersion changes whenever content.Tidy changes what it keeps.
-const TidyVersion = "1"
+const TidyVersion = "2"
 
 // TidyStored puts stored articles, and the feed text kept beside fetched
 // ones, through content.Tidy once per TidyVersion, in batches, so articles

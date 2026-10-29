@@ -35,19 +35,23 @@ func TestTidyWebsiteMaterial(t *testing.T) {
 		"<p>Oct 28, 2026, 2:47 PM UTC</p>",
 		body(), body(),
 		"<p>We may earn a commission when you buy through links on our site.</p>",
-		body(), body(), body(),
+		body(),
+		`<p><strong>Read more:</strong> “<a href="https://s.example/n">This Lion-Like Nebula Has Cosmic Dust for a Mane</a>”</p>`,
+		`<p>Related: <a href="https://s.example/r">Another story</a></p>`,
+		`<p>Read more: what the <a href="https://s.example/w">team</a> found surprised everyone who had studied it.</p>`,
+		body(), body(),
 		"<p>Continue reading…</p>",
 		"<p>Tags: one, two</p>",
 		"<h2>Related articles</h2>",
 		`<ul><li><a href="https://s.example/1">One story</a></li><li><a href="https://s.example/2">Another</a></li></ul>`,
 	}, "")
 	got := Tidy(in, "A title")
-	for _, gone := range []string{"Home", "Jane Doe", "2:47", "commission", "Tags", "Related", "One story"} {
+	for _, gone := range []string{"Home", "Jane Doe", "2:47", "commission", "Tags", "Related", "One story", "Lion-Like", "Another story"} {
 		if strings.Contains(got, gone) {
 			t.Errorf("kept %q", gone)
 		}
 	}
-	if !strings.Contains(got, "Continue reading") || strings.Count(got, "own words") != 40 {
+	if !strings.Contains(got, "Continue reading") || !strings.Contains(got, "surprised everyone") || strings.Count(got, "own words") != 40 {
 		t.Errorf("lost the article or its onward link:\n%s", got)
 	}
 }

@@ -7,6 +7,18 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-29
+
+### Fixed
+
+- Links to a site's other stories set in the middle of an article
+  ("Read more: “A headline”", "Related: …", "See also: …") are
+  removed, wherever they are; a "Read more" closing a summary stays.
+  Stored articles are tidied again on the next start.
+- On the Mac, adding a subscription shows every folder: the folder
+  choices wrap onto more lines instead of scrolling sideways out of
+  reach.
+
 ## [0.24.0] - 2026-10-29
 
 ### Added

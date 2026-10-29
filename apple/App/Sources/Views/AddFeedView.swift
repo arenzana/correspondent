@@ -63,16 +63,16 @@ struct AddFeedView: View {
                             Text("Folder").font(Typeface.ui.font(13.5, weight: 600)).foregroundStyle(theme.ink)
                             TextField("None", text: $folder).modifier(FieldStyle())
                             if !app.tree.folders.isEmpty {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 6) {
-                                        ForEach(app.tree.folders) { f in
-                                            Button(f.name) { folder = f.name }
-                                                .font(Typeface.ui.font(13.5, weight: folder == f.name ? 600 : 450))
-                                                .foregroundStyle(folder == f.name ? theme.accent : theme.ink)
-                                                .padding(.horizontal, 10).frame(height: 30)
-                                                .background(Capsule().stroke(folder == f.name ? theme.accent : theme.rule))
-                                                .buttonStyle(.plain)
-                                        }
+                                // Every folder in view: the chips wrap onto more lines.
+                                Wrap(spacing: 6) {
+                                    ForEach(app.tree.folders) { f in
+                                        Button(f.name) { folder = f.name }
+                                            .font(Typeface.ui.font(13.5, weight: folder == f.name ? 600 : 450))
+                                            .foregroundStyle(folder == f.name ? theme.accent : theme.ink)
+                                            .padding(.horizontal, 10).frame(height: 30)
+                                            .background(Capsule().stroke(folder == f.name ? theme.accent : theme.rule))
+                                            .contentShape(Capsule())
+                                            .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -139,5 +139,50 @@ struct AddFeedView: View {
             message = error.localizedDescription
         }
         asked = !ai
+    }
+}
+
+/// Lays its views out in rows, left to right, starting a new row when
+/// the next one doesn't fit.
+private struct Wrap: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = rows(subviews, width: proposal.width ?? .infinity)
+        let width = rows.map { $0.width }.max() ?? 0
+        let height = rows.map { $0.height }.reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            var x = bounds.minX
+            for i in row.items {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row { var items: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [Row] {
+        var rows = [Row()]
+        for i in subviews.indices {
+            let size = subviews[i].sizeThatFits(.unspecified)
+            let needed = rows[rows.count - 1].items.isEmpty ? size.width : rows[rows.count - 1].width + spacing + size.width
+            if needed > width, !rows[rows.count - 1].items.isEmpty {
+                rows.append(Row())
+            }
+            var row = rows[rows.count - 1]
+            row.width = row.items.isEmpty ? size.width : row.width + spacing + size.width
+            row.height = max(row.height, size.height)
+            row.items.append(i)
+            rows[rows.count - 1] = row
+        }
+        return rows
     }
 }
