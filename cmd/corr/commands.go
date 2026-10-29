@@ -261,7 +261,9 @@ func (a *app) read(args []string) error {
 		// On a terminal, with the pictures drawn in.
 		text, pics := textify.Pictured(e.Content, a.cfg.Server+"/")
 		width := termWidth()
-		lipgloss.Fprint(w, placePictures(renderMarkdown(doc+text, width), pics, fetchPictures(a.ctx, pics), width))
+		out, raw := placePictures(renderMarkdown(doc+text, width), pics, fetchPictures(a.ctx, pics), width)
+		io.WriteString(w, raw)
+		lipgloss.Fprint(w, out)
 	})
 }
 

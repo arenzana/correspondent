@@ -84,7 +84,7 @@ instead of moving.
 | Command | |
 |---|---|
 | `corr list [--view unread\|starred\|today\|all] [--feed ID] [--folder ID] [--search TEXT] [--saved ID] [--limit N] [--cursor C] [--oldest]` | articles, newest first (unread by default); `--search` finds words in titles and text, `--saved` uses a saved search |
-| `corr read ID [--full] [--html] [--keep-unread] [--no-images]` | an article, as Markdown; marks it read unless `--keep-unread`. On a terminal its pictures are drawn in colour (in half blocks, so any terminal and tmux show them); `--no-images` leaves just their labels |
+| `corr read ID [--full] [--html] [--keep-unread] [--no-images]` | an article, as Markdown; marks it read unless `--keep-unread`. On a terminal its pictures are drawn: sharp in Ghostty, Kitty and herdr (Kitty graphics), in colour half blocks elsewhere (`CORR_IMAGES=kitty` or `blocks` chooses); `--no-images` leaves just their labels |
 | `corr mark read\|unread\|star\|unstar ID…` | change articles; `-` reads IDs from stdin, one per line |
 | `corr mark-all-read [--feed ID \| --folder ID \| --view today] [--search TEXT \| --saved ID]` | everything in a feed, folder, today, or all; with a search, only what matches |
 | `corr feeds`, `corr folders` | subscriptions and folders with unread counts |

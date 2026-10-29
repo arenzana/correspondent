@@ -7,6 +7,17 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-10-29
+
+### Changed
+
+- `corr` shows pictures sharp in terminals that draw images themselves
+  (Ghostty, Kitty, and herdr inside them): it sends the image, and the
+  terminal draws it at full resolution where the picture goes, scrolling
+  with the text. Other terminals keep the half-block drawing.
+  `CORR_IMAGES=blocks` or `CORR_IMAGES=kitty` chooses one way or the
+  other.
+
 ## [0.24.1] - 2026-10-29
 
 ### Fixed

@@ -293,8 +293,9 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.article != nil && m.article.ID == msg.id {
 			m.got = msg.got
 			y := m.vp.YOffset()
-			m.renderArticle()
+			cmd := m.renderArticle()
 			m.vp.SetYOffset(y)
+			return m, cmd
 		}
 		return m, nil
 	case summaryMsg:
@@ -302,8 +303,9 @@ func (m *reader) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.article != nil && m.article.ID == msg.id {
 			m.article.Summary = msg.text
 			m.showSummary = true
-			m.renderArticle()
+			cmd := m.renderArticle()
 			m.vp.GotoTop()
+			return m, cmd
 		}
 		return m, nil
 	case playMsg:
@@ -901,17 +903,23 @@ func (m *reader) helpView() string {
 }
 
 // renderArticle shows the open article, with its summary above the text
-// when asked for.
-func (m *reader) renderArticle() {
+// when asked for. Its command sends the terminal the pictures it draws
+// itself, if any.
+func (m *reader) renderArticle() tea.Cmd {
 	if m.article == nil {
-		return
+		return nil
 	}
 	doc := m.articleHead + "\n\n"
 	if m.showSummary && m.article.Summary != "" {
 		doc += "> **Summary.** " + m.article.Summary + "\n>\n> _Written by AI._\n\n"
 	}
 	doc += "---\n\n" + m.articleBody
-	m.vp.SetContent(placePictures(renderMarkdown(doc, m.articleWidth()), m.pics, m.got, m.articleWidth()))
+	text, raw := placePictures(renderMarkdown(doc, m.articleWidth()), m.pics, m.got, m.articleWidth())
+	m.vp.SetContent(text)
+	if raw == "" {
+		return nil
+	}
+	return tea.Raw(raw)
 }
 
 // summary shows or hides the open article's summary, asking for one (the
@@ -923,9 +931,9 @@ func (m *reader) summary() tea.Cmd {
 	}
 	if e.Summary != "" {
 		m.showSummary = !m.showSummary
-		m.renderArticle()
+		cmd := m.renderArticle()
 		m.vp.GotoTop()
-		return nil
+		return cmd
 	}
 	m.summarizing = true
 	m.status = "Summarizing…"

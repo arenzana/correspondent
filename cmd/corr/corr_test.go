@@ -466,24 +466,62 @@ func TestPlacePictures(t *testing.T) {
 	palettes["night"].apply()
 	pics := []textify.Picture{{URL: "a", Label: `_\[Chart\]_ \[1\]`}, {URL: "b", Label: `_\[Pixel\]_ \[2\]`}}
 	rendered := "  Before.\n\n  \x1b[38;2;1;2;3mCORRPICTURE0\x1b[0m   \n\n  CORRPICTURE1\n  After."
-	if out := ansi.Strip(placePictures(rendered, pics, nil, 100)); !strings.Contains(out, "  [Chart] [1] (loading)") {
+	if out, _ := placePictures(rendered, pics, nil, 100); !strings.Contains(ansi.Strip(out), "  [Chart] [1] (loading)") {
 		t.Errorf("while loading:\n%s", out)
 	}
-	if out := ansi.Strip(placePictures(rendered, pics, []*picture{nil, nil}, 100)); !strings.Contains(out, "  [Chart] [1]\n") || strings.Contains(out, "CORRPICTURE") {
+	if out, _ := placePictures(rendered, pics, []*picture{nil, nil}, 100); !strings.Contains(ansi.Strip(out), "  [Chart] [1]\n") || strings.Contains(out, "CORRPICTURE") {
 		t.Errorf("when they couldn't be had:\n%s", out)
 	}
 	wide := image.NewRGBA(image.Rect(0, 0, 800, 200))
 	got := []*picture{{img: wide, w: 800, h: 200}, {img: image.NewRGBA(image.Rect(0, 0, 1, 1)), w: 1, h: 1}}
-	out := placePictures(rendered, pics, got, 60)
+	defer func(was func() bool) { kittyGraphics = was }(kittyGraphics)
+	kittyGraphics = func() bool { return false }
+	out, raw := placePictures(rendered, pics, got, 60)
+	if raw != "" {
+		t.Errorf("half blocks need nothing sent first: %q", raw)
+	}
 	lines := strings.Split(ansi.Strip(out), "\n")
 	// 60 columns wrap text at 56: a 4:1 picture is 54 columns (after the
-	// indent) by 54/4/2 lines, and the pixel is left out.
+	// indent) by 54/4/2 lines, rounded, and the pixel is left out.
 	want := []string{"  Before.", ""}
-	for range 6 {
+	for range 7 {
 		want = append(want, "  "+strings.Repeat("▀", 54))
 	}
 	want = append(want, "", "  After.")
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Errorf("drawn:\n%s", strings.Join(lines, "\n"))
+	}
+}
+
+func TestKittyPictures(t *testing.T) {
+	palettes["night"].apply()
+	defer func(was func() bool) { kittyGraphics = was }(kittyGraphics)
+	kittyGraphics = func() bool { return true }
+	pics := []textify.Picture{{URL: "a", Label: "x"}}
+	got := []*picture{{img: image.NewRGBA(image.Rect(0, 0, 800, 200)), w: 800, h: 200, id: 7}}
+	out, raw := placePictures("  CORRPICTURE0", pics, got, 60)
+	has := func(raw string, keys ...string) bool {
+		head, _, _ := strings.Cut(strings.TrimPrefix(raw, "\x1b_G"), ";")
+		head, _, _ = strings.Cut(head, "\x1b")
+		set := map[string]bool{}
+		for _, kv := range strings.Split(head, ",") {
+			set[kv] = true
+		}
+		for _, k := range keys {
+			if !set[k] {
+				return false
+			}
+		}
+		return strings.HasPrefix(raw, "\x1b_G")
+	}
+	if !has(raw, "a=T", "f=100", "i=7", "U=1", "c=54", "r=7", "m=1") {
+		t.Errorf("first, the image: %.120q", raw)
+	}
+	lines := strings.Split(out, "\n")
+	if len(lines) != 7 || !strings.HasPrefix(lines[0], "  \x1b[38;5;7m\U0010EEEE") || ansi.StringWidth(lines[0]) != 56 {
+		t.Errorf("placeholders: %d lines, %q", len(lines), lines[0])
+	}
+	if _, raw := placePictures("  CORRPICTURE0", pics, got, 60); !has(raw, "a=p", "i=7", "U=1", "c=54", "r=7") || strings.Contains(raw, ";") {
+		t.Errorf("then only where it goes: %q", raw)
 	}
 }
