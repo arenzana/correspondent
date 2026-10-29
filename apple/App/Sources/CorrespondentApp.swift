@@ -67,6 +67,7 @@ struct CorrespondentApp: App {
                 }
                 #if os(macOS)
                 .frame(minWidth: 980, minHeight: 620)
+                .background(RemembersFrame())
                 #endif
         }
         #if os(iOS)

@@ -7,6 +7,15 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.23.6] - 2026-10-29
+
+### Fixed
+
+- On the Mac, the window keeps its size and place across launches and
+  updates. macOS saved them under a name that changed with every build,
+  so each update forgot them. (The first launch of this version still
+  opens at the default size.)
+
 ## [0.23.5] - 2026-10-28
 
 ### Fixed
