@@ -72,6 +72,7 @@ struct WideLayout: View {
     @State private var searching = false
     #if os(macOS)
     @State private var keyMonitor: Any?
+    @State private var wheelMonitor: Any?
     #endif
     @State private var settings = Self.debugEnv("CORR_TAB") == "settings"
     @State private var showingKeys = false
@@ -151,8 +152,8 @@ struct WideLayout: View {
         .onKeyPress { press in keys(press) }
         #endif
         #if os(macOS)
-        .onAppear { keyMonitor = watchKeys() }
-        .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
+        .onAppear { keyMonitor = watchKeys(); wheelMonitor = WheelBoost.watch() }
+        .onDisappear { [keyMonitor, wheelMonitor].compactMap { $0 }.forEach(NSEvent.removeMonitor) }
         #endif
         .onReceive(NotificationCenter.default.publisher(for: .search)) { _ in searching = true }
         .onReceive(NotificationCenter.default.publisher(for: .focus)) { _ in toggleFocus() }
@@ -272,6 +273,11 @@ struct WideLayout: View {
                 NotificationCenter.default.post(name: .spotlightStep, object: event.keyCode == 125 ? 1 : -1)
                 return nil
             }
+            // ↓ and ↑ move through the list, wherever the focus is, as on the web.
+            if event.keyCode == 125 || event.keyCode == 126 {
+                Task { await app.move(event.keyCode == 125 ? 1 : -1) }
+                return nil
+            }
             // Shift-Space pages back up.
             if event.keyCode == 49, event.modifierFlags.contains(.shift) { page(-1); return nil }
             return shortcut(event.charactersIgnoringModifiers.map { event.modifierFlags.contains(.shift) ? $0.uppercased() : $0 } ?? "") ? nil : event
@@ -337,6 +343,43 @@ struct WideLayout: View {
         #endif
     }
 }
+
+#if os(macOS)
+/// A mouse's wheel speeds up the longer it spins: a slow click moves a
+/// line, a fast spin (an MX Master's free wheel) runs down the list.
+/// Trackpads and Magic Mouse scroll by the pixel already and are left alone.
+@MainActor
+enum WheelBoost {
+    private static var last: TimeInterval = 0
+    private static var streak = 0
+    private static var direction: Double = 0
+
+    static func watch() -> Any? {
+        NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            guard !event.hasPreciseScrollingDeltas, event.deltaY != 0, let cg = event.cgEvent?.copy() else { return event }
+            let f = factor(at: event.timestamp, direction: event.deltaY < 0 ? -1 : 1)
+            guard f > 1 else { return event }
+            for (axis, fixed, point) in [(CGEventField.scrollWheelEventDeltaAxis1, CGEventField.scrollWheelEventFixedPtDeltaAxis1, CGEventField.scrollWheelEventPointDeltaAxis1),
+                                         (.scrollWheelEventDeltaAxis2, .scrollWheelEventFixedPtDeltaAxis2, .scrollWheelEventPointDeltaAxis2)] {
+                cg.setIntegerValueField(axis, value: Int64((Double(cg.getIntegerValueField(axis)) * f).rounded()))
+                cg.setDoubleValueField(fixed, value: cg.getDoubleValueField(fixed) * f)
+                cg.setIntegerValueField(point, value: Int64((Double(cg.getIntegerValueField(point)) * f).rounded()))
+            }
+            return NSEvent(cgEvent: cg) ?? event
+        }
+    }
+
+    /// How much to multiply this tick by: 1 for ticks a moment apart, up to
+    /// 8 as quick ticks in one direction run on. A pause or a turn back
+    /// starts again from 1.
+    static func factor(at time: TimeInterval, direction d: Double) -> Double {
+        streak = time - last < 0.06 && d == direction ? streak + 1 : 0
+        last = time
+        direction = d
+        return min(1 + Double(max(0, streak - 2)) * 0.4, 8)
+    }
+}
+#endif
 
 #if os(iOS)
 /// iPhone: iOS's own tab bar (Feeds, Unread, Starred, Settings, Search),

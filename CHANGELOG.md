@@ -7,6 +7,16 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-03
+
+### Fixed
+
+- On the Mac, ↓ and ↑ go to the next and previous article wherever the
+  focus is, as on the web (with the spotlight on, they still move it).
+- On the Mac, a mouse wheel spun fast scrolls faster: each quick tick
+  in a row moves further, up to eight times a slow one, and a pause
+  starts again from one. Trackpads and the Magic Mouse are unchanged.
+
 ## [0.25.0] - 2026-10-29
 
 ### Added
