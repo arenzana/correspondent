@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-11-03
+
+### Fixed
+
+- On the iPhone, the bar for several selected subscriptions shows its
+  actions as symbols when their names don't fit, instead of cutting
+  them to "P…" and "Re…".
+
 ## [0.25.1] - 2026-11-03
 
 ### Fixed

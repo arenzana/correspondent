@@ -189,17 +189,38 @@ struct ManageView: View {
     private var bulkBar: some View {
         HStack(spacing: 10) {
             Text("\(selected.count) selected").font(Typeface.ui.font(14, weight: 560)).foregroundStyle(theme.ink)
-            Spacer()
-            moveMenu(selected).fixedSize()
-            Button("Pause") { Task { await app.setPaused(selected, true) } }
-            Button("Resume") { Task { await app.setPaused(selected, false) } }
-            Button("Delete…", role: .destructive) { confirmDelete = selected }
+                .lineLimit(1).fixedSize()
+            Spacer(minLength: 0)
+            // Words where they fit; on a phone, just the symbols, rather than
+            // buttons squeezed to "P…" and "Re…".
+            ViewThatFits(in: .horizontal) {
+                bulkActions(words: true)
+                bulkActions(words: false)
+            }
         }
         .font(Typeface.ui.font(14))
         .buttonStyle(QuietButton())
         .padding(.horizontal, 18).padding(.vertical, 10)
         .background(theme.fog)
         .overlay(alignment: .top) { Rectangle().fill(theme.rule).frame(height: 1) }
+    }
+
+    private func bulkActions(words: Bool) -> some View {
+        HStack(spacing: 8) {
+            moveMenu(selected).labelStyle(BulkLabel(words: words)).fixedSize()
+            Button { Task { await app.setPaused(selected, true) } } label: { Label("Pause", systemImage: "pause") }
+            Button { Task { await app.setPaused(selected, false) } } label: { Label("Resume", systemImage: "play") }
+            Button(role: .destructive) { confirmDelete = selected } label: { Label(words ? "Delete…" : "Delete", systemImage: "trash") }
+        }
+        .labelStyle(BulkLabel(words: words))
+        .fixedSize()
+    }
+
+    private struct BulkLabel: LabelStyle {
+        let words: Bool
+        func makeBody(configuration: Configuration) -> some View {
+            if words { configuration.title } else { configuration.icon.frame(minWidth: 22) }
+        }
     }
 
     private func addressSheet(_ f: Feed) -> some View {
