@@ -62,16 +62,45 @@ struct WireView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            if let leading { leading }
-            VStack(alignment: .leading, spacing: 2) {
-                if !pushed {
-                    Text(app.query.isEmpty ? app.title : "“\(app.query)”")
-                        .font(Typeface.read.font(23, weight: 560, opsz: 36)).foregroundStyle(theme.ink).lineLimit(1)
-                }
-                Text(app.subtitle).font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate).lineLimit(1)
+        // The list's name on the same line as its controls when it fits
+        // whole; otherwise above them. Squeezed beside them, a narrow
+        // column cut it to "…", and a feed's empty list read as if
+        // everything were caught up.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                if let leading { leading }
+                titles.fixedSize()
+                Spacer(minLength: 8)
+                controls
             }
-            Spacer()
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if let leading { leading }
+                    titles
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    controls
+                }
+            }
+        }
+        .padding(.leading, 18).padding(.trailing, 12).padding(.vertical, 12)
+        .background(theme.sheet)
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
+    }
+
+    private var titles: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if !pushed {
+                Text(app.query.isEmpty ? app.title : "“\(app.query)”")
+                    .font(Typeface.read.font(23, weight: 560, opsz: 36)).foregroundStyle(theme.ink).lineLimit(1)
+            }
+            Text(app.subtitle).font(Typeface.ui.font(12.5)).foregroundStyle(theme.slate).lineLimit(1)
+        }
+    }
+
+    @ViewBuilder private var controls: some View {
             if !app.query.isEmpty, !isSavedSearch {
                 Button { Task { await app.saveSearch() } } label: {
                     Text("Save search").font(Typeface.ui.font(13.5, weight: 560)).foregroundStyle(theme.ink)
@@ -99,10 +128,6 @@ struct WireView: View {
                 Button { Task { await app.markAllRead() } } label: { Image(systemName: "checkmark.circle") }
                     .iconButton().accessibilityLabel("Mark all read").keyHint("A", "Mark all read")
             }
-        }
-        .padding(.leading, 18).padding(.trailing, 12).padding(.vertical, 12)
-        .background(theme.sheet)
-        .overlay(alignment: .bottom) { Rectangle().fill(theme.rule).frame(height: 1) }
     }
 
     private var isSavedSearch: Bool {

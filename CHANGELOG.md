@@ -7,6 +7,14 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-11-06
+
+### Fixed
+
+- In the Apple apps, the list's name moves above its buttons when the
+  column is too narrow for both, instead of shrinking to "…". A single
+  feed's empty list no longer passes for the Unread list.
+
 ## [0.25.2] - 2026-11-03
 
 ### Fixed
