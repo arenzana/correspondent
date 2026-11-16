@@ -321,7 +321,7 @@ struct WireView: View {
         var out: [Group] = []
         let cal = Calendar.current
         for e in app.entries {
-            let day = cal.startOfDay(for: e.published)
+            let day = cal.startOfDay(for: e.arrived)
             let key = ISO8601DateFormatter().string(from: day)
             if out.last?.key == key { out[out.count - 1].entries.append(e) } else {
                 out.append(Group(key: key, label: Self.dayLabel(day), entries: [e]))
@@ -383,7 +383,7 @@ struct WireRow: View {
 
     private var spoken: String {
         let state = [entry.read ? nil : "Unread", entry.starred ? "starred" : nil].compactMap { $0 }.joined(separator: ", ")
-        let when = entry.published.formatted(.relative(presentation: .named))
+        let when = entry.arrived.formatted(.relative(presentation: .named))
         return [state, entry.title, "\(feed?.title ?? ""), \(when)"].filter { !$0.isEmpty }.joined(separator: ". ")
     }
 
@@ -391,7 +391,8 @@ struct WireRow: View {
         HStack(alignment: .top, spacing: 0) {
             // Gutter: the time, and the seal for a starred article.
             ZStack(alignment: .topTrailing) {
-                Text(entry.published.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))
+                // When it arrived, the list's order; the article shows its own date.
+                Text(entry.arrived.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))
                     .font(Typeface.ui.font(11.5)).monospacedDigit().foregroundStyle(theme.slate)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .padding(.top, 3).padding(.trailing, 10)

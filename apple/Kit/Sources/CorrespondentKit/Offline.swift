@@ -104,7 +104,7 @@ public actor OfflineStore {
             switch source {
             case .unread: if e.read { return false }
             case .starred: if !e.starred { return false }
-            case .today: if e.published < startOfDay { return false }
+            case .today: if e.arrived < startOfDay { return false }
             case .all, .search: if unreadOnly && e.read { return false }
             case .feed(let id): if e.feedId != id || (unreadOnly && e.read) { return false }
             case .folder(let id): if !(folders[id]?.contains(e.feedId) ?? false) || (unreadOnly && e.read) { return false }
@@ -114,7 +114,7 @@ public actor OfflineStore {
                 if !needle.split(separator: " ").allSatisfy({ text.contains($0) }) { return false }
             }
             return true
-        }.sorted { ($0.publishedAt, $0.id) > ($1.publishedAt, $1.id) }
+        }.sorted { (Int64($0.id) ?? 0) > (Int64($1.id) ?? 0) }
     }
 
     /// Forget everything (sign-out).

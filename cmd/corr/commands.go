@@ -192,7 +192,7 @@ func (a *app) list(args []string) error {
 			if e.Starred {
 				star = styles.star.Render("★")
 			}
-			when := time.Unix(e.PublishedAt, 0).Format("Jan 02 15:04")
+			when := e.Arrived().Format("Jan 02 15:04")
 			title := truncate(e.Title, max(20, width-48))
 			line(w, fmt.Sprintf("%s %s %s  %s  %s", dot, star, styles.dim.Render(when), title, styles.dim.Render(truncate(titles[e.FeedID], 22))))
 			line(w, styles.dim.Render(fmt.Sprintf("        %s", e.ID)))

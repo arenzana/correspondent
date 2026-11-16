@@ -782,7 +782,7 @@ func (m *reader) listView(width, h int) string {
 	var rows []row
 	day := ""
 	for i, e := range m.entries {
-		t := time.Unix(e.PublishedAt, 0)
+		t := e.Arrived() // the list's order
 		if d := dayLabel(t); d != day {
 			day = d
 			rows = append(rows, row{"       " + sBold.Render("— "+d), -1})

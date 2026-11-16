@@ -1610,7 +1610,7 @@ export const app = new AppState()
 
 /** Any modal overlay currently owns the keyboard. */
 /**
- * The list with arrivals slotted in by the list's order (newest published
+ * The list with arrivals slotted in by the list's order (newest arrival
  * first, as the server sends it), and every row the page refreshed. Rows
  * already shown keep their places: in Unread the page leaves out what was
  * read here, and rebuilding from it pushed those rows, the open one too, to
@@ -1619,8 +1619,7 @@ export const app = new AppState()
 export function placeArrivals(list: Entry[], page: Entry[], added: Entry[]): Entry[] {
   const latest = new Map(page.map((e) => [e.id, e]))
   const out = list.map((e) => latest.get(e.id) ?? e)
-  const before = (a: Entry, b: Entry) =>
-    a.publishedAt !== b.publishedAt ? a.publishedAt > b.publishedAt : BigInt(a.id) > BigInt(b.id)
+  const before = (a: Entry, b: Entry) => BigInt(a.id) > BigInt(b.id) // by arrival, as the server lists
   for (const e of added) {
     const at = out.findIndex((row) => before(e, row))
     out.splice(at < 0 ? out.length : at, 0, e)

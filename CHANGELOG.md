@@ -7,6 +7,16 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-16
+
+### Changed
+
+- Lists are in the order articles arrived, newest first, everywhere: the
+  web, the Apple apps and `corr`. An article a site dates hours back now
+  comes in at the top instead of somewhere in the middle. The time beside
+  each row and the day headings are when it arrived; the article itself
+  still shows the date it was published.
+
 ## [0.25.3] - 2026-11-06
 
 ### Fixed

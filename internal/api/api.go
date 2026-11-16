@@ -383,8 +383,10 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 // filterFrom maps reader query parameters to a store filter.
 func filterFrom(r *http.Request) store.Filter {
 	q := r.URL.Query()
-	// The reader lists by publication time; the cursor is "published.id".
-	f := store.Filter{UserID: userID(r), Query: q.Get("q"), Oldest: q.Get("order") == "oldest", ByPublished: true}
+	// The reader lists by arrival, so what came in last is on top even when
+	// a site backdates it. The cursor stays "published.id" for clients that
+	// kept one; only the ID counts.
+	f := store.Filter{UserID: userID(r), Query: q.Get("q"), Oldest: q.Get("order") == "oldest"}
 	f.FeedID, _ = strconv.ParseInt(q.Get("feed"), 10, 64)
 	f.FolderID, _ = strconv.ParseInt(q.Get("folder"), 10, 64)
 	if pub, id, ok := strings.Cut(q.Get("cursor"), "."); ok {

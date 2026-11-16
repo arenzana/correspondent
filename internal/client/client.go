@@ -179,6 +179,13 @@ type Tree struct {
 	Searches []Search `json:"searches"`
 }
 
+// Arrived is when the entry reached the server: its ID is that moment in
+// microseconds, and lists are in this order.
+func (e Entry) Arrived() time.Time {
+	us, _ := strconv.ParseInt(e.ID, 10, 64)
+	return time.UnixMicro(us)
+}
+
 type Entry struct {
 	ID          string `json:"id"`
 	FeedID      int64  `json:"feedId"`

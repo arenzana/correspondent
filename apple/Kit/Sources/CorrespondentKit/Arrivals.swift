@@ -9,7 +9,7 @@ public func placeArrivals(_ list: [Entry], page: [Entry], added: [Entry]) -> [En
     let latest = Dictionary(page.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     var out = list.map { latest[$0.id] ?? $0 }
     func before(_ a: Entry, _ b: Entry) -> Bool {
-        a.publishedAt != b.publishedAt ? a.publishedAt > b.publishedAt : (Int64(a.id) ?? 0) > (Int64(b.id) ?? 0)
+        (Int64(a.id) ?? 0) > (Int64(b.id) ?? 0) // by arrival, as the server lists
     }
     for e in added {
         out.insert(e, at: out.firstIndex { before(e, $0) } ?? out.count)

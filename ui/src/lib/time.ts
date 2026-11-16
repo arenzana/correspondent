@@ -26,6 +26,11 @@ export function dayLabel(d: Date, now = new Date()): string {
   return dayFmt.format(d)
 }
 
+/** When an article reached the server: its ID is that moment in microseconds. Lists are in this order. */
+export function arrived(e: { id: string }): Date {
+  return new Date(Number(BigInt(e.id) / 1000n))
+}
+
 export function clock(d: Date): string {
   return clockFmt.format(d)
 }

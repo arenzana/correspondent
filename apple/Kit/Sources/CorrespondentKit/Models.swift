@@ -30,6 +30,9 @@ public struct Entry: Codable, Identifiable, Hashable, Sendable {
     public var enclosures: [Enclosure] = []
 
     public var published: Date { Date(timeIntervalSince1970: TimeInterval(publishedAt)) }
+    /// When the article reached Correspondent: its ID is that moment in
+    /// microseconds. Lists are in this order.
+    public var arrived: Date { Date(timeIntervalSince1970: TimeInterval(Int64(id) ?? 0) / 1_000_000) }
 
     public init(id: EntryID, feedId: Int64, url: String = "", title: String, author: String = "", content: String? = nil,
                 excerpt: String = "", imageUrl: String = "", publishedAt: Int64, read: Bool = false, starred: Bool = false,

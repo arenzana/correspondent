@@ -117,12 +117,12 @@ export async function queryEntries(query: OfflineQuery, feedsInFolder: (folder: 
       if (inFolder && !inFolder.has(e.feedId)) return false
       if (query.view === 'unread' && e.read) return false
       if (query.view === 'starred' && !e.starred) return false
-      if (query.view === 'today' && e.publishedAt * 1000 < today.getTime()) return false
+      if (query.view === 'today' && Number(BigInt(e.id) / 1000n) < today.getTime()) return false
       // Offline, the article text is searched too (without its markup).
       if (needle && !`${e.title} ${e.excerpt} ${e.author} ${(e.content ?? '').replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(needle)) return false
       return true
     })
-    .sort((a, b) => b.publishedAt - a.publishedAt || (BigInt(b.id) > BigInt(a.id) ? 1 : -1))
+    .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : BigInt(b.id) < BigInt(a.id) ? -1 : 0))
     .map(({ savedAt: _, ...e }) => e)
 }
 
