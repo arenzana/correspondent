@@ -10,7 +10,7 @@ RUN npm ci --ignore-scripts
 COPY ui/ ./
 RUN npm run check && npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS go
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS go
 ARG TARGETOS TARGETARCH VERSION=dev COMMIT=
 WORKDIR /src
 COPY go.mod go.sum ./

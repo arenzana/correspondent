@@ -7,6 +7,13 @@ change behaviour; the Google Reader API stays compatible throughout.
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-11-16
+
+### Security
+
+- Built with Go 1.27.4, which fixes GO-2026-6859 in the standard
+  library's `net/http`.
+
 ## [0.26.0] - 2026-11-16
 
 ### Changed
